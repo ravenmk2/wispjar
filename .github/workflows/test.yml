@@ -1,0 +1,47 @@
+name: Test
+
+on:
+  push:
+    branches: [main, master, develop, dev]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Ensure web/dist placeholder
+        shell: bash
+        run: mkdir -p web/dist && touch web/dist/index.html
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13
+
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CGO_ENABLED: 0
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Ensure web/dist placeholder
+        shell: bash
+        run: mkdir -p web/dist && touch web/dist/index.html
+
+      - run: go vet ./...
+
+      - run: go test ./...
