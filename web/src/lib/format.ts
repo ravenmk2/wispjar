@@ -34,6 +34,13 @@ export function formatRelativeTime(s?: string | null): string {
   return d.toLocaleDateString("zh-CN")
 }
 
+export function formatBytes(n?: number | null): string {
+  if (n === undefined || n === null || Number.isNaN(n)) return "-"
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
 export function safeParseJson(text: string): Record<string, unknown> | null {
   try {
     const v = JSON.parse(text) as unknown

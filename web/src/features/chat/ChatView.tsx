@@ -1,4 +1,4 @@
-import { Bot, CircleAlert, WifiOff } from "lucide-react"
+import { Bot, CircleAlert, ListTree, MessagesSquare, PanelRight, WifiOff } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Link, useParams } from "react-router"
 import { ApiError, errorMessage } from "@/api/client"
@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button"
 import { EmptyState, TableSkeleton } from "@/components/common"
 import { Composer } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
+import { SandboxPanel } from "@/features/sandbox/SandboxPanel"
+import { TrajectoryView } from "@/features/trajectory/TrajectoryView"
 import { followSession, type FollowHandle } from "@/mux/follow"
+import { cn } from "@/lib/utils"
 import { useComposerStore } from "@/stores/composer"
 import { useCurrentOrg } from "@/stores/identity"
 import { useSessionStore } from "@/stores/session"
@@ -31,9 +34,12 @@ export default function ChatView() {
   const followStatus = useSessionStore((s) => s.followStatus)
   const composerReset = useComposerStore((s) => s.reset)
   const [loadError, setLoadError] = useState<LoadError | null>(null)
+  const [tab, setTab] = useState<"chat" | "trajectory">("chat")
+  const [sandboxOpen, setSandboxOpen] = useState(false)
 
   useEffect(() => {
     setLoadError(null)
+    setTab("chat")
     if (!sessionId) return
     sessionsApi.detail(sessionId).catch((e) => setLoadError(toLoadError(e)))
   }, [sessionId])
@@ -64,28 +70,68 @@ export default function ChatView() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
-        <Bot className="size-4 text-muted-foreground" />
-        <span className="truncate text-sm font-medium">{header?.title || "新会话"}</span>
-        {header?.agentName && (
-          <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{header.agentName}</span>
-        )}
-        {followStatus === "stalled" && (
-          <span className="ml-auto flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-400">
-            <WifiOff className="size-3.5" />
-            连接已断开，重连中…
-          </span>
-        )}
-      </div>
-      {followStatus === "connecting" && !header ? (
-        <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
-          <TableSkeleton rows={4} />
+    <div className="flex h-full min-w-0 flex-1">
+      <div className="flex h-full min-w-0 flex-1 flex-col">
+        <div className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
+          <Bot className="size-4 shrink-0 text-muted-foreground" />
+          <span className="truncate text-sm font-medium">{header?.title || "新会话"}</span>
+          {header?.agentName && (
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+              {header.agentName}
+            </span>
+          )}
+          <div className="ml-4 flex shrink-0 items-center rounded-md border p-0.5">
+            <button
+              type="button"
+              onClick={() => setTab("chat")}
+              className={cn(
+                "flex items-center gap-1 rounded-sm px-2 py-1 text-xs text-muted-foreground hover:text-foreground",
+                tab === "chat" && "bg-accent font-medium text-foreground",
+              )}
+            >
+              <MessagesSquare className="size-3.5" />
+              聊天
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("trajectory")}
+              className={cn(
+                "flex items-center gap-1 rounded-sm px-2 py-1 text-xs text-muted-foreground hover:text-foreground",
+                tab === "trajectory" && "bg-accent font-medium text-foreground",
+              )}
+            >
+              <ListTree className="size-3.5" />
+              轨迹
+            </button>
+          </div>
+          {followStatus === "stalled" && (
+            <span className="ml-auto flex shrink-0 items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-400">
+              <WifiOff className="size-3.5" />
+              连接已断开，重连中…
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn("size-8", followStatus !== "stalled" && "ml-auto", sandboxOpen && "bg-accent")}
+            title="沙箱面板"
+            onClick={() => setSandboxOpen((v) => !v)}
+          >
+            <PanelRight className="size-4" />
+          </Button>
         </div>
-      ) : (
-        <MessageList sessionId={sessionId} />
-      )}
-      <Composer sessionId={sessionId} />
+        {followStatus === "connecting" && !header ? (
+          <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
+            <TableSkeleton rows={4} />
+          </div>
+        ) : tab === "chat" ? (
+          <MessageList sessionId={sessionId} />
+        ) : (
+          <TrajectoryView sessionId={sessionId} />
+        )}
+        {tab === "chat" && <Composer sessionId={sessionId} />}
+      </div>
+      {sandboxOpen && <SandboxPanel sessionId={sessionId} onClose={() => setSandboxOpen(false)} />}
     </div>
   )
 }

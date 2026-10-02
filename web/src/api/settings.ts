@@ -23,6 +23,10 @@ export const settingsApi = {
     const data = await api<unknown>("/platform/settings")
     return normalizeSettings(data)
   },
+  async getOrgSandbox(orgId: string): Promise<SettingsMap> {
+    const data = await api<unknown>(`/orgs/${orgId}/admin/sandbox-settings`)
+    return normalizeSettings(data)
+  },
   put(key: SettingKey, value: unknown) {
     return api<{ ok: boolean }>(`/platform/settings/${encodeURIComponent(key)}`, {
       method: "PUT",

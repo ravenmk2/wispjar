@@ -54,11 +54,25 @@ type runState struct {
 	cancelRequested bool
 	checkpointID    string
 	turn            int
+	stepMu          sync.Mutex // 保护 step：task 工具 goroutine 与 consume goroutine 并发访问
 	step            int
 	lastSeq         int64
 	attempt         *attemptState
 	denied          map[string]struct{}
 	toolCtx         *tools.Context
+}
+
+func (rs *runState) incrStep() int {
+	rs.stepMu.Lock()
+	defer rs.stepMu.Unlock()
+	rs.step++
+	return rs.step
+}
+
+func (rs *runState) currentStep() int {
+	rs.stepMu.Lock()
+	defer rs.stepMu.Unlock()
+	return rs.step
 }
 
 type orchestrator struct {
@@ -137,7 +151,7 @@ func (o *orchestrator) prepare(ctx context.Context, sessionID string, rs *runSta
 	rs.turn = turn
 	rs.checkpointID = id.New()
 	rs.toolCtx = o.buildToolContext(sess, &snap)
-	a, _, err := o.buildAgent(ctx, sess, &snap, rs.toolCtx)
+	a, _, err := o.buildAgent(ctx, sess, &snap, rs.toolCtx, rs)
 	if err != nil {
 		return err
 	}
@@ -252,7 +266,7 @@ func (o *orchestrator) consume(sessionID string, rs *runState, iter *adk.AsyncIt
 
 // stepStream 处理一次流式模型调用（一个 step）。
 func (o *orchestrator) stepStream(sessionID string, rs *runState, stream *schema.StreamReader[*schema.Message]) bool {
-	rs.step++
+	rs.incrStep()
 	attempt := newAttempt(rs.turn, rs.step)
 	rs.attempt = attempt
 	startedAfter := rs.lastSeq
@@ -295,7 +309,7 @@ func (o *orchestrator) stepStream(sessionID string, rs *runState, stream *schema
 
 // stepMessage 处理一次非流式完整 assistant 消息（防御性分支）。
 func (o *orchestrator) stepMessage(sessionID string, rs *runState, msg *schema.Message) bool {
-	rs.step++
+	rs.incrStep()
 	attempt := newAttempt(rs.turn, rs.step)
 	attempt.feed(msg)
 	inputs := []session.EventInput{
@@ -362,34 +376,8 @@ func (o *orchestrator) toolResult(sessionID string, rs *runState, msg *schema.Me
 
 // pause 审批中断：approval/asked 落库 + 登记 pending；turn 保持 running。
 func (o *orchestrator) pause(sessionID string, rs *runState, info *adk.InterruptInfo) {
-	var root *adk.InterruptCtx
-	var walk func(ic *adk.InterruptCtx)
-	walk = func(ic *adk.InterruptCtx) {
-		if ic == nil {
-			return
-		}
-		if ic.IsRootCause {
-			root = ic
-			return
-		}
-		walk(ic.Parent)
-	}
-	for _, ic := range info.InterruptContexts {
-		walk(ic)
-	}
-	if root == nil && len(info.InterruptContexts) > 0 {
-		root = info.InterruptContexts[len(info.InterruptContexts)-1]
-	}
-	var ai ApprovalInterruptInfo
-	if root != nil {
-		switch v := root.Info.(type) {
-		case ApprovalInterruptInfo:
-			ai = v
-		case *ApprovalInterruptInfo:
-			ai = *v
-		}
-	}
-	if root == nil || ai.CallID == "" {
+	ai, rootID, ok := approvalFromInterrupt(info)
+	if !ok {
 		o.failTurn(sessionID, rs, errors.New("unknown interrupt (not an approval request)"))
 		return
 	}
@@ -405,7 +393,7 @@ func (o *orchestrator) pause(sessionID string, rs *runState, info *adk.Interrupt
 	o.registerPending(&pendingApproval{
 		sessionID:    sessionID,
 		checkpointID: rs.checkpointID,
-		interruptID:  root.ID,
+		interruptID:  rootID,
 		callID:       ai.CallID,
 	})
 	// 暂停：保留 runs 条目，等待 DecideApproval 恢复
@@ -482,6 +470,12 @@ func (o *orchestrator) endTurn(sessionID string, rs *runState, reason, errMsg st
 		if p.sessionID == sessionID {
 			if p.timer != nil {
 				p.timer.Stop()
+			}
+			if p.sub != nil {
+				select {
+				case p.sub.ch <- false:
+				default:
+				}
 			}
 			delete(o.pending, id)
 		}

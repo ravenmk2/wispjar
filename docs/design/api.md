@@ -164,7 +164,7 @@
 
 | 方法/路径 | 说明 |
 |---|---|
-| `GET /admin/agents` | 本机构全部（含 draft/archived），游标分页 |
+| `GET /admin/agents` | 本机构全部（含 draft/archived），游标分页；列表项含 `model_display_name` / `skill_count` / `sub_agent_count` |
 | `POST /admin/agents` | 创建（默认 draft）。body 见下 |
 | `GET /admin/agents/{id}` | 详情（含 skills/subagents 解析） |
 | `PUT /admin/agents/{id}` | 全量更新（仅 draft/archived 可直接改；published 修改自动转 draft 需重新发布——避免线上配置被悄悄改变） |
@@ -188,10 +188,16 @@
 | 方法/路径 | 说明 |
 |---|---|
 | `POST /admin/skills` | 上传 zip（`multipart/form-data`，字段名 `file`）。限制：≤20MB、解压后 ≤50MB、文件数 ≤200、zip slip 防护。服务端解压校验 SKILL.md frontmatter（agentskills.io 规范：name 合法且与目录一致、description 1..1024）→ 201 返回 skill 对象；失败 422 `skill/invalid`（details 说明） |
-| `GET /admin/skills` | 列表（含被哪些智能体引用 `referenced_by`） |
-| `GET /admin/skills/{id}` | 详情（meta 全文 + 文件清单） |
-| `GET /admin/skills/{id}/file?path=SKILL.md` | 查看包内文本文件（≤256KB） |
-| `DELETE /admin/skills/{id}` | 删除；被引用时 409 并列出引用者 |
+| `GET /admin/skills` | 列表（`size_bytes` / `uploader_name` / 被哪些智能体引用 `referenced_by`；不返回服务端 `storage_path`） |
+| `GET /admin/skills/{id}` | 详情（meta 全文 + 顶层 `files` 文件清单 + `size_bytes` / `uploader_name` / `referenced_by`） |
+| `GET /admin/skills/{id}/file?path=SKILL.md` | 查看包内文本文件（≤256KB）→ `{ "path", "content", "truncated" }` |
+| `DELETE /admin/skills/{id}` | 删除；被引用时 409（`details.referenced_by` 列出引用者） |
+
+### 沙箱设置（只读）
+
+| 方法/路径 | 说明 |
+|---|---|
+| `GET /admin/sandbox-settings` | 平台 `sandbox.*` 设置子集（镜像列表/默认资源/TTL/ egress），机构 admin 只读（编辑器沙箱分区用；写仍走 `/platform/settings`） |
 
 ### 成员管理
 

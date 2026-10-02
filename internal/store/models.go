@@ -104,7 +104,7 @@ type Skill struct {
 	Name        string          `gorm:"column:name;size:64" json:"name"`
 	Description string          `gorm:"column:description;size:1024" json:"description"`
 	Meta        json.RawMessage `gorm:"column:meta;type:json" json:"meta"`
-	StoragePath string          `gorm:"column:storage_path;size:512" json:"storage_path"`
+	StoragePath string          `gorm:"column:storage_path;size:512" json:"-"`
 	ZipSize     int64           `gorm:"column:zip_size" json:"zip_size"`
 	Status      string          `gorm:"column:status;size:16" json:"status"`
 	CreatedBy   string          `gorm:"column:created_by;size:32" json:"created_by"`

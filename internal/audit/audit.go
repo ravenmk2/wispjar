@@ -32,6 +32,8 @@ const (
 	AgentPublish      = "agent.publish"
 	AgentArchive      = "agent.archive"
 	AgentDelete       = "agent.delete"
+	SkillUpload       = "skill.upload"
+	SkillDelete       = "skill.delete"
 )
 
 type Entry struct {

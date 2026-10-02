@@ -30,6 +30,7 @@ var toolRisk = map[string]string{
 	"glob":           RiskLow,
 	"grep":           RiskLow,
 	"activate_skill": RiskLow,
+	"task":           RiskLow,
 }
 
 func riskOf(toolName string) string {
@@ -94,12 +95,50 @@ func approvalMiddleware(mode string) compose.ToolMiddleware {
 
 const approvalTimeout = 10 * time.Minute
 
+// approvalFromInterrupt 从 InterruptInfo 提取审批载体与根 interrupt ID（主/子 Agent 共用）。
+func approvalFromInterrupt(info *adk.InterruptInfo) (ApprovalInterruptInfo, string, bool) {
+	var root *adk.InterruptCtx
+	var walk func(ic *adk.InterruptCtx)
+	walk = func(ic *adk.InterruptCtx) {
+		if ic == nil {
+			return
+		}
+		if ic.IsRootCause {
+			root = ic
+			return
+		}
+		walk(ic.Parent)
+	}
+	for _, ic := range info.InterruptContexts {
+		walk(ic)
+	}
+	if root == nil && len(info.InterruptContexts) > 0 {
+		root = info.InterruptContexts[len(info.InterruptContexts)-1]
+	}
+	var ai ApprovalInterruptInfo
+	if root != nil {
+		switch v := root.Info.(type) {
+		case ApprovalInterruptInfo:
+			ai = v
+		case *ApprovalInterruptInfo:
+			ai = *v
+		}
+	}
+	if root == nil || ai.CallID == "" {
+		return ApprovalInterruptInfo{}, "", false
+	}
+	return ai, root.ID, true
+}
+
 type pendingApproval struct {
 	sessionID    string
 	checkpointID string
 	interruptID  string
 	callID       string
 	timer        *time.Timer
+	// 子 Agent 嵌套审批：parentCallID 非空，decide 投递到 sub.ch 而非 resume 主 runner。
+	parentCallID string
+	sub          *subApproval
 }
 
 var (
@@ -123,10 +162,10 @@ func (e *Error) Error() string { return e.Message }
 func (o *orchestrator) registerPending(p *pendingApproval) {
 	o.mu.Lock()
 	o.pending[p.callID] = p
-	o.mu.Unlock()
 	p.timer = time.AfterFunc(approvalTimeout, func() {
 		_ = o.decide(p.sessionID, p.callID, false, "system", true)
 	})
+	o.mu.Unlock()
 }
 
 // DecideApproval 实现 Orchestrator 接口。
@@ -162,20 +201,40 @@ func (o *orchestrator) decide(sessionID, callID string, allow bool, by string, a
 	if allow {
 		decision = "allow"
 	}
+	var decidedData any = session.ApprovalDecidedData{
+		CallID: callID, Decision: decision, DecidedBy: by, Auto: auto,
+	}
+	if p.parentCallID != "" {
+		decidedData = nestedApprovalDecidedData{
+			ApprovalDecidedData: session.ApprovalDecidedData{
+				CallID: callID, Decision: decision, DecidedBy: by, Auto: auto,
+			},
+			ParentCallID: p.parentCallID,
+		}
+	}
 	if _, err := o.commit(context.Background(), sessionID, []session.EventInput{
-		{Type: session.EventApprovalDecided, Data: session.ApprovalDecidedData{
-			CallID: callID, Decision: decision, DecidedBy: by, Auto: auto,
-		}},
+		{Type: session.EventApprovalDecided, Data: decidedData},
 	}); err != nil {
 		return fmt.Errorf("approval/decided 落库失败: %w", err)
 	}
 
 	if !allow {
-		o.mu.Lock()
-		if rs := o.runs[sessionID]; rs != nil {
-			rs.denied[callID] = struct{}{}
+		if p.sub != nil {
+			p.sub.denied.add(callID)
+		} else {
+			o.mu.Lock()
+			if rs := o.runs[sessionID]; rs != nil {
+				rs.denied[callID] = struct{}{}
+			}
+			o.mu.Unlock()
 		}
-		o.mu.Unlock()
+	}
+	if p.sub != nil {
+		select {
+		case p.sub.ch <- allow:
+		default:
+		}
+		return nil
 	}
 	o.resume(p, allow)
 	return nil

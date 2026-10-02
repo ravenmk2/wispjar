@@ -379,7 +379,7 @@ type ListItem struct {
 	ModelDisplayName string    `json:"model_display_name"`
 	MaxIterations    int       `json:"max_iterations"`
 	SkillCount       int       `json:"skill_count"`
-	SubagentCount    int       `json:"subagent_count"`
+	SubagentCount    int       `json:"sub_agent_count"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }

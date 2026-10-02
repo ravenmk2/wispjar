@@ -245,7 +245,7 @@ type Handle struct {
 
 创建成功后：
 1. `GET /sandboxes/{id}/endpoints/44772` 解析 execd 地址 → 构造 ExecdClient。
-2. 上传会话激活 Skills：`/skills/<name>/` 整目录（execd upload）。
+2. 上传会话激活 Skills：`/skills/<name>/` 整目录（execd upload）。REST 沙箱面板端点（`GET /sessions/{id}/sandbox/file(s)`）在拿到新建/重建沙箱时同样做一次同步（按 sessionID→sandboxID 去重），保证服务重启句柄丢失后技能目录一致。
 3. 更新 `session.sandbox` 为 `{"id": <沙箱ID>, "status": "running"}` + append `session/sandbox{action:"created"}`。
 
 ### 7.2 续约与回收
@@ -253,7 +253,7 @@ type Handle struct {
 - **续约**：会话活动（每次事件写入）刷新内存 lastActive；后台任务对运行中且 `now-lastActive < ttl/2` 的沙箱调 `renew-expiration`。
 - **空闲回收**：reaper 每分钟扫描，`now-lastActive > idle_ttl_seconds` → DELETE 沙箱 → `session.sandbox.status="recycled"` + append `session/sandbox{action:"recycled"}`。再次调用沙箱工具 → 重新创建（文件不保留，新事件使轨迹自洽）。
 - **兜底**：启动时与每小时对比 lifecycle `GET /sandboxes` 列表与库内记录，孤儿沙箱强制删除。
-- **失败**：创建失败置 `session.sandbox.status="failed"` + 事件，工具调用返回"沙箱不可用"错误给模型（可重试一次）。
+- **失败**：创建失败置 `session.sandbox.status="failed"` + 事件，工具调用返回"沙箱不可用"错误给模型（可重试一次）。创建路径自带一次退避重试（2s），lifecycle 请求超时 120s（冷启动镜像拉取可能超过 30s）。
 
 ### 7.3 沙箱镜像
 

@@ -116,7 +116,7 @@ func main() {
 				return "", "", err
 			}
 			return m.ModelCode, m.ProviderID, nil
-		})
+		}, cfg.Storage.DataDir)
 	wsServer := ws.NewServer(ws.Deps{
 		JWTSecret:      []byte(jwtSecret),
 		Store:          ws.NewGormStore(db),

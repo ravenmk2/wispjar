@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/session"
@@ -33,5 +34,23 @@ func SandboxEventHook(repo SessionRepo, events EventStore, bus *Bus) func(sandbo
 			e2 := ev
 			bus.Publish(e.SessionID, EventFrame(session.Event{Seq: e2.Seq, Type: e2.Type, Time: e2.TimeMs, Data: e2.Data}))
 		}
+	}
+}
+
+// recordSkillUploadFailure 技能目录上传沙箱失败时写 session/sandbox 事件（detail 记录原因，不阻断 turn）。
+func (o *orchestrator) recordSkillUploadFailure(sessionID, skillName, sandboxID string, cause error) {
+	evs, err := o.deps.Events.AppendBatch(context.Background(), sessionID, []session.EventInput{
+		{Type: session.EventSessionSandbox, Data: session.SessionSandboxData{
+			Action:    "skills_upload",
+			SandboxID: sandboxID,
+			Error:     fmt.Sprintf("skill %s 上传失败: %v", skillName, cause),
+		}},
+	})
+	if err != nil {
+		return
+	}
+	for _, ev := range evs {
+		e := ev
+		o.deps.Bus.Publish(sessionID, EventFrame(session.Event{Seq: e.Seq, Type: e.Type, Time: e.TimeMs, Data: e.Data}))
 	}
 }

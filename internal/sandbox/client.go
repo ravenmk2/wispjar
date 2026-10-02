@@ -23,7 +23,7 @@ func NewClient(lifecycleURL, apiKey string) *Client {
 		conn: opensandbox.ConnectionConfig{
 			Domain:         base,
 			APIKey:         apiKey,
-			RequestTimeout: 30 * time.Second,
+			RequestTimeout: 120 * time.Second,
 			DisableMetrics: true,
 		},
 		lifecycle: opensandbox.NewLifecycleClient(base+"/v1", apiKey),

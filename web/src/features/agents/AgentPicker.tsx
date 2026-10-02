@@ -6,6 +6,7 @@ import { errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
 import { workspaceApi } from "@/api/workspace"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { AgentAvatar, AVATAR_ICONS } from "@/features/agents/AgentAvatar"
 import { useCurrentOrg } from "@/stores/identity"
 import type { AgentSummary } from "@/lib/types"
 
@@ -83,7 +84,11 @@ export function AgentPicker() {
         >
           <Avatar className="size-6 shrink-0">
             <AvatarFallback className="text-xs">
-              {agent.avatar || <Bot className="size-3.5" />}
+              {agent.avatar && AVATAR_ICONS[agent.avatar] ? (
+                <AgentAvatar avatar={agent.avatar} className="size-3.5" />
+              ) : (
+                agent.avatar || <Bot className="size-3.5" />
+              )}
             </AvatarFallback>
           </Avatar>
           <span className="min-w-0 flex-1 truncate">{agent.name}</span>

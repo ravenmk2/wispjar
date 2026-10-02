@@ -5,3 +5,4 @@
 /dist/
 /web/dist/
 .playwright-cli/
+data/

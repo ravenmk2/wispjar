@@ -5,11 +5,13 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/gateway/respond"
+	"github.com/ravenmk2/wispjar/internal/store"
 )
 
 type Handler struct {
@@ -209,6 +211,23 @@ func (h *Handler) GetSettings(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": settings})
+}
+
+// GetSandboxSettings GET /orgs/:orgId/admin/sandbox-settings：机构 admin 只读
+// sandbox.* 设置子集（编辑器沙箱分区取镜像列表/默认资源用，不暴露其它平台 KV）。
+func (h *Handler) GetSandboxSettings(c *gin.Context) {
+	settings, err := h.svc.ListSettings()
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	out := make([]store.PlatformSetting, 0, len(settings))
+	for _, s := range settings {
+		if strings.HasPrefix(s.Key, "sandbox.") {
+			out = append(out, s)
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"items": out})
 }
 
 func (h *Handler) UpdateSetting(c *gin.Context) {

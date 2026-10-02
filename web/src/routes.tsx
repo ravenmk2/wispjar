@@ -6,7 +6,9 @@ import LoginPage from "@/pages/Login"
 import WorkspaceHome from "@/pages/WorkspaceHome"
 import ChatView from "@/features/chat/ChatView"
 import MembersPage from "@/features/admin/MembersPage"
-import AgentsPlaceholderPage from "@/features/admin/AgentsPage"
+import AgentsPage from "@/features/admin/AgentsPage"
+import AgentEditorPage from "@/features/admin/AgentEditor"
+import SkillsPage from "@/features/admin/SkillsPage"
 import OrgUsagePage from "@/features/admin/OrgUsagePage"
 import ModelsPage from "@/platform/ModelsPage"
 import OrgsPage from "@/platform/OrgsPage"
@@ -59,10 +61,13 @@ export const router = createBrowserRouter([
             path: "/admin",
             element: <AdminLayout />,
             children: [
-              { index: true, element: <Navigate to="/admin/members" replace /> },
+              { index: true, element: <Navigate to="/admin/agents" replace /> },
+              { path: "agents", element: <AgentsPage /> },
+              { path: "agents/new", element: <AgentEditorPage /> },
+              { path: "agents/:id", element: <AgentEditorPage /> },
+              { path: "skills", element: <SkillsPage /> },
               { path: "members", element: <MembersPage /> },
               { path: "usage", element: <OrgUsagePage /> },
-              { path: "agents", element: <AgentsPlaceholderPage /> },
             ],
           },
         ],

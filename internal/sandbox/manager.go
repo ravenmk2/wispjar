@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -95,7 +96,7 @@ func (s *Service) Get(ctx context.Context, sessionID string, opts Options) (*Han
 		s.mu.Unlock()
 	}
 
-	h, err := s.createHandle(ctx, sessionID, opts)
+	h, err := s.createWithRetry(ctx, sessionID, opts)
 	if err != nil {
 		s.emit(Event{SessionID: sessionID, Action: EventFailed, Reason: err.Error()})
 		return nil, err
@@ -112,6 +113,23 @@ func (s *Service) Get(ctx context.Context, sessionID string, opts Options) (*Han
 	s.mu.Unlock()
 	s.emit(Event{SessionID: sessionID, SandboxID: h.SandboxID, Action: EventCreated})
 	return h, nil
+}
+
+// createWithRetry 创建沙箱失败时退避重试一次（冷启动镜像拉取等瞬时超时；
+// 超时前可能已在服务端建出的孤儿沙箱由 reaper 的 reconcileOrphans 兜底回收）。
+func (s *Service) createWithRetry(ctx context.Context, sessionID string, opts Options) (*Handle, error) {
+	h, err := s.createHandle(ctx, sessionID, opts)
+	if err == nil {
+		return h, nil
+	}
+	first := err
+	select {
+	case <-ctx.Done():
+		return nil, first
+	case <-time.After(2 * time.Second):
+	}
+	log.Printf("sandbox: create for session %s failed, retrying once: %v", sessionID, first)
+	return s.createHandle(ctx, sessionID, opts)
 }
 
 func (s *Service) createHandle(ctx context.Context, sessionID string, opts Options) (*Handle, error) {

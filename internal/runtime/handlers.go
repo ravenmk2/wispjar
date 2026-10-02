@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"path"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/agent"
 	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/gateway/respond"
+	"github.com/ravenmk2/wispjar/internal/runtime/tools"
 	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/session"
 	"github.com/ravenmk2/wispjar/internal/store"
@@ -32,14 +35,19 @@ type Handler struct {
 	settings sandbox.Settings
 	bus      *Bus
 	model    func(ctx context.Context, modelID string) (modelCode, providerID string, err error)
+	dataDir  string
+
+	skillsMu     sync.Mutex
+	skillsSynced map[string]string // sessionID -> 已完成技能目录同步的 sandboxID
 }
 
 func NewHandler(orch Orchestrator, sessions *session.Service, events EventStore, repo SessionRepo,
 	sb sandbox.Manager, settings sandbox.Settings, bus *Bus,
-	modelLookup func(ctx context.Context, modelID string) (string, string, error)) *Handler {
+	modelLookup func(ctx context.Context, modelID string) (string, string, error), dataDir string) *Handler {
 	return &Handler{
 		orch: orch, sessions: sessions, events: events, repo: repo,
 		sandbox: sb, settings: settings, bus: bus, model: modelLookup,
+		dataDir: dataDir, skillsSynced: map[string]string{},
 	}
 }
 
@@ -214,7 +222,28 @@ func (h *Handler) sandboxHandle(c *gin.Context, sess *session.Detail) (*sandbox.
 		respond.Error(c, http.StatusBadGateway, "sandbox/upstream", "调用沙箱失败", gin.H{"reason": err.Error()})
 		return nil, false
 	}
+	h.syncSkills(c.Request.Context(), sess, &snap, handle)
 	return handle, true
+}
+
+// syncSkills 保证 REST 侧拿到的沙箱含 /skills/<name>/（沙箱可能被重建过，
+// 例如服务重启后句柄丢失再按需新建；turn 内路径由 tools.Context 自行上传）。
+func (h *Handler) syncSkills(ctx context.Context, sess *session.Detail, snap *agent.Snapshot, handle *sandbox.Handle) {
+	if len(snap.Skills) == 0 || h.dataDir == "" {
+		return
+	}
+	h.skillsMu.Lock()
+	synced := h.skillsSynced[sess.ID] == handle.SandboxID
+	if !synced {
+		h.skillsSynced[sess.ID] = handle.SandboxID
+	}
+	h.skillsMu.Unlock()
+	if synced {
+		return
+	}
+	tools.UploadSkills(ctx, handle, h.dataDir, sess.OrgID, snap.Skills, func(skillName string, err error) {
+		log.Printf("runtime: skill %s upload to sandbox %s (session %s): %v", skillName, handle.SandboxID, sess.ID, err)
+	})
 }
 
 // SandboxFiles GET /sessions/:id/sandbox/files?path=。
@@ -302,6 +331,9 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 		fail(c, err)
 		return
 	}
+	h.skillsMu.Lock()
+	delete(h.skillsSynced, sess.ID)
+	h.skillsMu.Unlock()
 	if err := h.sessions.Delete(ctx, uid, sess.ID); err != nil {
 		fail(c, err)
 		return

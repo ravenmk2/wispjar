@@ -54,6 +54,9 @@ func (o *orchestrator) buildToolContext(sess *store.Session, snap *agent.Snapsho
 	tc.Resources = sc.Resources
 	tc.DataDir = o.deps.DataDir
 	tc.Skills = snap.Skills
+	tc.OnSkillUploadFailed = func(name, sandboxID string, err error) {
+		o.recordSkillUploadFailure(sess.ID, name, sandboxID, err)
+	}
 	tc.PublishToolOutput = func(callID, stream, delta string) {
 		o.deps.Bus.Publish(sess.ID, ToolOutputLiveFrame(callID, stream, delta))
 	}
@@ -85,7 +88,7 @@ func buildTools(tc *tools.Context, snap *agent.Snapshot, approvalMode string) ([
 }
 
 // buildAgent 按会话快照构建 adk.ChatModelAgent（runtime.md §2）。
-func (o *orchestrator) buildAgent(ctx context.Context, sess *store.Session, snap *agent.Snapshot, tc *tools.Context) (adk.Agent, []string, error) {
+func (o *orchestrator) buildAgent(ctx context.Context, sess *store.Session, snap *agent.Snapshot, tc *tools.Context, rs *runState) (adk.Agent, []string, error) {
 	modelID := sess.ModelID
 	if modelID == "" {
 		modelID = snap.Model.ID
@@ -101,6 +104,15 @@ func (o *orchestrator) buildAgent(ctx context.Context, sess *store.Session, snap
 	toolList, toolNames, err := buildTools(tc, snap, sess.ApprovalMode)
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(snap.SubAgents) > 0 {
+		task, err := o.newTaskTool(sess, snap, tc, rs)
+		if err != nil {
+			return nil, nil, err
+		}
+		toolList = append(toolList, task)
+		toolNames = append(toolNames, "task")
+		sort.Strings(toolNames)
 	}
 	maxIter := snap.MaxIterations
 	if maxIter <= 0 {
@@ -134,6 +146,13 @@ func renderInstruction(snap *agent.Snapshot, approvalMode string) string {
 			fmt.Fprintf(&b, "- %s: %s\n", sk.Name, sk.Description)
 		}
 		b.WriteString("使用 activate_skill 工具加载某个 Skill 的完整使用说明。\n")
+	}
+	if len(snap.SubAgents) > 0 {
+		b.WriteString("\n## 子智能体\n")
+		for _, sa := range snap.SubAgents {
+			fmt.Fprintf(&b, "- %s: %s\n", sa.Name, sa.Description)
+		}
+		b.WriteString("使用 task 工具把自包含的子任务委派给子智能体：子智能体在独立上下文中执行（看不到本会话历史），与你共享沙箱文件系统，只返回最终结果；prompt 中必须包含子智能体所需的全部信息。\n")
 	}
 	fmt.Fprintf(&b, "\n## 运行环境\n- 当前日期：%s\n- 沙箱工作目录：/workspace（exec/read/write/edit/glob/grep 工具均在沙箱内操作）\n",
 		time.Now().Format("2006-01-02"))

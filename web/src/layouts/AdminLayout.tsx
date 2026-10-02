@@ -172,6 +172,8 @@ export function AdminLayout() {
     <SecondaryLayout
       title={`机构管理 · ${currentOrg?.name ?? ""}`}
       items={[
+        { to: "/admin/agents", label: "智能体" },
+        { to: "/admin/skills", label: "Skills" },
         { to: "/admin/members", label: "成员" },
         { to: "/admin/usage", label: "用量" },
       ]}

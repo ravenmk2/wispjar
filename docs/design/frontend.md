@@ -143,7 +143,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 4. **工具**：六沙箱工具开关组（默认全开）。
 5. **Skills**：本机构 skills 多选列表（名称+描述），可排序（拖拽）。
 6. **子智能体**：本机构其他 published 智能体多选；保存时前端提示环/层级限制（服务端 409 校验为准）；hint 说明"通过 task 工具委派"。
-7. **沙箱**：镜像下拉（`/platform/settings` 的 images 只读展示）、资源覆盖（CPU/内存，留空用平台默认）。
+7. **沙箱**：镜像下拉（`GET /orgs/{orgId}/admin/sandbox-settings` 的 images 只读展示）、资源覆盖（CPU/内存，留空用平台默认）。
 8. **发布**：draft → 「发布」按钮（校验失败显示原因）；published → 「下线」；published 编辑后自动转 draft 并提示重新发布。
 
 ## 9. 机构/平台管理页（规格摘要）

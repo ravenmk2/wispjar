@@ -3,6 +3,12 @@ package tools
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -75,6 +81,9 @@ type Context struct {
 
 	PublishToolOutput func(callID, stream, delta string)
 
+	// OnSkillUploadFailed 技能目录上传沙箱失败回调（非阻断；builder 注入以记录会话事件）。
+	OnSkillUploadFailed func(skillName, sandboxID string, err error)
+
 	mu     sync.Mutex
 	handle *cachedHandle
 	metas  map[string]*Meta
@@ -94,6 +103,11 @@ func FromContext(ctx context.Context) *Context {
 }
 
 func callID(ctx context.Context) string { return compose.GetToolCallID(ctx) }
+
+// BeginMeta 导出 beginMeta，供 runtime 包内非沙箱工具（task）登记 tool/result meta。
+func (c *Context) BeginMeta(ctx context.Context, render string) *Meta {
+	return c.beginMeta(ctx, render)
+}
 
 func (c *Context) beginMeta(ctx context.Context, render string) *Meta {
 	m := &Meta{Render: render}
@@ -125,9 +139,93 @@ func (c *Context) sandboxHandle(ctx context.Context) (Handle, string, error) {
 	opts := c.Settings.Options(c.Image, c.Resources)
 	sh, sid, err := c.Sandbox.Get(ctx, c.SessionID, opts)
 	if err != nil {
+		log.Printf("tools: sandbox get for session %s: %v", c.SessionID, err)
 		return nil, "", errSandboxUnavailable
 	}
+	c.uploadSkills(ctx, sh, sid)
 	return c.setHandle(sh, sid), sid, nil
+}
+
+// uploadSkills 在沙箱就绪后上传会话激活 Skills 到 /skills/<name>/（runtime.md §7）。
+// 单个失败只回调记录，不阻断其余技能与工具调用。
+func (c *Context) uploadSkills(ctx context.Context, h Handle, sandboxID string) {
+	UploadSkills(ctx, h, c.DataDir, c.OrgID, c.Skills, func(skillName string, err error) {
+		if c.OnSkillUploadFailed != nil {
+			c.OnSkillUploadFailed(skillName, sandboxID, err)
+		}
+	})
+}
+
+// UploadSkills 上传激活 Skills 到沙箱 /skills/<name>/。除 turn 内工具上下文外，
+// REST 沙箱面板在沙箱被重建后（如服务重启句柄丢失）也需保证技能目录一致。
+// 单技能失败回调记录，不阻断其余技能。
+func UploadSkills(ctx context.Context, h Handle, dataDir, orgID string, skills []agent.SnapshotSkill, onFailed func(skillName string, err error)) {
+	if len(skills) == 0 || dataDir == "" {
+		return
+	}
+	for i := range skills {
+		sk := skills[i]
+		dir, err := skillDir(dataDir, orgID, sk.ID)
+		if err == nil {
+			err = uploadSkillDir(ctx, h, dir, "/skills/"+sk.Name)
+		}
+		if err != nil && onFailed != nil {
+			onFailed(sk.Name, err)
+		}
+	}
+}
+
+func uploadSkillDir(ctx context.Context, h Handle, localDir, remoteBase string) error {
+	dirs := []string{}
+	type fileEntry struct{ rel, abs string }
+	files := []fileEntry{}
+	err := filepath.WalkDir(localDir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(localDir, p)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		if d.IsDir() {
+			dirs = append(dirs, rel)
+			return nil
+		}
+		if rel == "_source.zip" {
+			return nil
+		}
+		files = append(files, fileEntry{rel: rel, abs: p})
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	mkdirs := make([]string, 0, len(dirs)+1)
+	mkdirs = append(mkdirs, shellQuote(remoteBase))
+	for _, d := range dirs {
+		mkdirs = append(mkdirs, shellQuote(path.Join(remoteBase, d)))
+	}
+	res, err := h.RunCommand(ctx, "mkdir -p "+strings.Join(mkdirs, " "), "/", nil, 30000, nil)
+	if err != nil {
+		return err
+	}
+	if res.ExitCode != 0 {
+		return fmt.Errorf("mkdir %s: exit %d: %s", remoteBase, res.ExitCode, strings.TrimSpace(res.Stderr))
+	}
+	for _, f := range files {
+		data, err := os.ReadFile(f.abs)
+		if err != nil {
+			return err
+		}
+		if err := h.UploadFile(ctx, path.Join(remoteBase, f.rel), data); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type cachedHandle struct {

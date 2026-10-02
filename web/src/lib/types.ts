@@ -492,3 +492,98 @@ export interface OrgModel {
   capabilities: ModelCapabilities
   context_size: number
 }
+
+// ============ api.md §5：机构管理（智能体 / Skills）DTO ============
+
+export type AgentStatus = "draft" | "published" | "archived"
+
+export interface AgentToolsEnabled {
+  exec: boolean
+  read: boolean
+  write: boolean
+  edit: boolean
+  glob: boolean
+  grep: boolean
+}
+
+export interface AgentModelParams {
+  temperature?: number
+  max_tokens?: number
+}
+
+export interface AgentSandboxResources {
+  cpu?: string
+  memory?: string
+}
+
+export interface AgentSandboxConfig {
+  image: string
+  resources: AgentSandboxResources | null
+}
+
+export interface AgentBody {
+  name: string
+  description: string
+  avatar: string
+  system_prompt: string
+  model_id: string
+  model_params: AgentModelParams | null
+  max_iterations: number
+  tools_enabled: AgentToolsEnabled
+  skill_ids: string[]
+  sub_agent_ids: string[]
+  sandbox_config: AgentSandboxConfig
+}
+
+export interface AdminAgentSummary {
+  id: string
+  name: string
+  description: string
+  avatar: string
+  status: AgentStatus
+  model_id: string
+  model_display_name?: string
+  skill_count?: number
+  sub_agent_count?: number
+  updated_at: string
+  created_at?: string
+}
+
+export interface AdminAgentDetail extends AgentBody {
+  id: string
+  status: AgentStatus
+  updated_at: string
+  created_at?: string
+}
+
+export interface SkillReference {
+  agent_id: string
+  agent_name: string
+}
+
+export interface SkillSummary {
+  id: string
+  name: string
+  description: string
+  size_bytes: number
+  uploader_name: string
+  created_at: string
+  referenced_by: SkillReference[]
+}
+
+export interface SkillFileEntry {
+  path: string
+  size: number
+  type?: "file" | "dir"
+}
+
+export interface SkillDetail extends SkillSummary {
+  meta: Record<string, unknown>
+  files: SkillFileEntry[]
+}
+
+export interface SkillFileResponse {
+  path: string
+  content: string
+  truncated?: boolean
+}

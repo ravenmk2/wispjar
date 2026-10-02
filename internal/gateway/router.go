@@ -13,6 +13,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/provider"
 	"github.com/ravenmk2/wispjar/internal/runtime"
 	"github.com/ravenmk2/wispjar/internal/session"
+	"github.com/ravenmk2/wispjar/internal/skill"
 	"github.com/ravenmk2/wispjar/internal/tenant"
 )
 
@@ -88,6 +89,13 @@ func NewRouter(deps Deps) *gin.Engine {
 	admin.POST("/agents/:id/publish", agentH.PublishAgent)
 	admin.POST("/agents/:id/archive", agentH.ArchiveAgent)
 	admin.DELETE("/agents/:id", agentH.DeleteAgent)
+	skillH := skill.NewHandler(skill.NewService(deps.DB, deps.Config.Storage.DataDir))
+	admin.POST("/skills", skillH.UploadSkill)
+	admin.GET("/skills", skillH.ListSkills)
+	admin.GET("/skills/:id", skillH.GetSkill)
+	admin.GET("/skills/:id/file", skillH.GetSkillFile)
+	admin.DELETE("/skills/:id", skillH.DeleteSkill)
+	admin.GET("/sandbox-settings", providerH.GetSandboxSettings)
 
 	platform := authed.Group("/platform", deps.Auth.RequirePlatformAdmin())
 	platform.GET("/orgs", tenantH.ListOrgs)
