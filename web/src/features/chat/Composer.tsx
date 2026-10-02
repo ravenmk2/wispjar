@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { TokenBadge } from "@/features/chat/AssistantMessage"
-import { cn } from "@/lib/utils"
+import { cn, uuid } from "@/lib/utils"
 import type { ApprovalMode, OrgModel } from "@/lib/types"
 import { useComposerStore } from "@/stores/composer"
 import { useCurrentOrg } from "@/stores/identity"
@@ -72,7 +72,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
   async function send() {
     const content = draft.trim()
     if (!content || sending || busy) return
-    const requestId = crypto.randomUUID()
+    const requestId = uuid()
     setOptimistic({ requestId, content })
     setSending(true)
     try {

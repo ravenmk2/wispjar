@@ -1,4 +1,5 @@
 import type { ApiErrorBody, MuxClientFrame, MuxServerFrame } from "@/lib/types"
+import { uuid } from "@/lib/utils"
 
 export interface StreamHandlers {
   onItem: (value: unknown) => void
@@ -55,7 +56,7 @@ export class MuxConnection {
   }
 
   openStream(endpoint: string, getPayload: () => unknown, handlers: StreamHandlers): string {
-    const streamId = crypto.randomUUID()
+    const streamId = uuid()
     const reg: StreamRegistration = { streamId, endpoint, getPayload, handlers, opened: false }
     this.streams.set(streamId, reg)
     if (this.status === "open") this.sendOpen(reg)
