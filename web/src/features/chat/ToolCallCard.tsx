@@ -17,8 +17,14 @@ import { DiffBlock } from "@/components/Markdown"
 import { NodeList } from "@/features/chat/NodeList"
 import { safeParseJson } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import type { ToolCallNode } from "@/lib/conversation"
+import type { ConversationNode, ToolCallNode } from "@/lib/conversation"
 import type { ToolRender } from "@/lib/types"
+
+function hasPendingApproval(nodes: ConversationNode[]): boolean {
+  return nodes.some((n) =>
+    n.kind === "approval" ? n.status === "pending" : n.kind === "tool-call" ? hasPendingApproval(n.children) : false,
+  )
+}
 
 const TOOL_ICONS: Record<string, ReactNode> = {
   exec: <SquareTerminal className="size-3.5" />,
@@ -203,6 +209,8 @@ export function ToolCallCard({
   const isTask = node.name === "task"
   const render = node.result?.meta?.render ?? defaultRender(node.name)
   const [open, setOpen] = useState(!isTask && render !== "generic")
+  const pendingApproval = hasPendingApproval(node.children)
+  const expanded = open || pendingApproval
   const args = safeParseJson(node.arguments)
   const taskTarget =
     isTask && args
@@ -229,14 +237,20 @@ export function ToolCallCard({
         <span className="text-xs font-medium">{node.name}</span>
         {summary && <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">{summary}</span>}
         {!summary && <span className="flex-1" />}
+        {pendingApproval && (
+          <Badge variant="outline" className="gap-1 border-amber-500/50 text-[11px] font-normal text-amber-600">
+            <Loader2 className="size-3 animate-spin" />
+            待审批
+          </Badge>
+        )}
         <StatusBadge node={node} />
-        {open ? (
+        {expanded ? (
           <ChevronDown className="size-3.5 text-muted-foreground" />
         ) : (
           <ChevronRight className="size-3.5 text-muted-foreground" />
         )}
       </button>
-      {open && (
+      {expanded && (
         <div className="border-t px-2.5 py-2">
           {render === "terminal" && <TerminalBody node={node} liveOutput={liveOutput} />}
           {render === "diff" && <DiffBody node={node} />}
@@ -250,7 +264,7 @@ export function ToolCallCard({
           )}
         </div>
       )}
-      {!open && node.children.length > 0 && (
+      {!expanded && node.children.length > 0 && (
         <div className="border-t px-2.5 py-1 text-[11px] text-muted-foreground">
           {node.children.length} 条嵌套轨迹
         </div>

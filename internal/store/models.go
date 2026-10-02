@@ -172,7 +172,7 @@ type AgentCheckpoint struct {
 func (AgentCheckpoint) TableName() string { return "agent_checkpoint" }
 
 type UsageDaily struct {
-	Date             time.Time `gorm:"column:date;primaryKey;type:date" json:"date"`
+	Date             string    `gorm:"column:date;primaryKey;type:date" json:"date"`
 	OrgID            string    `gorm:"column:org_id;primaryKey;size:32" json:"org_id"`
 	UserID           string    `gorm:"column:user_id;primaryKey;size:32" json:"user_id"`
 	AgentID          string    `gorm:"column:agent_id;primaryKey;size:32" json:"agent_id"`

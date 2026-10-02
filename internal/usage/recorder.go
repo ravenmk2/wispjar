@@ -70,7 +70,7 @@ func deltaFromEvent(ev store.SessionEvent) (eventDelta, bool) {
 
 func (r *Recorder) upsert(ctx context.Context, sess *store.Session, d eventDelta) error {
 	row := store.UsageDaily{
-		Date:             d.date,
+		Date:             d.date.Format("2006-01-02"),
 		OrgID:            sess.OrgID,
 		UserID:           sess.UserID,
 		AgentID:          sess.AgentID,
