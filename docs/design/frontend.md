@@ -1,0 +1,165 @@
+# 前端详细设计
+
+> 本文是 `web/` 的权威设计。技术栈已定（决策 #11）：React 18 + Vite + TypeScript + Tailwind CSS + shadcn/ui + Zustand + React Router。界面语言中文。
+> 交互对标 DeepSeek Harness 的产品形态（三栏布局、聊天/轨迹双视图、工具卡片、审批内嵌），但不照搬其自研 store/Slots/模块加载器。
+
+## 1. 工程约定
+
+| 项 | 约定 |
+|---|---|
+| 包管理 | pnpm |
+| 构建 | Vite 6（`@vitejs/plugin-react`），产物 `web/dist`（gitignore，由 Go embed） |
+| 语言 | TypeScript 5 strict |
+| UI | Tailwind 3 + shadcn/ui（Radix 原语）；图标 lucide-react |
+| 状态 | Zustand 5（transport 状态与组件状态分离，见 §5） |
+| 路由 | react-router v7 |
+| Markdown | react-markdown + remark-gfm；代码高亮 shiki（按需加载语言） |
+| 请求 | 原生 fetch 封装（`src/api/client.ts`）：自动带 token、`X-Org-Id`（从 URL/状态推导）、统一错误信封解包、401 跳登录 |
+| 测试 | vitest（仅关键工具函数与 mux 客户端） |
+
+开发代理：vite dev server `server.proxy` 把 `/api` 转发到本地 Go 服务 `:8080`。
+
+## 2. 目录结构
+
+```txt
+web/src/
+├── main.tsx / App.tsx
+├── routes.tsx                 # 路由表 + 守卫
+├── api/                       # REST：client.ts + 按域 modules（auth/sessions/agents/admin/platform）
+├── mux/                       # WS mux 客户端（§4）
+├── stores/                    # Zustand stores（§5）
+├── components/ui/             # shadcn/ui 生成物
+├── components/                # 通用：Markdown、CodeBlock、DiffBlock、ConfirmDialog、EmptyState...
+├── features/
+│   ├── chat/                  # ChatView、MessageList、AssistantMessage、ToolCallCard（§6）、
+│   │                          #   ApprovalCard、Composer（输入区）、TokenBadge、StreamingText
+│   ├── trajectory/            # TrajectoryView（turn/step 时间线）
+│   ├── sessions/              # SessionList、SessionItem、重命名/归档菜单
+│   ├── agents/                # AgentPicker（侧栏智能体列表）
+│   ├── sandbox/               # SandboxPanel（文件树/预览/状态）
+│   └── admin/                 # 机构管理：AgentEditor（§8）、SkillManager、MemberManager、OrgUsage
+├── platform/                  # 平台管理：Orgs、Users、Providers、Models、Settings、Usage、Audit
+├── layouts/                   # WorkspaceLayout（三栏）、AdminLayout、PlatformLayout
+└── lib/                       # utils、types（与 protocol.md 对齐的 TS 类型，单一事实源）
+```
+
+`src/lib/types.ts` 手写与 protocol.md/api.md 对齐的 TS 类型（事件词表、StreamChunk、帧、资源 DTO）——前后端契约以文档为准，类型从文档翻译。
+
+## 3. 路由
+
+| 路径 | 页面 | 守卫 |
+|---|---|---|
+| `/login` | 登录 | 已登录跳 `/` |
+| `/` | 工作区（重定向到最近会话或空态） | 登录 |
+| `/c/:sessionId` | 会话（聊天/轨迹 tab + 右侧面板） | owner（403 友好页） |
+| `/admin/agents`、`/admin/agents/new`、`/admin/agents/:id` | 智能体管理/编辑器 | 机构 admin |
+| `/admin/skills` | Skills 管理 | 机构 admin |
+| `/admin/members` | 成员管理 | 机构 admin |
+| `/admin/usage` | 机构用量 | 机构 admin |
+| `/platform/orgs` `/platform/users` `/platform/providers` `/platform/models` `/platform/settings` `/platform/usage` `/platform/audit` | 平台后台 | 平台超管 |
+
+机构上下文：URL 不含机构；当前机构存 localStorage + `identity` store，API 客户端统一注入 `X-Org-Id`。顶栏机构切换器（下拉展示 `auth/me` 的 orgs；平台管理机构在列表中标注"平台"，选中且角色 admin 时导航进 `/platform/*`）。
+
+## 4. mux 客户端（src/mux/）
+
+```ts
+// 连接单例：鉴权、心跳响应、断线指数退避重连（1s→2s→…→30s，±20% 抖动）
+class MuxConnection {
+  connect(token: string): void
+  openStream(endpoint: string, payload: unknown, handlers: StreamHandlers): string // 返回 streamId
+  sendItem(streamId: string, value: unknown): void
+  closeStream(streamId: string): void
+}
+interface StreamHandlers { onItem(v: unknown): void; onError(e: RpcError): void; onEnd(): void }
+```
+
+- 重连成功后**自动重放 open**（登记表记录每条流的 endpoint+payload），payload 由流处理器提供"最新 afterSeq"回调——follow 流据此实现 protocol.md §8.2。
+- `session.follow` 处理器（`followSession(sessionId)`）封装完整状态机：snapshot 原子替换 → event 按 seq 追加（跳号触发 REST 补洞）→ assistant-stream 去重（attemptId+index ≥ nextIndex 才应用）→ tool-output 瞬态附加。对外只暴露一个 Zustand store 更新函数。
+- `control` 处理器维护会话列表投影 store。
+
+## 5. Zustand stores
+
+```ts
+useIdentityStore   // { user, orgs, currentOrgId, setOrg() }
+useSessionListStore// { sessions: Record<id, SessionProjection>, order: id[], applyBaseline/applyUpsert/remove }
+useSessionStore    // 当前会话窗口：
+                   // { header, events: SessionEvent[], liveAttempt?: { chunks, nextIndex },
+                   //   pendingApprovals: Record<callId, ApprovalAsked>, toolOutputs: Record<callId, string>,
+                   //   followStatus: "connecting"|"live"|"stalled" }
+useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, content } }
+```
+
+装配规则（直播与回放一致的关键）：消息渲染节点从 `events`（持久）+ `liveAttempt`（瞬态）统一派生——`deriveConversationNodes(events, liveAttempt)` 纯函数输出节点数组（user / assistant / tool-call / approval / boundary），ToolCallCard 既吃持久 `tool/call+tool/result` 也吃 liveAttempt 中的 tool-call 块 + `toolOutputs`。提交后瞬态丢弃，持久事件无缝接管。
+
+## 6. 聊天视图（features/chat）
+
+### 6.1 消息流
+
+- **user**：气泡右置（或左置宽卡，风格按 harness：简洁、弱气泡、强排版）。
+- **assistant**：Markdown 流式渲染；`reasoning` 块折叠（"思考过程"，默认收起，流式时展开滚动）；usage 徽标（`in/out tokens`，hover 展开 cached/reasoning 明细）；`interrupted` 标记"已停止"。
+- **ToolCallCard**（按 `tool/result.meta.render` 或 live 工具名映射）：
+  | render | 工具 | 卡片 |
+  |---|---|---|
+  | terminal | exec | 黑底终端样式：命令头 + stdout/stderr 滚动（live 期间接 tool-output 帧），退出码徽标 |
+  | diff | write/edit | 文件路径头 + unified diff 着色（新增绿/删除红） |
+  | search | glob/grep | 查询词头 + 结果列表（path:line 可点击定位预览） |
+  | read | read | 路径头 + 行号代码块 |
+  | generic | activate_skill/task | 名称头 + 可展开内容 |
+- **task 子轨迹**：task 卡片默认收起显示"委派给 {subagent}"+ 状态；展开后渲染 `parent_call_id` 相同的嵌套事件序列（递归用同一套节点渲染，层级缩进 + 左侧竖线）。
+- **ApprovalCard**：`approval/asked` 且 pending → 消息流内嵌卡片：工具名 + 参数展示（exec 命令高亮 / write/edit 显示 diff）+ 「允许」「拒绝」按钮 + 10 分钟倒计时；已 decided 或 auto-deny 显示结果态。点击调 REST 或 uplink（实现任选，协议等价）。
+
+### 6.2 Composer（输入区）
+
+- 多行输入（Enter 发送 / Shift+Enter 换行）；发送按钮在 `running` 时变为**停止**（POST cancel）。
+- 左下：确认模式三段切换（`严格：全部确认 / 默认：仅命令确认 / 自动：全部放行`）→ PATCH session。
+- 右下：模型切换下拉（`/orgs/{org}/models`）+ token 用量徽标。
+- 乐观对账：发送即插入乐观节点（`request_id`），事件帧到达后替换（protocol.md §8.4）。
+- 会话 running 且来自**本会话**时不允许再发送（置灰 + 提示）；429/409 错误 toast。
+
+### 6.3 轨迹视图（features/trajectory）
+
+同一 store 数据的另一投影：按 `turn → step → (model request | tool calls)` 时间线展示；每节点显示 seq、时间、耗时（step 边界差值）、usage；默认折叠消息正文、展开工具与审批——用于调试 Agent 行为。tab 切换不重新取数。
+
+### 6.4 沙箱面板（右侧，可折叠）
+
+- 状态头：沙箱状态（无/创建中/运行中/已回收）+ 镜像名。
+- 文件树：`GET /sessions/{id}/sandbox/files?path=` 懒加载目录；点击文件 → `sandbox/file` 预览（文本带高亮、二进制提供下载）。
+- 沙箱回收后提示"沙箱已回收，文件已清空"。
+
+## 7. 侧栏（sessions + agents）
+
+- 顶部：机构切换器 + 用户菜单（改密、退出）。
+- 智能体列表（AgentPicker）：本机构 published 智能体；点击 → POST 创建会话并跳转。
+- 会话列表：标题（自动生成中显示"新会话"）、running 呼吸点、相对时间；右键菜单：重命名 / 归档 / 删除（确认对话框）。数据源 `control` 流投影。
+- 底部入口：机构管理（admin 可见）、平台管理（超管可见）。
+
+## 8. 智能体编辑器（features/admin/AgentEditor）
+
+左侧分节导航、右侧表单，保存按钮底置固定：
+
+1. **基本信息**：名称、描述（hint：将作为 task 委派时的能力说明）、头像（内置图标集选择）。
+2. **模型**：下拉（`/orgs/{org}/models`，显示供应商/上下文长度）；参数：temperature 滑块（0-2）、max_tokens 数字。
+3. **提示词**：等宽字体 textarea（行数自适应，支持全屏）。
+4. **工具**：六沙箱工具开关组（默认全开）。
+5. **Skills**：本机构 skills 多选列表（名称+描述），可排序（拖拽）。
+6. **子智能体**：本机构其他 published 智能体多选；保存时前端提示环/层级限制（服务端 409 校验为准）；hint 说明"通过 task 工具委派"。
+7. **沙箱**：镜像下拉（`/platform/settings` 的 images 只读展示）、资源覆盖（CPU/内存，留空用平台默认）。
+8. **发布**：draft → 「发布」按钮（校验失败显示原因）；published → 「下线」；published 编辑后自动转 draft 并提示重新发布。
+
+## 9. 机构/平台管理页（规格摘要）
+
+- **SkillManager**：上传按钮（拖拽 zip，进度条）、列表（name/description/引用数/上传者/时间）、详情抽屉（frontmatter + 文件树 + 文件查看）、删除（被引用时禁用并提示）。
+- **MemberManager**：表格 + 「添加成员」（输入 username，角色下拉）、角色修改、移出（二次确认）。
+- **OrgUsage / PlatformUsage**：日期范围 + group_by 切换 + 表格 + 简单柱状图（recharts 或轻量自绘；token 三色系 input/output/cached）。
+- **Providers**：卡片列表（类型徽标、base_url、密钥掩码、连通状态点、最近检查时间）+ 新建/编辑对话框（类型下拉动态字段：deepseek/qwen/ark/openai_compat 各自 base_url 默认值）+ 「测试连通」按钮。
+- **Models**：按供应商分组的表格；上架对话框（model_code、显示名、能力复选：工具/推理/视觉/流式、上下文长度、默认参数 JSON）。
+- **Settings**：沙箱分区（默认镜像、镜像列表编辑器、egress 策略编辑器：defaultAction 切换 + 规则表格 allow/deny×target、资源默认、TTL）。
+- **Audit**：时间倒序表格（操作者/action/target/时间，detail 展开 JSON）。
+
+## 10. 视觉与体验基线
+
+- 主题：浅色默认 + 深色跟随系统（Tailwind `class` 策略）。
+- 字体：系统栈；代码 JetBrains Mono / ui-monospace。
+- 密度：harness 式紧凑信息密度（消息间距小、卡片边框细、弱化阴影）。
+- 空态：无会话时中央 AgentPicker 大卡；无智能体时引导去管理页创建（admin）或联系管理员（member）。
+- 加载：会话切换骨架屏；followStatus=stalled 时顶栏提示"连接已断开，重连中…"。
