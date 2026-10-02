@@ -1,0 +1,3 @@
+package id
+
+const PlatformOrgID = "00000000000000000000000000000001"

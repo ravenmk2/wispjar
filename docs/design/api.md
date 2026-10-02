@@ -197,7 +197,7 @@
 
 | 方法/路径 | 说明 |
 |---|---|
-| `GET /admin/members` | 成员列表（含 user 信息） |
+| `GET /admin/members` | 成员列表 `{items:[{user_id, username, display_name, status, role, created_at}]}` |
 | `POST /admin/members` | 添加已有用户：`{ "username": "...", "role": "admin|member" }`（按 username 查找；不存在 404） |
 | `PATCH /admin/members/{userId}` | 改角色 `{ "role": "..." }`（不得移除本机构最后一名 admin） |
 | `DELETE /admin/members/{userId}` | 移出机构（同上约束） |
@@ -224,19 +224,20 @@
 
 | 方法/路径 | 说明 |
 |---|---|
-| `GET /platform/users?q=&cursor=&limit=` | 用户列表 |
-| `POST /platform/users` | 创建用户 `{ "username", "display_name", "password"（可空→随机生成）, "org_ids": ["..."], "role": "member" }`；返回初始密码（仅此一次展示），`must_change_password=1` |
-| `PATCH /platform/users/{id}` | 改名/停用启用/重置密码（重置后同样强制改密） |
-| `POST /platform/users/{id}/orgs` | 把用户加入机构 `{ "org_id", "role" }` |
-| `DELETE /platform/users/{id}/orgs/{orgId}` | 移出机构 |
+| `GET /platform/users?q=&cursor=&limit=` | 用户列表；每项含 `orgs: [{org_id, org_name, role}]` 机构归属 |
+| `POST /platform/users` | 创建用户 `{ "username", "display_name", "password"（可空→随机生成）, "org_ids": ["..."], "role": "member" }`；201 返回 `{ "user": {...}, "password": "<初始密码，仅此一次展示>" }`，`must_change_password=1` |
+| `PATCH /platform/users/{id}` | 改名/停用启用/重置密码 `{ "display_name"?, "status"?, "reset_password"? }`；返回 `{ "user": {...} }`，重置密码时顶层附带 `"password"`（同样强制改密） |
+| `POST /platform/users/{id}/orgs` | 把用户加入机构 `{ "org_id", "role" }`（已是成员返回 409）；201 返回成员条目 `{user_id, username, display_name, status, role, created_at}` |
+| `PATCH /platform/users/{id}/orgs/{orgId}` | 修改用户在该机构的角色 `{ "role": "admin\|member" }`；不得移除本机构最后一名 admin（409），审计 `member.update_role` |
+| `DELETE /platform/users/{id}/orgs/{orgId}` | 移出机构（同上最后一名 admin 约束） |
 
 ### 供应商与模型
 
 | 方法/路径 | 说明 |
 |---|---|
-| `GET /platform/providers` | 列表（`api_key` 仅返回掩码如 `sk-****1234`） |
-| `POST /platform/providers` | 创建 `{ "name", "type": "deepseek|ark|qwen|openai_compat", "base_url", "api_key", "extra"?, "remark"? }`；创建后服务端做连通性测试（拉模型列表或一次最小 chat 调用），结果存 `extra.last_check`，失败仍允许保存但标记 |
-| `GET /platform/providers/{id}` | 详情（密钥掩码） |
+| `GET /platform/providers` | 列表；密钥仅返回 `masked_key` 掩码（如 `sk-****1234`），扩展信息在 `extra`（`{remark?, last_check?: {ok, at, latency_ms, error?}}`，无则为 null） |
+| `POST /platform/providers` | 创建 `{ "name", "type": "deepseek|ark|qwen|openai_compat", "base_url", "api_key", "extra"?, "remark"? }`；创建后服务端异步做连通性测试（GET base_url/models），结果存 `extra.last_check`，失败仍允许保存但标记 |
+| `GET /platform/providers/{id}` | 详情（结构同列表项，密钥掩码） |
 | `PUT /platform/providers/{id}` | 更新；`api_key` 字段留空表示不更换 |
 | `DELETE /platform/providers/{id}` | 删除；存在 `active` 模型时 409 |
 | `POST /platform/providers/{id}/check` | 重新连通性测试 → `{ "ok": true, "latency_ms": 0 }` |

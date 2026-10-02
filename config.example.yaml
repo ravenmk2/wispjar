@@ -1,0 +1,29 @@
+# WispJar 配置示例。复制为 config.yaml 后按需修改。
+# 敏感项建议用环境变量注入（优先级高于本文件）：
+#   WISPJAR_MASTER_KEY / WISPJAR_JWT_SECRET / WISPJAR_ADMIN_PASSWORD / WISPJAR_SANDBOX_KEY
+# 另支持 WISPJAR_ADDR 覆盖 server.addr。
+
+server:
+  addr: ":8080"
+
+database:
+  # MySQL 8；charset/parseTime/time_zone=+08:00 等参数由程序自动补全
+  dsn: "wispjar:wispjar@tcp(127.0.0.1:3306)/wispjar"
+
+auth:
+  # HS256 密钥；留空则启动时随机生成（重启后旧 token 全部失效）
+  jwt_secret: ""
+  token_ttl: 24h
+
+crypto:
+  # 32 字节主密钥，base64 或 hex 编码；用于供应商密钥 AES-256-GCM 加密
+  master_key: ""
+
+storage:
+  data_dir: "./data"
+
+opensandbox:
+  lifecycle_url: "http://127.0.0.1:8081"
+  api_key: ""
+  idle_ttl_seconds: 1800
+  sandbox_ttl_seconds: 3600
