@@ -56,7 +56,7 @@
 { "orgId": "...", "sessionId": "...", "afterSeq": 0 }
 ```
 
-- `afterSeq`：客户端本地已持有的最大事件 seq。首开后一般为 0（要完整尾部窗口）；重连后填本地 lastSeq（服务端仍发快照，但 records 窗口以 afterSeq 为下界裁剪）。
+- `afterSeq`：客户端本地已持有的最大事件 seq。首开后一般为 0（要完整尾部窗口）；重连后填本地 lastSeq（服务端仍发快照；v1 实现中 records 始终为尾部窗口、不按 afterSeq 裁剪——客户端本就原子替换窗口，裁剪仅为带宽优化，见 §8.2）。
 
 ### 4.2 首帧：snapshot（永远第一帧，重连同语义）
 
@@ -221,7 +221,7 @@ Agent 请求 exec → runtime 拦截（runtime.md §5）
 
 ### 8.2 follow 重开
 
-`afterSeq` 填本地 lastSeq → 服务端发 snapshot（records 窗口裁剪）→ 客户端**原子替换**本地窗口 → 若有进行中 attempt，从 `compactChunks + nextIndex` 继续追加 chunk。渲染结果与从未断线一致。
+`afterSeq` 填本地 lastSeq → 服务端发 snapshot（records 为最新尾部窗口，不裁剪）→ 客户端**原子替换**本地窗口 → 若有进行中 attempt，从 `compactChunks + nextIndex` 继续追加 chunk。渲染结果与从未断线一致。
 
 ### 8.3 间隙修复
 

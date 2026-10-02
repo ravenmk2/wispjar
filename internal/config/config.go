@@ -28,7 +28,8 @@ func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 
 type Config struct {
 	Server struct {
-		Addr string `yaml:"addr"`
+		Addr           string   `yaml:"addr"`
+		AllowedOrigins []string `yaml:"allowed_origins"`
 	} `yaml:"server"`
 	Database struct {
 		DSN string `yaml:"dsn"`

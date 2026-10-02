@@ -4,7 +4,9 @@ import WorkspaceLayout from "@/layouts/WorkspaceLayout"
 import ChangePasswordPage from "@/pages/ChangePassword"
 import LoginPage from "@/pages/Login"
 import WorkspaceHome from "@/pages/WorkspaceHome"
+import ChatView from "@/features/chat/ChatView"
 import MembersPage from "@/features/admin/MembersPage"
+import AgentsPlaceholderPage from "@/features/admin/AgentsPage"
 import OrgUsagePage from "@/features/admin/OrgUsagePage"
 import ModelsPage from "@/platform/ModelsPage"
 import OrgsPage from "@/platform/OrgsPage"
@@ -45,7 +47,10 @@ export const router = createBrowserRouter([
       {
         path: "/",
         element: <WorkspaceLayout />,
-        children: [{ index: true, element: <WorkspaceHome /> }],
+        children: [
+          { index: true, element: <WorkspaceHome /> },
+          { path: "c/:sessionId", element: <ChatView /> },
+        ],
       },
       {
         element: <RequireOrgAdmin />,
@@ -57,6 +62,7 @@ export const router = createBrowserRouter([
               { index: true, element: <Navigate to="/admin/members" replace /> },
               { path: "members", element: <MembersPage /> },
               { path: "usage", element: <OrgUsagePage /> },
+              { path: "agents", element: <AgentsPlaceholderPage /> },
             ],
           },
         ],

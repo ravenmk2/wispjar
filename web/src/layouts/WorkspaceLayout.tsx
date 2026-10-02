@@ -1,36 +1,45 @@
 import { Bot, MessagesSquare, Settings2, ShieldCheck } from "lucide-react"
+import { useEffect } from "react"
 import { Link, Outlet } from "react-router"
 import { OrgSwitcher, UserMenu } from "@/layouts/AdminLayout"
 import { Separator } from "@/components/ui/separator"
-import { useCurrentOrg } from "@/stores/identity"
-
-function SidebarPlaceholder({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <div className="px-3">
-      <div className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
-        {icon}
-        {label}
-      </div>
-      <div className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
-        即将上线
-      </div>
-    </div>
-  )
-}
+import { AgentPicker } from "@/features/agents/AgentPicker"
+import { SessionList } from "@/features/sessions/SessionList"
+import { followControl } from "@/mux/control"
+import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 
 export default function WorkspaceLayout() {
   const currentOrg = useCurrentOrg()
+  const token = useIdentityStore((s) => s.token)
   const isAdmin = currentOrg?.role === "admin"
   const isPlatformAdmin = isAdmin && currentOrg?.is_platform
 
+  useEffect(() => {
+    if (!currentOrg || !token) return
+    const handle = followControl(currentOrg.id)
+    return () => handle.close()
+  }, [currentOrg, token])
+
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen">
       <aside className="flex w-60 shrink-0 flex-col border-r">
-        <div className="flex h-12 items-center px-4 text-sm font-semibold">WispJar</div>
+        <div className="flex h-12 shrink-0 items-center px-4 text-sm font-semibold">WispJar</div>
         <Separator />
-        <div className="flex-1 space-y-4 overflow-y-auto py-4">
-          <SidebarPlaceholder icon={<Bot className="size-3.5" />} label="智能体" />
-          <SidebarPlaceholder icon={<MessagesSquare className="size-3.5" />} label="会话" />
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-4">
+          <div className="px-3">
+            <div className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+              <Bot className="size-3.5" />
+              智能体
+            </div>
+            <AgentPicker />
+          </div>
+          <div className="px-3">
+            <div className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+              <MessagesSquare className="size-3.5" />
+              会话
+            </div>
+            <SessionList />
+          </div>
         </div>
         {(isAdmin || isPlatformAdmin) && (
           <>

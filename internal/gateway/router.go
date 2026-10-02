@@ -6,16 +6,25 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"github.com/ravenmk2/wispjar/internal/agent"
 	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/config"
+	"github.com/ravenmk2/wispjar/internal/gateway/ws"
 	"github.com/ravenmk2/wispjar/internal/provider"
+	"github.com/ravenmk2/wispjar/internal/runtime"
+	"github.com/ravenmk2/wispjar/internal/session"
 	"github.com/ravenmk2/wispjar/internal/tenant"
 )
 
 type Deps struct {
-	Config *config.Config
-	DB     *gorm.DB
-	Auth   *auth.Service
+	Config  *config.Config
+	DB      *gorm.DB
+	Auth    *auth.Service
+	Runtime *runtime.Handler
+	WS      *ws.Server
+	// WSBus 与 RuntimeSessions 用于 PATCH 附带事件的 follow/control 广播挂钩（可选）。
+	WSBus           *runtime.Bus
+	RuntimeSessions runtime.SessionRepo
 }
 
 func NewRouter(deps Deps) *gin.Engine {
@@ -35,14 +44,50 @@ func NewRouter(deps Deps) *gin.Engine {
 
 	tenantH := tenant.NewHandler(tenant.NewService(deps.DB))
 	providerH := provider.NewHandler(provider.NewService(deps.DB, deps.Config.MasterKey()))
+	agentSvc := agent.NewService(deps.DB)
+	sessionSvc := session.NewService(deps.DB, agentSvc)
+	if deps.Runtime != nil && deps.WSBus != nil {
+		sessionSvc.AfterEvents = func(sessionID string, events []session.Event) {
+			for _, ev := range events {
+				deps.WSBus.Publish(sessionID, runtime.EventFrame(ev))
+			}
+			go runtime.PublishControlProjection(deps.RuntimeSessions, deps.WSBus, sessionID)
+		}
+	}
+	sessionH := session.NewHandler(sessionSvc)
+	agentH := agent.NewHandler(agentSvc)
+
+	authed.GET("/sessions/:id", sessionH.GetSession)
+	authed.PATCH("/sessions/:id", sessionH.PatchSession)
+	if deps.Runtime != nil {
+		authed.DELETE("/sessions/:id", deps.Runtime.DeleteSession)
+		authed.POST("/sessions/:id/prompts", deps.Runtime.Prompt)
+		authed.POST("/sessions/:id/cancel", deps.Runtime.Cancel)
+		authed.POST("/sessions/:id/approvals/:callId", deps.Runtime.Approval)
+		authed.GET("/sessions/:id/sandbox/files", deps.Runtime.SandboxFiles)
+		authed.GET("/sessions/:id/sandbox/file", deps.Runtime.SandboxFile)
+	} else {
+		authed.DELETE("/sessions/:id", sessionH.DeleteSession)
+	}
+	authed.GET("/sessions/:id/events", sessionH.ListEvents)
 
 	org := authed.Group("/orgs/:orgId", deps.Auth.ResolveOrg())
 	org.GET("/models", providerH.ListWorkspaceModels)
+	org.GET("/agents", agentH.ListWorkspaceAgents)
+	org.POST("/sessions", sessionH.CreateSession)
+	org.GET("/sessions", sessionH.ListSessions)
 	admin := org.Group("/admin", auth.RequireOrgAdmin())
 	admin.GET("/members", tenantH.ListMembers)
 	admin.POST("/members", tenantH.AddMember)
 	admin.PATCH("/members/:userId", tenantH.UpdateMemberRole)
 	admin.DELETE("/members/:userId", tenantH.RemoveMember)
+	admin.GET("/agents", agentH.ListAgents)
+	admin.POST("/agents", agentH.CreateAgent)
+	admin.GET("/agents/:id", agentH.GetAgent)
+	admin.PUT("/agents/:id", agentH.UpdateAgent)
+	admin.POST("/agents/:id/publish", agentH.PublishAgent)
+	admin.POST("/agents/:id/archive", agentH.ArchiveAgent)
+	admin.DELETE("/agents/:id", agentH.DeleteAgent)
 
 	platform := authed.Group("/platform", deps.Auth.RequirePlatformAdmin())
 	platform.GET("/orgs", tenantH.ListOrgs)
@@ -67,6 +112,10 @@ func NewRouter(deps Deps) *gin.Engine {
 	platform.DELETE("/models/:id", providerH.DeleteModel)
 	platform.GET("/settings", providerH.GetSettings)
 	platform.PUT("/settings/:key", providerH.UpdateSetting)
+
+	if deps.WS != nil {
+		r.GET("/api/ws", deps.WS.Handle)
+	}
 
 	r.NoRoute(spaHandler())
 	return r

@@ -27,6 +27,11 @@ const (
 	ModelUpdate       = "model.update"
 	ModelDelete       = "model.delete"
 	SettingsUpdate    = "settings.update"
+	AgentCreate       = "agent.create"
+	AgentUpdate       = "agent.update"
+	AgentPublish      = "agent.publish"
+	AgentArchive      = "agent.archive"
+	AgentDelete       = "agent.delete"
 )
 
 type Entry struct {

@@ -190,3 +190,305 @@ export interface UsageResponse {
 }
 
 export type UsageGroupBy = "user" | "agent" | "model" | "day" | "org"
+
+// ============ protocol.md：WS mux 协议类型 ============
+
+export type ApprovalMode = "strict" | "default" | "auto"
+
+export type SandboxStatus = "none" | "creating" | "running" | "recycled"
+
+export type SessionStatus = "active" | "archived" | "deleted"
+
+export interface Usage {
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  reasoning_tokens: number
+}
+
+export interface ChunkUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  reasoningTokens: number
+}
+
+export type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "reasoning"; text: string }
+  | { type: "tool-call"; id: string; name: string; arguments: string }
+
+export interface AssistantMessagePayload {
+  role: "assistant"
+  content: ContentBlock[]
+}
+
+export type StreamChunk =
+  | { type: "block-start"; index: number; blockType: "text" | "reasoning" | "tool-call" }
+  | { type: "text-delta"; index: number; text: string }
+  | { type: "reasoning-delta"; index: number; text: string }
+  | { type: "tool-call-delta"; index: number; id?: string; name?: string; argumentsDelta?: string }
+  | { type: "block-end"; index: number; block: ContentBlock }
+  | { type: "usage"; usage: ChunkUsage }
+  | { type: "finish"; reason: "stop" | "tool-calls" | "max-tokens" | "aborted" | "error" }
+
+// ============ protocol.md §6：会话事件词表 ============
+
+export type TurnEndReason = "completed" | "interrupted" | "failed"
+
+export type ToolRender = "terminal" | "diff" | "search" | "read" | "generic"
+
+export interface ToolResultMeta {
+  duration_ms?: number
+  render?: ToolRender
+  diff?: string
+  truncated?: boolean
+  sandbox_id?: string
+}
+
+export interface SessionEventBase {
+  seq: number
+  time: number
+}
+
+export type SessionEvent = SessionEventBase &
+  (
+    | { type: "turn/start"; data: { turn: number; request_id: string } }
+    | { type: "turn/end"; data: { turn: number; reason: TurnEndReason; error?: string } }
+    | { type: "step/start"; data: { turn: number; step: number } }
+    | { type: "step/end"; data: { turn: number; step: number } }
+    | { type: "user/message"; data: { turn: number; content: string; request_id: string } }
+    | {
+        type: "assistant/message"
+        data: { turn: number; step: number; message: AssistantMessagePayload; usage?: Usage; interrupted?: boolean }
+      }
+    | { type: "assistant/attempt"; data: { turn: number; step: number; chunks: StreamChunk[]; error?: string } }
+    | {
+        type: "tool/call"
+        data: { turn: number; step: number; call_id: string; name: string; arguments: string; parent_call_id?: string }
+      }
+    | {
+        type: "tool/result"
+        data: {
+          turn: number
+          step: number
+          call_id: string
+          name: string
+          content: string
+          error?: string
+          meta?: ToolResultMeta
+          parent_call_id?: string
+        }
+      }
+    | { type: "session/title"; data: { title: string; auto: boolean } }
+    | {
+        type: "session/sandbox"
+        data: { action: "created" | "recycled" | "failed"; sandbox_id: string; image: string; error?: string }
+      }
+    | { type: "session/approval-mode"; data: { mode: ApprovalMode; changed_by: string } }
+    | { type: "model/selection"; data: { model_id: string; changed_by: string } }
+    | {
+        type: "request/header"
+        data: { turn: number; provider_id: string; model_id: string; model_code: string; params: unknown; tools: string[] }
+      }
+    | {
+        type: "approval/asked"
+        data: {
+          turn: number
+          step: number
+          call_id: string
+          name: string
+          arguments: string
+          risk: "high" | "medium"
+          parent_call_id?: string
+        }
+      }
+    | {
+        type: "approval/decided"
+        data: { call_id: string; decision: "allow" | "deny"; decided_by: string; auto: boolean }
+      }
+    | { type: "compaction/summary"; data: { covers: { start_seq: number; end_seq: number }; summary: string } }
+  )
+
+export type SessionEventType = SessionEvent["type"]
+
+// ============ protocol.md §4：session.follow 帧 ============
+
+export interface SessionHeader {
+  sessionId: string
+  title: string
+  titlePinned: boolean
+  agentId: string
+  agentName: string
+  agentAvatar: string
+  modelId: string
+  approvalMode: ApprovalMode
+  sandboxStatus: SandboxStatus
+  running: boolean
+  lastSeq: number
+  usageTotal: Usage
+  createdAt: string
+}
+
+export interface AssistantStreamSnapshot {
+  attemptId: string
+  turn: number
+  step: number
+  startedAfterSeq: number
+  compactChunks: StreamChunk[]
+  nextIndex: number
+}
+
+export type AssistantStreamOutcome =
+  | { kind: "committed"; eventType: string; seq: number }
+  | { kind: "abandoned" }
+
+export type AssistantStreamFrame =
+  | { type: "start"; attemptId: string; turn: number; step: number; startedAfterSeq: number }
+  | { type: "chunk"; attemptId: string; index: number; time: number; chunk: StreamChunk }
+  | { type: "end"; attemptId: string; outcome: AssistantStreamOutcome }
+
+export type FollowFrame =
+  | { type: "snapshot"; header: SessionHeader; records: SessionEvent[]; hasMore: boolean; assistantStream?: AssistantStreamSnapshot }
+  | { type: "event"; event: SessionEvent }
+  | { type: "assistant-stream"; frame: AssistantStreamFrame }
+  | { type: "tool-output"; callId: string; stream: "stdout" | "stderr"; delta: string }
+
+export interface FollowOpenPayload {
+  orgId: string
+  sessionId: string
+  afterSeq: number
+}
+
+export interface ApprovalResponseUplink {
+  type: "approval-response"
+  callId: string
+  decision: "allow" | "deny"
+}
+
+// ============ protocol.md §5：control 流 ============
+
+export interface SessionProjection {
+  sessionId: string
+  title: string
+  running: boolean
+  agentId: string
+  usageTotal: Usage
+  lastActiveAt: string
+  status: SessionStatus
+}
+
+export type ControlFrame =
+  | { type: "baseline"; sessions: SessionProjection[] }
+  | { type: "upsert"; session: SessionProjection }
+  | { type: "remove"; sessionId: string }
+
+// ============ protocol.md §2：mux 帧 ============
+
+export type MuxClientFrame =
+  | { type: "open"; streamId: string; endpoint: string; payload: unknown }
+  | { type: "item"; streamId: string; value: unknown }
+  | { type: "end"; streamId: string }
+  | { type: "cancel"; streamId: string }
+
+export type MuxServerFrame =
+  | { type: "item"; streamId: string; value: unknown }
+  | { type: "error"; streamId: string; error: ApiErrorBody }
+  | { type: "end"; streamId: string }
+
+// ============ api.md §3/§4：会话域 REST DTO ============
+
+export interface SessionSummary {
+  id: string
+  agent_id: string
+  agent_name: string
+  title: string
+  running: boolean
+  approval_mode: ApprovalMode
+  model_id: string
+  usage_total: Usage
+  last_active_at: string
+  created_at: string
+}
+
+export interface SessionAgentInfo {
+  name: string
+  description: string
+  avatar: string
+}
+
+export interface SessionDetail extends SessionSummary {
+  title_pinned?: boolean
+  sandbox_status?: SandboxStatus
+  status?: SessionStatus
+  agent?: SessionAgentInfo
+}
+
+export interface CreateSessionRequest {
+  agent_id: string
+  title?: string
+}
+
+export interface UpdateSessionRequest {
+  title?: string
+  approval_mode?: ApprovalMode
+  status?: "active" | "archived"
+  model_id?: string
+}
+
+export interface PromptRequest {
+  content: string
+  request_id: string
+}
+
+export interface PromptResponse {
+  accepted: boolean
+  seq: number
+}
+
+export interface SessionEventsResponse {
+  items: SessionEvent[]
+  last_seq: number
+}
+
+export interface ApprovalDecisionRequest {
+  decision: "allow" | "deny"
+}
+
+export interface SandboxFileItem {
+  name: string
+  path: string
+  type: "file" | "dir"
+  size: number
+  modified_at: string
+}
+
+export interface SandboxFilesResponse {
+  items: SandboxFileItem[]
+}
+
+export interface SandboxFileResponse {
+  path: string
+  content: string
+  truncated: boolean
+}
+
+export interface AgentSummary {
+  id: string
+  name: string
+  description: string
+  avatar: string
+  model_id: string
+  model_display_name: string
+}
+
+export interface OrgModel {
+  id: string
+  display_name: string
+  model_code: string
+  provider_name: string
+  capabilities: ModelCapabilities
+  context_size: number
+}

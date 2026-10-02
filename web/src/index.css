@@ -57,3 +57,61 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .markdown-body > *:first-child {
+    margin-top: 0;
+  }
+  .markdown-body > *:last-child {
+    margin-bottom: 0;
+  }
+  .markdown-body p {
+    @apply my-2;
+  }
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3,
+  .markdown-body h4 {
+    @apply mb-2 mt-4 font-semibold;
+  }
+  .markdown-body h1 {
+    @apply text-lg;
+  }
+  .markdown-body h2 {
+    @apply text-base;
+  }
+  .markdown-body h3,
+  .markdown-body h4 {
+    @apply text-sm;
+  }
+  .markdown-body ul {
+    @apply my-2 list-disc pl-5;
+  }
+  .markdown-body ol {
+    @apply my-2 list-decimal pl-5;
+  }
+  .markdown-body li {
+    @apply my-0.5;
+  }
+  .markdown-body blockquote {
+    @apply my-2 border-l-2 pl-3 text-muted-foreground;
+  }
+  .markdown-body hr {
+    @apply my-4;
+  }
+  .markdown-body table {
+    @apply my-2 w-full border-collapse text-[13px];
+  }
+  .markdown-body th,
+  .markdown-body td {
+    @apply border px-2 py-1 text-left;
+  }
+  .markdown-body th {
+    @apply bg-muted font-medium;
+  }
+  .dark .markdown-body .shiki,
+  .dark .markdown-body .shiki span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+}

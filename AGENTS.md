@@ -11,7 +11,7 @@ wispjar/
 │                    #   skill/agent/runtime/sandbox/session/gateway/usage/audit，见设计文档 §4.2）
 ├── web/             # 前端源码与构建产物（embed 进二进制，dist/ 不入库）
 ├── docs/            # 设计文档
-├── scripts/         # 辅助脚本（build.sh 本地多平台构建）
+├── scripts/         # 辅助脚本（build.sh 本地多平台构建；sandbox-image/ 沙箱基础镜像 Dockerfile）
 └── .github/workflows/  # CI（test.yml）与发布（release.yml，tag v*.*.* 触发 goreleaser）
 ```
 
