@@ -1,6 +1,7 @@
 import { CircleAlert, CircleStop, Loader2 } from "lucide-react"
 import { ApprovalCard } from "@/features/chat/ApprovalCard"
 import { AssistantMessage } from "@/features/chat/AssistantMessage"
+import { ForkButton } from "@/features/chat/ForkButton"
 import { ToolCallCard } from "@/features/chat/ToolCallCard"
 import { useSessionStore } from "@/stores/session"
 import { cn } from "@/lib/utils"
@@ -35,14 +36,21 @@ export function NodeView({ node, sessionId, depth }: { node: ConversationNode; s
   switch (node.kind) {
     case "user":
       return (
-        <div className={cn("flex", depth === 0 && "justify-end")}>
+        <div className={cn("group flex items-center gap-1.5", depth === 0 && "justify-end")}>
+          {depth === 0 && <ForkButton sessionId={sessionId} seq={node.seq} />}
           <div className="max-w-[85%] whitespace-pre-wrap rounded-lg bg-primary px-3.5 py-2 text-sm text-primary-foreground">
             {node.content}
           </div>
+          {depth !== 0 && <ForkButton sessionId={sessionId} seq={node.seq} />}
         </div>
       )
     case "assistant":
-      return <AssistantMessage node={node} />
+      return (
+        <div className="group relative">
+          <AssistantMessage node={node} />
+          {!node.live && <ForkButton sessionId={sessionId} seq={node.seq} className="absolute -top-1 right-0" />}
+        </div>
+      )
     case "tool-call":
       return <ToolCallCard node={node} sessionId={sessionId} liveOutput={liveOutput} depth={depth} />
     case "approval":

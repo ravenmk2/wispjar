@@ -5,6 +5,10 @@
 
 server:
   addr: ":8080"
+  # 额外允许的跨域 Origin（WS /api/ws 握手校验；同源请求始终放行，无需列出）。
+  # 前后端分离部署（如前端单独域名）时在此添加前端完整来源：
+  # allowed_origins: ["https://wispjar-ui.example.com"]
+  allowed_origins: []
 
 database:
   # MySQL 8；charset/parseTime/time_zone=+08:00 等参数由程序自动补全

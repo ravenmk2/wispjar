@@ -26,15 +26,14 @@ type ModelFactory interface {
 }
 
 type Deps struct {
-	Events          EventStore
-	Sessions        SessionRepo
-	Models          ModelFactory
-	Sandbox         sandbox.Manager
-	SandboxSettings sandbox.Settings
-	Checkpoints     func(sessionID string) adk.CheckPointStore
-	Bus             *Bus
-	DataDir         string
-	ContextSize     func(ctx context.Context, modelID string) int
+	Events      EventStore
+	Sessions    SessionRepo
+	Models      ModelFactory
+	Sandbox     sandbox.Manager
+	Checkpoints func(sessionID string) adk.CheckPointStore
+	Bus         *Bus
+	DataDir     string
+	ContextSize func(ctx context.Context, modelID string) int
 	// ToolContextFactory 覆盖工具上下文装配（测试注入用；生产为 nil）。
 	ToolContextFactory func(sess *store.Session, snap *agent.Snapshot) *tools.Context
 }

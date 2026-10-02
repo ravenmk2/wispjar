@@ -415,7 +415,6 @@ func newTestEnv(t *testing.T, approvalMode string, script func(call int, input [
 		ToolContextFactory: func(sess *store.Session, snap *agent.Snapshot) *tools.Context {
 			tc := tools.NewContext(sess.ID, sess.OrgID)
 			tc.Sandbox = fakeSandboxProvider{h: handle}
-			tc.Settings = sandbox.DefaultSettings()
 			return tc
 		},
 	})

@@ -1,4 +1,4 @@
-import { Archive, MoreHorizontal, Pencil, Search, Trash2 } from "lucide-react"
+import { Archive, GitFork, MoreHorizontal, Pencil, Search, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { NavLink, useNavigate, useParams } from "react-router"
 import { toast } from "sonner"
@@ -108,6 +108,17 @@ export function SessionList() {
     }
   }
 
+  async function forkFromEnd(item: ListItem) {
+    try {
+      const { last_seq } = await sessionsApi.events(item.id, Number.MAX_SAFE_INTEGER)
+      const res = await sessionsApi.fork(item.id, last_seq)
+      toast.success("已创建分叉会话")
+      navigate(`/c/${res.id}`)
+    } catch (e) {
+      toast.error(errorMessage(e))
+    }
+  }
+
   async function remove() {
     if (!deleteTarget || acting) return
     setActing(true)
@@ -183,6 +194,10 @@ export function SessionList() {
                   <DropdownMenuItem onClick={() => void archive(item)}>
                     <Archive className="size-3.5" />
                     归档
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => void forkFromEnd(item)}>
+                    <GitFork className="size-3.5" />
+                    从结尾分叉
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive"

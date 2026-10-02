@@ -124,7 +124,7 @@
 
 ### POST /api/v1/sessions/{id}/fork （M4）
 
-请求 `{ "at_seq": 42 }` → 从该事件点分叉出新会话（复制 ≤at_seq 的事件 + 快照），201 返回新会话 id。
+请求 `{ "at_seq": 42 }` → 从该事件点分叉出新会话（复制 ≤at_seq 的事件 + 快照，标题追加"（分叉）"），201 返回 `{ "id": "<新会话 id>" }`；`at_seq` 不在 `1..last_seq` 时 400。
 
 ### GET /api/v1/sessions/{id}/events
 
@@ -211,7 +211,7 @@
 ### 机构用量
 
 `GET /admin/usage?from=YYYY-MM-DD&to=YYYY-MM-DD&group_by=user|agent|model|day` →
-`{ "items": [ { "key": "...", "requests", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens", "total_tokens" } ], "totals": {...} }`（基于 `usage_daily`）。
+`{ "items": [ { "key": "...", "requests", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens", "total_tokens" } ], "totals": {...}, "names": { "<key>": "<显示名>" } }`（基于 `usage_daily`；`names` 把 user/agent/model/org 维度的 key 映射为显示名，`day` 维度为空）。机构端 `group_by=org` 返回 400。
 
 ---
 
@@ -231,7 +231,7 @@
 | 方法/路径 | 说明 |
 |---|---|
 | `GET /platform/users?q=&cursor=&limit=` | 用户列表；每项含 `orgs: [{org_id, org_name, role}]` 机构归属 |
-| `POST /platform/users` | 创建用户 `{ "username", "display_name", "password"（可空→随机生成）, "org_ids": ["..."], "role": "member" }`；201 返回 `{ "user": {...}, "password": "<初始密码，仅此一次展示>" }`，`must_change_password=1` |
+| `POST /platform/users` | 创建用户 `{ "username", "display_name", "password"（可空→随机生成）, "org_ids": ["..."], "role": "member" }`；201 返回 `{ "user": {...}, "password": "<初始密码，仅此一次展示>" }`，`must_change_password=1`；审计 `tenant.user_create`，且每个初始机构各记一条 `member.add` |
 | `PATCH /platform/users/{id}` | 改名/停用启用/重置密码 `{ "display_name"?, "status"?, "reset_password"? }`；返回 `{ "user": {...} }`，重置密码时顶层附带 `"password"`（同样强制改密） |
 | `POST /platform/users/{id}/orgs` | 把用户加入机构 `{ "org_id", "role" }`（已是成员返回 409）；201 返回成员条目 `{user_id, username, display_name, status, role, created_at}` |
 | `PATCH /platform/users/{id}/orgs/{orgId}` | 修改用户在该机构的角色 `{ "role": "admin\|member" }`；不得移除本机构最后一名 admin（409），审计 `member.update_role` |
@@ -259,7 +259,7 @@
 | `GET /platform/settings` | 全部 platform_setting KV |
 | `PUT /platform/settings/{key}` | 更新单 key（body 即 value JSON；仅允许 data-model.md §7 列出的 key） |
 | `GET /platform/usage?from=&to=&group_by=org|user|agent|model|day` | 全平台用量（结构同机构用量） |
-| `GET /platform/audit?org_id=&cursor=&limit=` | 审计日志 |
+| `GET /platform/audit?org_id=&cursor=&limit=` | 审计日志（id 倒序即时间倒序），`{items:[{id, org_id, actor_id, actor_name, action, target, detail, created_at}], next_cursor}`；`actor_name` 为操作者显示名（回退 username） |
 
 ---
 

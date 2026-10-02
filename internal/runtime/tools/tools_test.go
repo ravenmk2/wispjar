@@ -81,7 +81,6 @@ func (p memProvider) Get(_ context.Context, sessionID string, opts sandbox.Optio
 func testCtx(h *memHandle) context.Context {
 	tc := NewContext("sess-1", "org-1")
 	tc.Sandbox = memProvider{h: h}
-	tc.Settings = sandbox.DefaultSettings()
 	return WithContext(context.Background(), tc)
 }
 

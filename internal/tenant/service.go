@@ -489,6 +489,15 @@ func (s *Service) CreateUser(actorID string, in CreateUserInput) (*UserView, str
 			if err := tx.Create(&member).Error; err != nil {
 				return err
 			}
+			if err := audit.Log(tx, audit.Entry{
+				OrgID:   orgID,
+				ActorID: actorID,
+				Action:  audit.MemberAdd,
+				Target:  user.ID,
+				Detail:  map[string]any{"username": user.Username, "role": role},
+			}); err != nil {
+				return err
+			}
 		}
 		return audit.Log(tx, audit.Entry{
 			ActorID: actorID,

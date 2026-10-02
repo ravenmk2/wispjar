@@ -107,6 +107,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
   | generic | activate_skill/task | 名称头 + 可展开内容 |
 - **task 子轨迹**：task 卡片默认收起显示"委派给 {subagent}"+ 状态；展开后渲染 `parent_call_id` 相同的嵌套事件序列（递归用同一套节点渲染，层级缩进 + 左侧竖线）。
 - **ApprovalCard**：`approval/asked` 且 pending → 消息流内嵌卡片：工具名 + 参数展示（exec 命令高亮 / write/edit 显示 diff）+ 「允许」「拒绝」按钮 + 10 分钟倒计时；已 decided 或 auto-deny 显示结果态。点击调 REST 或 uplink（实现任选，协议等价）。
+- **消息分叉**（M4）：hover 消息节点显示分叉按钮（GitFork 图标，tooltip "从这条消息分叉出新会话"）；点击调 `POST /sessions/{id}/fork {at_seq}`，成功后跳转新会话（标题自动带"（分叉）"）。
 
 ### 6.2 Composer（输入区）
 

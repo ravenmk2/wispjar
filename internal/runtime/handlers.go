@@ -32,7 +32,6 @@ type Handler struct {
 	events   EventStore
 	repo     SessionRepo
 	sandbox  sandbox.Manager
-	settings sandbox.Settings
 	bus      *Bus
 	model    func(ctx context.Context, modelID string) (modelCode, providerID string, err error)
 	dataDir  string
@@ -42,11 +41,11 @@ type Handler struct {
 }
 
 func NewHandler(orch Orchestrator, sessions *session.Service, events EventStore, repo SessionRepo,
-	sb sandbox.Manager, settings sandbox.Settings, bus *Bus,
+	sb sandbox.Manager, bus *Bus,
 	modelLookup func(ctx context.Context, modelID string) (string, string, error), dataDir string) *Handler {
 	return &Handler{
 		orch: orch, sessions: sessions, events: events, repo: repo,
-		sandbox: sb, settings: settings, bus: bus, model: modelLookup,
+		sandbox: sb, bus: bus, model: modelLookup,
 		dataDir: dataDir, skillsSynced: map[string]string{},
 	}
 }
@@ -217,7 +216,7 @@ func (h *Handler) sandboxHandle(c *gin.Context, sess *session.Detail) (*sandbox.
 		return nil, false
 	}
 	sc := parseSandboxConfig(snap.SandboxConfig)
-	handle, err := h.sandbox.Get(c.Request.Context(), sess.ID, h.settings.Options(sc.Image, sc.Resources))
+	handle, err := h.sandbox.Get(c.Request.Context(), sess.ID, sandbox.Options{Image: sc.Image, ResourceLimits: sc.Resources})
 	if err != nil {
 		respond.Error(c, http.StatusBadGateway, "sandbox/upstream", "调用沙箱失败", gin.H{"reason": err.Error()})
 		return nil, false

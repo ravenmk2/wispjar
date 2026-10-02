@@ -7,13 +7,11 @@ import (
 	"testing"
 
 	"github.com/ravenmk2/wispjar/internal/agent"
-	"github.com/ravenmk2/wispjar/internal/sandbox"
 )
 
 func skillContext(dataDir string, h *memHandle) *Context {
 	tc := NewContext("sess-1", "org-1")
 	tc.Sandbox = memProvider{h: h}
-	tc.Settings = sandbox.DefaultSettings()
 	tc.DataDir = dataDir
 	tc.Skills = []agent.SnapshotSkill{{ID: "skill-1", Name: "pdf-tools", Description: "Handle PDFs"}}
 	return tc

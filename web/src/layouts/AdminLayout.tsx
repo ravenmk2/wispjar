@@ -191,6 +191,8 @@ export function PlatformLayout() {
         { to: "/platform/users", label: "用户" },
         { to: "/platform/providers", label: "供应商" },
         { to: "/platform/models", label: "模型" },
+        { to: "/platform/usage", label: "用量" },
+        { to: "/platform/audit", label: "审计" },
         { to: "/platform/settings", label: "设置" },
       ]}
     />

@@ -15,6 +15,9 @@ import (
 
 type Store struct {
 	db *gorm.DB
+
+	// AfterAppend 在批量事件提交后调用（用量聚合挂钩；fork 复制不经此路径）。
+	AfterAppend func(ctx context.Context, sessionID string, events []store.SessionEvent)
 }
 
 func NewStore(db *gorm.DB) *Store {
@@ -49,6 +52,9 @@ func (s *Store) AppendBatch(ctx context.Context, sessionID string, inputs []Even
 	})
 	if err != nil {
 		return nil, err
+	}
+	if s.AfterAppend != nil {
+		s.AfterAppend(ctx, sessionID, out)
 	}
 	return out, nil
 }

@@ -96,6 +96,24 @@ func (h *Handler) PatchSession(c *gin.Context) {
 	c.JSON(http.StatusOK, detail)
 }
 
+type forkSessionRequest struct {
+	AtSeq int64 `json:"at_seq" binding:"required"`
+}
+
+func (h *Handler) ForkSession(c *gin.Context) {
+	var req forkSessionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond.Error(c, http.StatusBadRequest, respond.CodeInvalid, "at_seq 必填", nil)
+		return
+	}
+	newID, err := h.svc.Fork(c.Request.Context(), auth.UID(c), c.Param("id"), req.AtSeq)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"id": newID})
+}
+
 func (h *Handler) DeleteSession(c *gin.Context) {
 	if err := h.svc.Delete(c.Request.Context(), auth.UID(c), c.Param("id")); err != nil {
 		fail(c, err)

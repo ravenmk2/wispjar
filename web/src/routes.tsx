@@ -15,6 +15,8 @@ import OrgsPage from "@/platform/OrgsPage"
 import ProvidersPage from "@/platform/ProvidersPage"
 import SettingsPage from "@/platform/SettingsPage"
 import UsersPage from "@/platform/UsersPage"
+import AuditPage from "@/platform/AuditPage"
+import PlatformUsagePage from "@/platform/PlatformUsagePage"
 import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 
 function RequireAuth() {
@@ -84,6 +86,8 @@ export const router = createBrowserRouter([
               { path: "users", element: <UsersPage /> },
               { path: "providers", element: <ProvidersPage /> },
               { path: "models", element: <ModelsPage /> },
+              { path: "usage", element: <PlatformUsagePage /> },
+              { path: "audit", element: <AuditPage /> },
               { path: "settings", element: <SettingsPage /> },
             ],
           },

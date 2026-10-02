@@ -44,8 +44,9 @@ type Manager interface {
 }
 
 type Service struct {
-	client  *Client
-	idleTTL time.Duration
+	client   *Client
+	idleTTL  time.Duration
+	settings SettingsSource
 
 	mu      sync.Mutex
 	handles map[string]*Handle
@@ -55,14 +56,15 @@ type Service struct {
 	wg     sync.WaitGroup
 }
 
-func NewService(client *Client, idleTTLSeconds int) *Service {
+func NewService(client *Client, idleTTLSeconds int, settings SettingsSource) *Service {
 	if idleTTLSeconds <= 0 {
 		idleTTLSeconds = 1800
 	}
 	return &Service{
-		client:  client,
-		idleTTL: time.Duration(idleTTLSeconds) * time.Second,
-		handles: make(map[string]*Handle),
+		client:   client,
+		idleTTL:  time.Duration(idleTTLSeconds) * time.Second,
+		settings: settings,
+		handles:  make(map[string]*Handle),
 	}
 }
 
@@ -96,7 +98,7 @@ func (s *Service) Get(ctx context.Context, sessionID string, opts Options) (*Han
 		s.mu.Unlock()
 	}
 
-	h, err := s.createWithRetry(ctx, sessionID, opts)
+	h, err := s.createWithRetry(ctx, sessionID, s.applySettings(ctx, opts))
 	if err != nil {
 		s.emit(Event{SessionID: sessionID, Action: EventFailed, Reason: err.Error()})
 		return nil, err
@@ -113,6 +115,32 @@ func (s *Service) Get(ctx context.Context, sessionID string, opts Options) (*Han
 	s.mu.Unlock()
 	s.emit(Event{SessionID: sessionID, SandboxID: h.SandboxID, Action: EventCreated})
 	return h, nil
+}
+
+// applySettings 用平台设置补齐 opts 缺省字段（调用方只传会话/Agent 级覆盖），
+// 设置经短 TTL 缓存源读取，PUT /platform/settings 后无需重启即可生效。
+func (s *Service) applySettings(ctx context.Context, opts Options) Options {
+	if s.settings == nil {
+		return opts
+	}
+	st, err := s.settings.Load(ctx)
+	if err != nil {
+		log.Printf("sandbox: load settings: %v", err)
+		return opts
+	}
+	if opts.Image == "" {
+		opts.Image = st.DefaultImage
+	}
+	if opts.TTLSeconds <= 0 {
+		opts.TTLSeconds = st.TTLSeconds
+	}
+	if len(opts.ResourceLimits) == 0 {
+		opts.ResourceLimits = st.ResourceLimits
+	}
+	if len(opts.NetworkPolicy) == 0 {
+		opts.NetworkPolicy = st.EgressPolicy
+	}
+	return opts
 }
 
 // createWithRetry 创建沙箱失败时退避重试一次（冷启动镜像拉取等瞬时超时；
@@ -211,6 +239,8 @@ type Handle struct {
 
 	lastActive atomic.Int64
 	expiresAt  atomic.Int64
+
+	renewFn func(ctx context.Context, d time.Duration) (time.Time, error)
 }
 
 func (h *Handle) Touch() {
@@ -226,10 +256,22 @@ func (h *Handle) expired() bool {
 	return exp > 0 && time.Now().UnixNano() > exp
 }
 
+func (h *Handle) ExpiresAt() time.Time {
+	return time.Unix(0, h.expiresAt.Load())
+}
+
 func (h *Handle) Renew(ctx context.Context) (time.Time, error) {
 	d := time.Duration(h.ttlSeconds) * time.Second
 	if d <= 0 {
 		d = opensandbox.DefaultTimeoutSeconds * time.Second
+	}
+	if h.renewFn != nil {
+		exp, err := h.renewFn(ctx, d)
+		if err != nil {
+			return time.Time{}, err
+		}
+		h.expiresAt.Store(exp.UnixNano())
+		return exp, nil
 	}
 	resp, err := h.sandbox.Renew(ctx, d)
 	if err != nil {

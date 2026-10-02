@@ -49,7 +49,6 @@ func (o *orchestrator) buildToolContext(sess *store.Session, snap *agent.Snapsho
 	if o.deps.Sandbox != nil {
 		tc.Sandbox = tools.WrapManager(o.deps.Sandbox)
 	}
-	tc.Settings = o.deps.SandboxSettings
 	tc.Image = sc.Image
 	tc.Resources = sc.Resources
 	tc.DataDir = o.deps.DataDir

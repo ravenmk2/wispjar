@@ -14,7 +14,6 @@ import (
 
 	"github.com/ravenmk2/wispjar/internal/agent"
 	"github.com/ravenmk2/wispjar/internal/runtime/tools"
-	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/session"
 	"github.com/ravenmk2/wispjar/internal/store"
 )
@@ -88,7 +87,6 @@ func newTaskTestEnv(t *testing.T, approvalMode string, mainScript, subScript fun
 		ToolContextFactory: func(sess *store.Session, snap *agent.Snapshot) *tools.Context {
 			tc := tools.NewContext(sess.ID, sess.OrgID)
 			tc.Sandbox = fakeSandboxProvider{h: handle}
-			tc.Settings = sandbox.DefaultSettings()
 			return tc
 		},
 	})

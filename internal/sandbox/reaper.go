@@ -52,19 +52,30 @@ func (s *Service) snapshotHandles() map[string]*Handle {
 }
 
 func (s *Service) renewActive(ctx context.Context) {
+	now := time.Now()
 	for sessionID, h := range s.snapshotHandles() {
-		idle := time.Since(h.LastActive())
 		ttl := time.Duration(h.ttlSeconds) * time.Second
 		if ttl <= 0 {
 			ttl = opensandbox.DefaultTimeoutSeconds * time.Second
 		}
-		if idle >= ttl/2 {
+		if !shouldRenew(now, h.LastActive(), h.ExpiresAt(), ttl, s.idleTTL) {
 			continue
 		}
 		if _, err := h.Renew(ctx); err != nil {
 			log.Printf("sandbox: renew %s (session %s): %v", h.SandboxID, sessionID, err)
 		}
 	}
+}
+
+// shouldRenew：仍有活动（idle < idleTTL，否则留给 idle 回收）且距离过期不足 TTL/2 时续约。
+func shouldRenew(now, lastActive, expiresAt time.Time, ttl, idleTTL time.Duration) bool {
+	if now.Sub(lastActive) >= idleTTL {
+		return false
+	}
+	if expiresAt.IsZero() || ttl <= 0 {
+		return false
+	}
+	return expiresAt.Sub(now) <= ttl/2
 }
 
 func (s *Service) reapIdle() {

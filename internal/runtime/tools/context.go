@@ -72,7 +72,6 @@ type Context struct {
 	OrgID     string
 
 	Sandbox   SandboxProvider
-	Settings  sandbox.Settings
 	Image     string
 	Resources map[string]string
 
@@ -136,7 +135,7 @@ func (c *Context) sandboxHandle(ctx context.Context) (Handle, string, error) {
 	if c.Sandbox == nil {
 		return nil, "", errSandboxUnavailable
 	}
-	opts := c.Settings.Options(c.Image, c.Resources)
+	opts := sandbox.Options{Image: c.Image, ResourceLimits: c.Resources}
 	sh, sid, err := c.Sandbox.Get(ctx, c.SessionID, opts)
 	if err != nil {
 		log.Printf("tools: sandbox get for session %s: %v", c.SessionID, err)

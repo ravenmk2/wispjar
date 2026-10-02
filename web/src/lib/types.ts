@@ -187,9 +187,22 @@ export interface UsageTotals {
 export interface UsageResponse {
   items: UsageItem[]
   totals: UsageTotals
+  names?: Record<string, string>
 }
 
 export type UsageGroupBy = "user" | "agent" | "model" | "day" | "org"
+
+export interface AuditItem {
+  id: string
+  org_id: string
+  org_name?: string
+  actor_id: string
+  actor_name: string
+  action: string
+  target: string
+  detail?: Record<string, unknown> | string | null
+  created_at: string
+}
 
 // ============ protocol.md：WS mux 协议类型 ============
 
@@ -446,6 +459,10 @@ export interface PromptRequest {
 export interface PromptResponse {
   accepted: boolean
   seq: number
+}
+
+export interface ForkResponse {
+  id: string
 }
 
 export interface SessionEventsResponse {

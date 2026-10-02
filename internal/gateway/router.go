@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/ravenmk2/wispjar/internal/agent"
+	"github.com/ravenmk2/wispjar/internal/audit"
 	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/config"
 	"github.com/ravenmk2/wispjar/internal/gateway/ws"
@@ -15,6 +16,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/session"
 	"github.com/ravenmk2/wispjar/internal/skill"
 	"github.com/ravenmk2/wispjar/internal/tenant"
+	"github.com/ravenmk2/wispjar/internal/usage"
 )
 
 type Deps struct {
@@ -60,6 +62,7 @@ func NewRouter(deps Deps) *gin.Engine {
 
 	authed.GET("/sessions/:id", sessionH.GetSession)
 	authed.PATCH("/sessions/:id", sessionH.PatchSession)
+	authed.POST("/sessions/:id/fork", sessionH.ForkSession)
 	if deps.Runtime != nil {
 		authed.DELETE("/sessions/:id", deps.Runtime.DeleteSession)
 		authed.POST("/sessions/:id/prompts", deps.Runtime.Prompt)
@@ -96,6 +99,8 @@ func NewRouter(deps Deps) *gin.Engine {
 	admin.GET("/skills/:id/file", skillH.GetSkillFile)
 	admin.DELETE("/skills/:id", skillH.DeleteSkill)
 	admin.GET("/sandbox-settings", providerH.GetSandboxSettings)
+	usageH := usage.NewHandler(usage.NewService(deps.DB))
+	admin.GET("/usage", usageH.OrgUsage)
 
 	platform := authed.Group("/platform", deps.Auth.RequirePlatformAdmin())
 	platform.GET("/orgs", tenantH.ListOrgs)
@@ -120,6 +125,8 @@ func NewRouter(deps Deps) *gin.Engine {
 	platform.DELETE("/models/:id", providerH.DeleteModel)
 	platform.GET("/settings", providerH.GetSettings)
 	platform.PUT("/settings/:key", providerH.UpdateSetting)
+	platform.GET("/usage", usageH.PlatformUsage)
+	platform.GET("/audit", audit.NewHandler(deps.DB).List)
 
 	if deps.WS != nil {
 		r.GET("/api/ws", deps.WS.Handle)

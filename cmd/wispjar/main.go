@@ -25,6 +25,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/session"
 	"github.com/ravenmk2/wispjar/internal/store"
+	"github.com/ravenmk2/wispjar/internal/usage"
 )
 
 var version = "dev" // default when not injected; release builds set it via -ldflags -X main.version
@@ -69,26 +70,22 @@ func main() {
 		sandboxSvc = sandbox.NewService(
 			sandbox.NewClient(cfg.OpenSandbox.LifecycleURL, cfg.OpenSandbox.APIKey),
 			cfg.OpenSandbox.IdleTTLSeconds,
+			sandbox.NewCachedSettingsSource(sandbox.NewDBSettingsSource(db), 30*time.Second),
 		)
 		sandboxSvc.Start(context.Background())
-	}
-
-	sandboxSettings, err := sandbox.LoadSettings(context.Background(), db)
-	if err != nil {
-		log.Fatalf("load sandbox settings: %v", err)
 	}
 
 	agentSvc := agent.NewService(db)
 	sessionSvc := session.NewService(db, agentSvc)
 	eventStore := session.NewStore(db)
+	eventStore.AfterAppend = usage.NewRecorder(db).OnEvents
 	repo := runtime.NewSessionRepo(db)
 	bus := runtime.NewBus()
 	orch := runtime.NewOrchestrator(runtime.Deps{
-		Events:          eventStore,
-		Sessions:        repo,
-		Models:          provider.NewChatModelFactory(db, cfg.MasterKey()),
-		Sandbox:         sandboxSvc,
-		SandboxSettings: sandboxSettings,
+		Events:   eventStore,
+		Sessions: repo,
+		Models:   provider.NewChatModelFactory(db, cfg.MasterKey()),
+		Sandbox:  sandboxSvc,
 		Checkpoints: func(sessionID string) adk.CheckPointStore {
 			return runtime.NewCheckpointStore(db, sessionID)
 		},
@@ -109,7 +106,7 @@ func main() {
 		log.Printf("recover pending approvals: %v", err)
 	}
 
-	runtimeH := runtime.NewHandler(orch, sessionSvc, eventStore, repo, sandboxSvc, sandboxSettings, bus,
+	runtimeH := runtime.NewHandler(orch, sessionSvc, eventStore, repo, sandboxSvc, bus,
 		func(ctx context.Context, modelID string) (string, string, error) {
 			var m store.Model
 			if err := db.WithContext(ctx).First(&m, "id = ?", modelID).Error; err != nil {

@@ -28,7 +28,7 @@ func TestSandboxIntegration(t *testing.T) {
 	defer cancel()
 
 	client := NewClient(url, key)
-	svc := NewService(client, 1800)
+	svc := NewService(client, 1800, nil)
 	var events []Event
 	svc.OnEvent(func(e Event) { events = append(events, e) })
 	defer svc.Stop()

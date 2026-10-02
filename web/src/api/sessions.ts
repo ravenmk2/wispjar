@@ -2,6 +2,7 @@ import { api } from "./client"
 import type {
   ApprovalDecisionRequest,
   CreateSessionRequest,
+  ForkResponse,
   List,
   PromptRequest,
   PromptResponse,
@@ -42,6 +43,9 @@ export const sessionsApi = {
   },
   cancel(id: string) {
     return api<{ ok: boolean }>(`/sessions/${id}/cancel`, { method: "POST" })
+  },
+  fork(id: string, atSeq: number) {
+    return api<ForkResponse>(`/sessions/${id}/fork`, { method: "POST", body: { at_seq: atSeq } })
   },
   events(id: string, afterSeq: number, limit = 500) {
     return api<SessionEventsResponse>(`/sessions/${id}/events`, {
