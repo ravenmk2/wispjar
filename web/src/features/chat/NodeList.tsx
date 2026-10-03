@@ -41,11 +41,13 @@ export function NodeView({
   sessionId,
   depth,
   latestTurn,
+  isAnswer = false,
 }: {
   node: ConversationNode
   sessionId: string
   depth: number
   latestTurn: number
+  isAnswer?: boolean
 }) {
   const liveOutput = useSessionStore((s) =>
     node.kind === "tool-call" ? s.toolOutputs[node.callId] : undefined,
@@ -70,13 +72,15 @@ export function NodeView({
         </div>
       )
     case "assistant":
+      // 只有一轮的最终回复展示操作条与 token 统计；中间过程回复不展示
       return (
         <div className="group">
           <AssistantMessage
             node={node}
             sessionId={sessionId}
-            showActions
-            alwaysShowActions={inLatestTurn}
+            showActions={isAnswer}
+            alwaysShowActions={isAnswer && inLatestTurn}
+            showMetaFallback={isAnswer}
           />
         </div>
       )
@@ -119,11 +123,27 @@ export function NodeList({
     [nodes],
   )
   const grouped = useMemo(() => (depth === 0 ? groupByTurn(nodes) : null), [nodes, depth])
+  // 嵌套（depth>0）渲染时，只有最后一条带文本的 assistant 视为最终回复
+  const nestedAnswerId = useMemo(() => {
+    if (grouped) return null
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i]
+      if (n.kind === "assistant" && !n.live && n.content.some((b) => b.type === "text")) return n.id
+    }
+    return null
+  }, [nodes, grouped])
   if (!grouped) {
     return (
       <div className="space-y-2">
         {nodes.map((node) => (
-          <NodeView key={node.id} node={node} sessionId={sessionId} depth={depth} latestTurn={latestTurn} />
+          <NodeView
+            key={node.id}
+            node={node}
+            sessionId={sessionId}
+            depth={depth}
+            latestTurn={latestTurn}
+            isAnswer={node.id === nestedAnswerId}
+          />
         ))}
       </div>
     )
@@ -136,7 +156,9 @@ export function NodeList({
           {seg.process.length > 0 && (
             <TurnProcessGroup segment={seg} sessionId={sessionId} latestTurn={latestTurn} />
           )}
-          {seg.answer && <NodeView node={seg.answer} sessionId={sessionId} depth={depth} latestTurn={latestTurn} />}
+          {seg.answer && (
+            <NodeView node={seg.answer} sessionId={sessionId} depth={depth} latestTurn={latestTurn} isAnswer />
+          )}
           {seg.end && <NodeView node={seg.end} sessionId={sessionId} depth={depth} latestTurn={latestTurn} />}
         </Fragment>
       ))}

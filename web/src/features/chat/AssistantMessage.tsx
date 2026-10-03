@@ -22,9 +22,9 @@ export function TokenBadge({ usage, className }: { usage: Usage; className?: str
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge variant="outline" className={cn("cursor-default gap-1 font-mono text-[11px] font-normal", className)}>
+        <span className={cn("cursor-default font-mono text-[11px] tabular-nums text-fg-caption", className)}>
           ↑{formatNumber(usage.input_tokens)} ↓{formatNumber(usage.output_tokens)}
-        </Badge>
+        </span>
       </TooltipTrigger>
       <TooltipContent className="font-mono text-xs">
         <div>输入 {formatNumber(usage.input_tokens)}</div>
@@ -87,11 +87,13 @@ export function AssistantMessage({
   sessionId,
   showActions,
   alwaysShowActions,
+  showMetaFallback = true,
 }: {
   node: AssistantNode
   sessionId?: string
   showActions?: boolean
   alwaysShowActions?: boolean
+  showMetaFallback?: boolean
 }) {
   const empty = node.content.length === 0
   const copyTextValue = node.content
@@ -132,6 +134,7 @@ export function AssistantMessage({
           <span className="px-1 text-[13px] text-fg-caption">{formatMessageTime(node.time)}</span>
         </div>
       ) : (
+        showMetaFallback &&
         (node.usage || node.interrupted) && (
           <div className="mt-1.5 flex items-center gap-2">
             {node.usage && <TokenBadge usage={node.usage} />}
