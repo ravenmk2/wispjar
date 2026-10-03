@@ -17,15 +17,10 @@ import { CopyIconButton } from "@/components/CopyIconButton"
 import { DiffBlock } from "@/components/Markdown"
 import { NodeList } from "@/features/chat/NodeList"
 import { safeParseJson } from "@/lib/format"
+import { hasPendingApproval } from "@/lib/turn-grouping"
 import { cn } from "@/lib/utils"
-import type { ConversationNode, ToolCallNode } from "@/lib/conversation"
+import type { ToolCallNode } from "@/lib/conversation"
 import type { ToolRender } from "@/lib/types"
-
-function hasPendingApproval(nodes: ConversationNode[]): boolean {
-  return nodes.some((n) =>
-    n.kind === "approval" ? n.status === "pending" : n.kind === "tool-call" ? hasPendingApproval(n.children) : false,
-  )
-}
 
 const TOOL_ICONS: Record<string, ReactNode> = {
   exec: <SquareTerminal className="size-3.5" />,
