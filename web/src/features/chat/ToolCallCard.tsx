@@ -294,7 +294,7 @@ export function ToolCallCard({
           </span>
         )}
         {pendingApproval && (
-          <Badge variant="outline" className="shrink-0 gap-1 border-amber-500/50 text-[11px] font-normal text-amber-600">
+          <Badge variant="outline" className="shrink-0 gap-1 border-amber-500/50 text-[11px] font-normal text-amber-600 dark:text-amber-400">
             <Loader2 className="size-3 animate-spin" />
             待审批
           </Badge>

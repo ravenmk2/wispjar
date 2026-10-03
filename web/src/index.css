@@ -37,31 +37,34 @@
     --toast-bg: #353436;
   }
 
+  /* DSH dark：base #151517 / 侧栏与代码块 #1B1B1C / elevated #2C2C2E / 文字 #F9FAFB / 蓝 #7AAAFF */
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    --background: 240 5% 9%;
+    --foreground: 210 20% 98%;
+    --card: 240 4% 18%;
+    --card-foreground: 210 20% 98%;
+    --popover: 240 4% 18%;
+    --popover-foreground: 210 20% 98%;
     --primary: 218 100% 74%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
+    --primary-foreground: 240 5% 9%;
+    --secondary: 240 3% 17%;
+    --secondary-foreground: 210 20% 98%;
+    --muted: 240 2% 11%;
+    --muted-foreground: 240 3% 66%;
+    --accent: 240 3% 17%;
+    --accent-foreground: 210 20% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 240 3% 20%;
+    --input: 240 3% 22%;
     --ring: 218 100% 74%;
     --sidebar: #1b1b1c;
     --text-secondary: #a0a4ab;
     --text-tertiary: #81858c;
     --text-caption: #61646b;
     --bubble: #2c2c2e;
+    --success: #22c55e;
+    --warning: #f59e0b;
     --tooltip-bg: #353436;
     --toast-bg: #43434a;
   }
@@ -166,6 +169,5 @@
   .dark .markdown-body .shiki,
   .dark .markdown-body .shiki span {
     color: var(--shiki-dark) !important;
-    background-color: var(--shiki-dark-bg) !important;
   }
 }

@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, ChevronsUpDown, KeyRound, LogOut, ShieldCheck } from "lucide-react"
+import { ArrowLeft, Building2, Check, ChevronsUpDown, KeyRound, LogOut, Monitor, Moon, ShieldCheck, Sun } from "lucide-react"
 import { useState } from "react"
 import { Link, NavLink, Outlet, useNavigate } from "react-router"
 import { toast } from "sonner"
@@ -13,9 +13,13 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
+import { setThemeMode, useThemeMode, type ThemeMode } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 
@@ -68,6 +72,34 @@ export function OrgSwitcher() {
   )
 }
 
+const THEME_OPTIONS: Array<{ value: ThemeMode; label: string; icon: typeof Sun }> = [
+  { value: "light", label: "浅色", icon: Sun },
+  { value: "dark", label: "深色", icon: Moon },
+  { value: "system", label: "跟随系统", icon: Monitor },
+]
+
+function ThemeSubMenu() {
+  const mode = useThemeMode()
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger className="gap-2">
+        <Sun className="size-4 dark:hidden" />
+        <Moon className="hidden size-4 dark:block" />
+        外观
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-36">
+        {THEME_OPTIONS.map((option) => (
+          <DropdownMenuItem key={option.value} onClick={() => setThemeMode(option.value)} className="gap-2">
+            <option.icon className="size-4" />
+            <span className="flex-1">{option.label}</span>
+            {mode === option.value && <Check className="size-3.5" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  )
+}
+
 export function UserMenu() {
   const user = useIdentityStore((s) => s.user)
   const clear = useIdentityStore((s) => s.clear)
@@ -94,6 +126,7 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <ThemeSubMenu />
         <DropdownMenuItem onClick={() => navigate("/change-password")}>
           <KeyRound className="size-4" />
           修改密码

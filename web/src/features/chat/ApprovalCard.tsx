@@ -95,7 +95,7 @@ export function ApprovalCard({ node, sessionId }: { node: ApprovalNode; sessionI
     return (
       <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
         {node.status === "allow" ? (
-          <CheckCircle2 className="size-3.5 text-green-600" />
+          <CheckCircle2 className="size-3.5 text-green-600 dark:text-green-400" />
         ) : (
           <XCircle className="size-3.5 text-red-500" />
         )}
@@ -111,7 +111,7 @@ export function ApprovalCard({ node, sessionId }: { node: ApprovalNode; sessionI
   return (
     <div className="rounded-md border border-amber-500/50 bg-amber-500/5">
       <div className="flex items-center gap-2 border-b border-amber-500/30 px-3 py-2">
-        <ShieldQuestion className="size-4 text-amber-600" />
+        <ShieldQuestion className="size-4 text-amber-600 dark:text-amber-400" />
         <span className="text-sm font-medium">审批请求</span>
         <span className="text-xs text-muted-foreground">{node.name}</span>
         <Badge
@@ -195,7 +195,7 @@ export function ApprovalTakeover({
         <div
           aria-busy={acting !== null}
           onKeyDown={onKeyDown}
-          className="overflow-hidden rounded-[28px] border border-warning bg-background shadow-[0_4px_24px_rgba(15,17,21,0.08)]"
+          className="overflow-hidden rounded-[28px] border border-warning bg-card shadow-[0_4px_24px_rgba(15,17,21,0.08)]"
         >
           <div className="flex items-center gap-2 bg-warning/10 px-4 py-2.5 text-[13px] font-medium text-warning">
             <span className="size-2 rounded-full bg-warning" />
