@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -339,5 +340,108 @@ func TestDecideApprovalNotPending(t *testing.T) {
 	err := env.orch.DecideApproval(env.session.ID, "call_x", true, "user-1")
 	if !errors.Is(err, ErrApprovalNotPending) {
 		t.Fatalf("want ErrApprovalNotPending, got %v", err)
+	}
+}
+
+// 工具 infra 错误（exec 沙箱不可达）→ 结构化错误工具结果，turn 正常 completed。
+func TestExecInfraErrorTurnCompletes(t *testing.T) {
+	var call2Input []*schema.Message
+	env := newTestEnv(t, session.ApprovalAuto, func(call int, input []*schema.Message) []*schema.Message {
+		if call == 1 {
+			return toolCallChunks("call_1", "exec", `{"command":"ls"}`)
+		}
+		call2Input = input
+		return textChunks("命令执行环境出了点问题。", nil)
+	})
+	env.handle.runErr = errors.New("sandbox unreachable")
+	env.prompt(t, "列一下文件", "req-1")
+
+	if err := env.orch.StartTurn(context.Background(), env.session.ID); err != nil {
+		t.Fatalf("StartTurn: %v", err)
+	}
+
+	ends := env.es.byType(session.EventTurnEnd)
+	if len(ends) != 1 {
+		t.Fatalf("want turn/end, events: %v", env.es.types())
+	}
+	var te session.TurnEndData
+	if err := json.Unmarshal(ends[0].Data, &te); err != nil {
+		t.Fatal(err)
+	}
+	if te.Reason != "completed" {
+		t.Fatalf("turn/end reason = %s, want completed (error=%q)", te.Reason, te.Error)
+	}
+
+	results := env.es.byType(session.EventToolResult)
+	if len(results) != 1 {
+		t.Fatalf("want 1 tool/result, events: %v", env.es.types())
+	}
+	var tr session.ToolResultData
+	if err := json.Unmarshal(results[0].Data, &tr); err != nil {
+		t.Fatal(err)
+	}
+	var execOut struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(tr.Content), &execOut); err != nil {
+		t.Fatalf("exec infra error result must be structured JSON: %v (%s)", err, tr.Content)
+	}
+	if !strings.Contains(execOut.Error, "sandbox unreachable") {
+		t.Fatalf("tool/result content = %s", tr.Content)
+	}
+	if tr.Meta == nil || tr.Meta.Render != "terminal" {
+		t.Fatalf("tool/result meta = %+v, want render terminal", tr.Meta)
+	}
+
+	sawToolMsg := false
+	for _, m := range call2Input {
+		if m.Role == schema.Tool && m.ToolCallID == "call_1" && strings.Contains(m.Content, "sandbox unreachable") {
+			sawToolMsg = true
+		}
+	}
+	if !sawToolMsg {
+		t.Fatal("model call2 input missing structured error tool message")
+	}
+}
+
+// 工具域失败（read 文件不存在）→ 中间件归一化为错误文本工具结果，turn 正常 completed。
+func TestToolDomainErrorTurnCompletes(t *testing.T) {
+	env := newTestEnv(t, session.ApprovalAuto, func(call int, input []*schema.Message) []*schema.Message {
+		if call == 1 {
+			return toolCallChunks("call_1", "read", `{"path":"/workspace/nope.txt"}`)
+		}
+		return textChunks("文件不存在，换个路径试试。", nil)
+	})
+	env.prompt(t, "读一下配置", "req-1")
+
+	if err := env.orch.StartTurn(context.Background(), env.session.ID); err != nil {
+		t.Fatalf("StartTurn: %v", err)
+	}
+
+	ends := env.es.byType(session.EventTurnEnd)
+	if len(ends) != 1 {
+		t.Fatalf("want turn/end, events: %v", env.es.types())
+	}
+	var te session.TurnEndData
+	if err := json.Unmarshal(ends[0].Data, &te); err != nil {
+		t.Fatal(err)
+	}
+	if te.Reason != "completed" {
+		t.Fatalf("turn/end reason = %s, want completed (error=%q)", te.Reason, te.Error)
+	}
+
+	results := env.es.byType(session.EventToolResult)
+	if len(results) != 1 {
+		t.Fatalf("want 1 tool/result, events: %v", env.es.types())
+	}
+	var tr session.ToolResultData
+	if err := json.Unmarshal(results[0].Data, &tr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(tr.Content, toolFailurePrefix) || !strings.Contains(tr.Content, "no such file") {
+		t.Fatalf("tool/result content = %q, want %q 前缀的错误文本", tr.Content, toolFailurePrefix)
+	}
+	if tr.Meta == nil || tr.Meta.Render != "read" {
+		t.Fatalf("tool/result meta = %+v, want render read", tr.Meta)
 	}
 }

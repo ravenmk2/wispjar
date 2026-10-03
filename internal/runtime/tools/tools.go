@@ -45,7 +45,7 @@ func newExecTool() (tool.BaseTool, error) {
 			defer func() { meta.DurationMS = sinceMS(start) }()
 			h, sid, err := tc.sandboxHandle(ctx)
 			if err != nil {
-				return "", err
+				return execErrorResult(err)
 			}
 			meta.SandboxID = sid
 			cwd := in.Cwd
@@ -62,7 +62,7 @@ func newExecTool() (tool.BaseTool, error) {
 			res, err := h.RunCommand(ctx, in.Command, cwd, in.Env, timeout,
 				func(stream, chunk string) { tc.publish(ctx, stream, chunk) })
 			if err != nil {
-				return "", err
+				return execErrorResult(err)
 			}
 			stdout, outTrunc := tailTruncate(res.Stdout, execMaxOutput)
 			stderr, errTrunc := tailTruncate(res.Stderr, execMaxOutput)
@@ -304,26 +304,22 @@ func newGrepTool() (tool.BaseTool, error) {
 			if root == "" {
 				root = defaultWorkDir
 			}
-			var cmd strings.Builder
-			cmd.WriteString("rg --line-number --no-heading --color never")
-			if in.IgnoreCase {
-				cmd.WriteString(" --ignore-case")
-			}
-			if in.Glob != "" {
-				cmd.WriteString(" -g " + shellQuote(in.Glob))
-			}
-			filesOnly := in.OutputMode == "files_with_matches"
-			if filesOnly {
-				cmd.WriteString(" -l")
-			}
-			cmd.WriteString(" -- " + shellQuote(in.Pattern) + " " + shellQuote(root))
-			res, err := h.RunCommand(ctx, cmd.String(), "/", nil, 30000, nil)
+			bin, cmdStr := "rg", rgCommand(in, root)
+			res, err := h.RunCommand(ctx, cmdStr, "/", nil, 30000, nil)
 			if err != nil {
 				return "", err
 			}
-			// rg: exit 1 = no matches, >1 = real error
+			// 沙箱缺 rg（精简镜像，如 python:3.12）：同进程内降级 grep -rInE 重试。
+			if rgUnavailable(res.ExitCode, res.Stderr) {
+				bin, cmdStr = "grep", grepCommand(in, root)
+				res, err = h.RunCommand(ctx, cmdStr, "/", nil, 30000, nil)
+				if err != nil {
+					return "", err
+				}
+			}
+			// rg/grep: exit 1 = no matches, >1 = real error（经中间件归一化为文本结果）
 			if res.ExitCode > 1 {
-				return "", fmt.Errorf("rg failed (exit %d): %s", res.ExitCode, tail(res.Stderr, 512))
+				return "", fmt.Errorf("%s failed (exit %d): %s", bin, res.ExitCode, tail(res.Stderr, 512))
 			}
 			out, truncated := headLines(res.Stdout, grepMaxLines)
 			meta.Truncated = truncated
@@ -413,4 +409,50 @@ func headLines(s string, max int) (string, bool) {
 
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// execErrorResult exec 的 infra 错误（命令超时/沙箱不可达/启动失败）结构化结果：
+// 与正常执行结果同构（JSON），render 仍走 terminal，模型可读 error 自行调整。
+func execErrorResult(err error) (string, error) {
+	return marshalResult(map[string]any{"error": err.Error(), "stderr": ""})
+}
+
+// rgUnavailable 判定 rg 不存在（exit 127 或 shell 报 command not found）。
+func rgUnavailable(exitCode int, stderr string) bool {
+	return exitCode == 127 ||
+		strings.Contains(stderr, "command not found") ||
+		strings.Contains(stderr, "not found")
+}
+
+func rgCommand(in grepArgs, root string) string {
+	var cmd strings.Builder
+	cmd.WriteString("rg --line-number --no-heading --color never")
+	if in.IgnoreCase {
+		cmd.WriteString(" --ignore-case")
+	}
+	if in.Glob != "" {
+		cmd.WriteString(" -g " + shellQuote(in.Glob))
+	}
+	if in.OutputMode == "files_with_matches" {
+		cmd.WriteString(" -l")
+	}
+	cmd.WriteString(" -- " + shellQuote(in.Pattern) + " " + shellQuote(root))
+	return cmd.String()
+}
+
+// grepCommand rg 不可用时的降级命令；输出同为 path:line:text。
+func grepCommand(in grepArgs, root string) string {
+	var cmd strings.Builder
+	cmd.WriteString("grep -rInE --color=never")
+	if in.IgnoreCase {
+		cmd.WriteString(" -i")
+	}
+	if in.Glob != "" {
+		cmd.WriteString(" --include=" + shellQuote(in.Glob))
+	}
+	if in.OutputMode == "files_with_matches" {
+		cmd.WriteString(" -l")
+	}
+	cmd.WriteString(" -- " + shellQuote(in.Pattern) + " " + shellQuote(root))
+	return cmd.String()
 }

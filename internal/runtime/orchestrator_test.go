@@ -290,6 +290,7 @@ type fakeHandle struct {
 	mu     sync.Mutex
 	files  map[string][]byte
 	execFn func(cmd string) (int, string, string)
+	runErr error
 }
 
 func newFakeHandle() *fakeHandle {
@@ -305,6 +306,9 @@ func newFakeHandle() *fakeHandle {
 }
 
 func (h *fakeHandle) RunCommand(_ context.Context, cmd, cwd string, env map[string]string, timeoutMs int64, onEvent func(stream, chunk string)) (*sandbox.CommandResult, error) {
+	if h.runErr != nil {
+		return nil, h.runErr
+	}
 	code, stdout, stderr := h.execFn(cmd)
 	if onEvent != nil && stdout != "" {
 		onEvent("stdout", stdout)

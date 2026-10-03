@@ -187,7 +187,7 @@ func (o *orchestrator) buildAgent(ctx context.Context, sess *store.Session, snap
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools:               toolList,
-				ToolCallMiddlewares: []compose.ToolMiddleware{approvalMiddleware(sess.ApprovalMode)},
+				ToolCallMiddlewares: []compose.ToolMiddleware{approvalMiddleware(sess.ApprovalMode), errorResultMiddleware()},
 			},
 		},
 		MaxIterations: maxIter,

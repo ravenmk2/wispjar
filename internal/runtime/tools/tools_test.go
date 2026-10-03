@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -14,8 +15,9 @@ import (
 )
 
 type memHandle struct {
-	files map[string][]byte
-	exec  func(cmd string) (int, string, string)
+	files  map[string][]byte
+	exec   func(cmd string) (int, string, string)
+	runErr error
 }
 
 func newMemHandle() *memHandle {
@@ -25,6 +27,9 @@ func newMemHandle() *memHandle {
 }
 
 func (h *memHandle) RunCommand(_ context.Context, cmd, cwd string, env map[string]string, timeoutMs int64, onEvent func(stream, chunk string)) (*sandbox.CommandResult, error) {
+	if h.runErr != nil {
+		return nil, h.runErr
+	}
 	code, out, errOut := h.exec(cmd)
 	return &sandbox.CommandResult{ExitCode: code, Stdout: out, Stderr: errOut}, nil
 }
@@ -210,6 +215,89 @@ func TestGrepViaRg(t *testing.T) {
 	}
 	if !strings.Contains(out, "a.go:1:package a") {
 		t.Fatalf("grep result: %s", out)
+	}
+}
+
+func TestExecInfraErrorStructuredResult(t *testing.T) {
+	h := newMemHandle()
+	h.runErr = errors.New("sandbox unreachable")
+	ctx := testCtx(h)
+	x, err := newExecTool()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := invoke(t, x, ctx, `{"command":"ls"}`)
+	if err != nil {
+		t.Fatalf("exec infra error must not surface as Go error: %v", err)
+	}
+	var er struct {
+		Error  string `json:"error"`
+		Stderr string `json:"stderr"`
+	}
+	if err := json.Unmarshal([]byte(out), &er); err != nil {
+		t.Fatalf("exec infra error result not JSON: %v (%s)", err, out)
+	}
+	if !strings.Contains(er.Error, "sandbox unreachable") {
+		t.Fatalf("exec infra error result: %s", out)
+	}
+	if m := FromContext(ctx).TakeMeta(""); m == nil || m.Render != RenderTerminal {
+		t.Fatalf("exec infra error meta render = %+v, want terminal", m)
+	}
+}
+
+func TestGrepFallbackToGrep(t *testing.T) {
+	h := newMemHandle()
+	calls := []string{}
+	h.exec = func(cmd string) (int, string, string) {
+		calls = append(calls, cmd)
+		if len(calls) == 1 {
+			return 127, "", "bash: rg: command not found"
+		}
+		return 0, "a.go:1:package a\n", ""
+	}
+	ctx := testCtx(h)
+	g, err := newGrepTool()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := invoke(t, g, ctx, `{"pattern":"package","path":"/workspace","glob":"*.go","ignore_case":true}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("want 2 commands (rg then grep), got %v", calls)
+	}
+	if !strings.HasPrefix(calls[0], "rg ") {
+		t.Fatalf("first command must be rg: %q", calls[0])
+	}
+	for _, want := range []string{"grep -rInE --color=never", "-i", "--include='*.go'", "-- 'package' '/workspace'"} {
+		if !strings.Contains(calls[1], want) {
+			t.Fatalf("grep fallback command %q missing %q", calls[1], want)
+		}
+	}
+	if !strings.Contains(out, "a.go:1:package a") {
+		t.Fatalf("grep fallback result: %s", out)
+	}
+}
+
+func TestGrepFallbackAlsoFails(t *testing.T) {
+	h := newMemHandle()
+	calls := 0
+	h.exec = func(cmd string) (int, string, string) {
+		calls++
+		if calls == 1 {
+			return 127, "", "bash: rg: command not found"
+		}
+		return 2, "", "grep: /workspace: permission denied"
+	}
+	ctx := testCtx(h)
+	g, err := newGrepTool()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := invoke(t, g, ctx, `{"pattern":"package"}`); err == nil ||
+		!strings.Contains(err.Error(), "grep failed (exit 2)") {
+		t.Fatalf("grep fallback failure want tool error, got %v", err)
 	}
 }
 

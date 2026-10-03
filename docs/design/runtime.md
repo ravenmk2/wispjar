@@ -113,6 +113,7 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
   "timeout_ms": "int，默认 30000，上限 600000",
   "env": "object<string,string>，附加环境变量" }
 // 返回：{ "exit_code": 0, "stdout": "...", "stderr": "...", "truncated": false }
+// infra 错误（超时/沙箱不可达/启动失败）：{ "error": "...", "stderr": "" }（不中断 run，§4.11）
 ```
 
 实现：execd `POST /command`（`background:false`，SSE 收集流式输出；流式过程同时以 transient 帧推前端 terminal 卡片实时滚动——作为 `tool/result.meta` 之外的 live 通道，协议上用 assistant-stream 之外的 `tool-output` 瞬态帧，见 §9）。输出 >64KB 截断（保留尾部，`truncated:true`）。
@@ -174,7 +175,7 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 // 返回 content 模式：{ "matches": ["path:line:text", ...], "truncated": bool }（上限 250 行）
 ```
 
-实现：execd `POST /command` 执行 `rg --line-number --no-heading [--ignore-case] [-g glob] -- pattern path`（`files_with_matches` 加 `-l`）；沙箱镜像保证预装 `rg`。
+实现：execd `POST /command` 执行 `rg --line-number --no-heading [--ignore-case] [-g glob] -- pattern path`（`files_with_matches` 加 `-l`）；沙箱镜像保证预装 `rg`。沙箱缺 `rg`（exit 127 / "command not found"）时自动降级 `grep -rInE --color=never`（参数映射见 §4.11），输出同为 `path:line:text`。
 
 ### 4.7 activate_skill（风险 low，render generic）
 
@@ -250,11 +251,21 @@ Use this when a subtask is focused and independent; include everything the subag
 
 **供应商兼容注意**：eino 链路（acl openai）允许 tool 角色消息携带 content 数组（text+image_url），与 DSH 的 tool_result 带图同构；但严格 OpenAI 规范里 tool 消息 content 是 string，各家兼容实现（DeepSeek/doubao/qwen）对 tool 消息多模态的接受度**需实测**——实测不通的供应商后续在 provider 层降级为占位文本（只发信封）。
 
+### 4.11 错误语义（工具失败不中断 run）
+
+eino ToolsNode 会把工具返回的 Go error 升级为整个 run 失败（turn interrupted）。因此运行时统一约定：**工具执行失败一律作为错误文本的 tool result 回喂模型继续运行，Go error 不外溢**。三类语义：
+
+- **域拒绝**（模型可修正的输入问题）：工具内直接返回文本结果（read_media 的 vision 门控/非图/超限；edit 的 old_string 未命中；read 的文件不存在/非 UTF-8 等——后者经归一化层统一转换）。
+- **执行失败**（infra/环境错误：`errorResultMiddleware`（注册在 `ToolCallMiddlewares` 链尾、贴近执行处，Invokable 与 EnhancedInvokable 双链覆盖）把工具返回的 Go error 统一转为文本结果 `工具执行失败: <err>`；exec 例外地返回结构化结果 `{"error": "...", "stderr": "..."}`（render 仍为 terminal）。失败路径 meta/render/duration 照常落 tool/result 事件。
+- **中断**（不外溢也不归一化，原样上抛）：仅来自 ① 用户停止/服务中断（外层 ctx 取消/超时，工具自身超时不在此列——外层 ctx 存活时按执行失败转文本）；② 审批等 eino interrupt 机制（interrupt 信号原样传递，审批 deny 本就是文本结果 `"denied by user"`）。
+
+链序：`approvalMiddleware`（外层，interrupt/deny 不经归一化层）→ `errorResultMiddleware`（内层）。grep 在缺 `rg` 的沙箱（exit 127 / "command not found"）自动降级 `grep -rInE --color=never`（`--ignore-case→-i`、`-g→--include`、`-l` 保持），重试仍失败按执行失败归一化。
+
 ## 5. 审批实现（internal/runtime/approval）
 
 ### 5.1 拦截点与状态机
 
-eino `ToolsConfig.ToolCallMiddlewares` 注册审批中间件（在工具执行前）：
+eino `ToolsConfig.ToolCallMiddlewares` 注册审批中间件（在工具执行前；链序 `approvalMiddleware → errorResultMiddleware`，审批 interrupt/deny 不经归一化层，§4.11）：
 
 ```txt
 查会话 approval_mode + 工具风险等级 → 需确认？

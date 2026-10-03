@@ -193,7 +193,7 @@ func (o *orchestrator) buildSubAgent(ctx context.Context, sess *store.Session, s
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools:               toolList,
-				ToolCallMiddlewares: []compose.ToolMiddleware{approvalMiddleware(sess.ApprovalMode)},
+				ToolCallMiddlewares: []compose.ToolMiddleware{approvalMiddleware(sess.ApprovalMode), errorResultMiddleware()},
 			},
 		},
 		MaxIterations: maxIter,
