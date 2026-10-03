@@ -109,7 +109,7 @@ func (h *Handler) Prompt(c *gin.Context) {
 		return
 	}
 	req.Content = strings.TrimSpace(req.Content)
-	if req.Content == "" {
+	if req.Content == "" && len(req.Attachments) == 0 {
 		respond.Error(c, http.StatusBadRequest, respond.CodeInvalid, "content 不能为空", nil)
 		return
 	}

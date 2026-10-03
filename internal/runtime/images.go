@@ -113,6 +113,9 @@ func (o *orchestrator) buildUserMessage(ctx context.Context, m session.Message, 
 			},
 		})
 	}
-	parts = append(parts, schema.MessageInputPart{Type: schema.ChatMessagePartTypeText, Text: m.Content})
+	// 纯图消息不带空文本 part（供应商对空 text 段可能报错）
+	if m.Content != "" {
+		parts = append(parts, schema.MessageInputPart{Type: schema.ChatMessagePartTypeText, Text: m.Content})
+	}
 	return &schema.Message{Role: schema.User, UserInputMultiContent: parts}, nil
 }

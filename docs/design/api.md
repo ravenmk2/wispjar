@@ -127,6 +127,7 @@
 ```
 
 - `request_id` 幂等：相同 `(session_id, request_id)` 重复投递直接返回 200 + 已存在的 `user/message` seq（乐观对账，见 protocol.md §8）。
+- `content` 允许为空字符串当且仅当携带 `attachments`（纯图消息）；两者皆空 → 400。纯图消息组装时不带空文本 part，首条为纯图时会话标题静态兜底"图片会话"。
 - `attachments`（可选）：附件 id 数组，≤9 个；每个 id 必须已存在于 attachment 表且 `org_id` 与会话一致，任一不满足 → 400 `request/invalid`（整条消息拒绝，不产生任何事件）。
 - vision 门控：携带附件而当前模型 `capabilities.vision=false` → 422 `model/not_vision`（提示换模型；不静默降级，避免"模型假装看不见"）。
 - 会话 `running=1` 时返回 409 `session/running`（v1 不支持排队；steer/queue 在 M4）。

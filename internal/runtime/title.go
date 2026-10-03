@@ -42,6 +42,8 @@ func (o *orchestrator) maybeGenerateTitle(sessionID string) {
 			break
 		}
 		if content == "" {
+			// 纯图消息没有文本可生成标题，用静态兜底
+			_, _ = o.deps.Sessions.SetTitleIfUnpinned(ctx, sessionID, "图片会话")
 			return
 		}
 		cm, err := o.deps.Models.NewChatModel(ctx, sess.ModelID, nil)
