@@ -118,7 +118,7 @@ func TestValidateImageDimensions(t *testing.T) {
 		{"webp-vp8l", webpVP8L(320, 200), "image/webp", 320, 200},
 	}
 	for _, tc := range cases {
-		mime, w, h, err := validateImage(tc.data)
+		mime, w, h, err := ValidateImage(tc.data)
 		if err != nil {
 			t.Fatalf("%s: %v", tc.name, err)
 		}
@@ -130,22 +130,22 @@ func TestValidateImageDimensions(t *testing.T) {
 
 func TestValidateImagePixelLimit(t *testing.T) {
 	// 8193x8193 > 64M 像素（声明即可，无需真实像素数据）。
-	if _, _, _, err := validateImage(pngHeader(8193, 8193)); err == nil {
+	if _, _, _, err := ValidateImage(pngHeader(8193, 8193)); err == nil {
 		t.Fatal("want pixel limit error")
 	}
-	if _, _, _, err := validateImage(pngHeader(100, 100)); err != nil {
+	if _, _, _, err := ValidateImage(pngHeader(100, 100)); err != nil {
 		t.Fatalf("small png must pass: %v", err)
 	}
 }
 
 func TestValidateImageRejects(t *testing.T) {
-	if _, _, _, err := validateImage(nil); err == nil {
+	if _, _, _, err := ValidateImage(nil); err == nil {
 		t.Fatal("want error for empty input")
 	}
-	if _, _, _, err := validateImage([]byte("%PDF-1.4 not an image")); err == nil {
+	if _, _, _, err := ValidateImage([]byte("%PDF-1.4 not an image")); err == nil {
 		t.Fatal("want error for non-image content")
 	}
-	if _, _, _, err := validateImage(pngHeader(0, 10)); err == nil {
+	if _, _, _, err := ValidateImage(pngHeader(0, 10)); err == nil {
 		t.Fatal("want error for zero dimension")
 	}
 }

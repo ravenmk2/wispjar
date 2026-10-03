@@ -118,7 +118,7 @@ func (t *taskTool) invoke(ctx context.Context, in taskArgs) (string, error) {
 
 	iter := runner.Run(ctx, []*schema.Message{schema.UserMessage(in.Prompt)}, adk.WithCheckPointID(checkpointID))
 	for {
-		reason, cause, intr := sr.consume(iter)
+		reason, intr, cause := sr.consume(iter)
 		if intr == nil {
 			return sr.synthesize(sub.Name, reason, cause), nil
 		}
@@ -168,7 +168,7 @@ func (o *orchestrator) buildSubAgent(ctx context.Context, sess *store.Session, s
 		Model:         sub.Model,
 		Skills:        sub.Skills,
 	}
-	toolList, _, err := buildTools(nil, subSnap, sess.ApprovalMode)
+	toolList, _, err := buildTools(nil, subSnap, sess.ApprovalMode, o.visionOf(ctx, sub.Model.ID))
 	if err != nil {
 		return nil, err
 	}
@@ -239,6 +239,7 @@ type nestedToolResultData struct {
 	Content      string                  `json:"content"`
 	Error        string                  `json:"error,omitempty"`
 	Meta         *session.ToolResultMeta `json:"meta,omitempty"`
+	Attachments  []session.AttachmentRef `json:"attachments,omitempty"`
 	ParentCallID string                  `json:"parent_call_id"`
 }
 
@@ -334,7 +335,7 @@ func (sr *subRun) commit(inputs []session.EventInput) error {
 
 // consume 消费子 AgentEvent 流直到结束/出错/审批中断（runtime.md §6.4）。
 // 不产出嵌套 turn/start（derive 按最后一个 turn/start 截断历史，嵌套边界事件会污染主历史）。
-func (sr *subRun) consume(iter *adk.AsyncIterator[*adk.AgentEvent]) (string, error, *subInterrupt) {
+func (sr *subRun) consume(iter *adk.AsyncIterator[*adk.AgentEvent]) (string, *subInterrupt, error) {
 	for {
 		event, ok := iter.Next()
 		if !ok {
@@ -346,19 +347,19 @@ func (sr *subRun) consume(iter *adk.AsyncIterator[*adk.AgentEvent]) (string, err
 			case errors.As(event.Err, &cancelErr),
 				errors.Is(event.Err, context.Canceled),
 				errors.Is(event.Err, context.DeadlineExceeded):
-				return "interrupted", event.Err, nil
+				return "interrupted", nil, event.Err
 			case errors.Is(event.Err, adk.ErrExceedMaxIterations):
-				return "max_iterations", event.Err, nil
+				return "max_iterations", nil, event.Err
 			default:
-				return "error", event.Err, nil
+				return "error", nil, event.Err
 			}
 		}
 		if event.Action != nil && event.Action.Interrupted != nil {
 			ai, rootID, ok := approvalFromInterrupt(event.Action.Interrupted)
 			if !ok {
-				return "error", errors.New("unknown interrupt (not an approval request)"), nil
+				return "error", nil, errors.New("unknown interrupt (not an approval request)")
 			}
-			return "", nil, &subInterrupt{info: ai, interruptID: rootID}
+			return "", &subInterrupt{info: ai, interruptID: rootID}, nil
 		}
 		mv := event.Output
 		if mv == nil || mv.MessageOutput == nil {
@@ -375,7 +376,7 @@ func (sr *subRun) consume(iter *adk.AsyncIterator[*adk.AgentEvent]) (string, err
 			err = sr.toolResult(out.Message)
 		}
 		if err != nil {
-			return "error", err, nil
+			return "error", nil, err
 		}
 	}
 }
@@ -452,7 +453,7 @@ func (sr *subRun) toolResult(msg *schema.Message) error {
 	data := nestedToolResultData{
 		Turn: sr.turn, Step: sr.step,
 		SubTurn: 1, SubStep: sr.subStep,
-		CallID: msg.ToolCallID, Name: msg.ToolName, Content: msg.Content,
+		CallID: msg.ToolCallID, Name: msg.ToolName, Content: toolMessageContent(msg),
 		ParentCallID: sr.parentCallID,
 	}
 	if m := sr.tc.TakeMeta(msg.ToolCallID); m != nil {
@@ -463,6 +464,7 @@ func (sr *subRun) toolResult(msg *schema.Message) error {
 			SandboxID:  m.SandboxID,
 			Diff:       m.Diff,
 		}
+		data.Attachments = m.Attachments
 	}
 	if sr.denied.take(msg.ToolCallID) {
 		data.Error = deniedResult

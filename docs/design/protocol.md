@@ -174,7 +174,7 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 | `assistant/message` | `{turn, step, message, usage?, interrupted?}`。`message` 为完整 assistant 消息：`{role:"assistant", content:[ContentBlock...]}`，ContentBlock = `{type:"text",text}` / `{type:"reasoning",text}` / `{type:"tool-call",id,name,arguments}`。`usage` 结构同 StreamChunk usage（snake_case） |
 | `assistant/attempt` | `{turn, step, chunks:[StreamChunk...]（压缩存储）, error?}` —— 失败/取消的尝试留痕，**不进模型历史** |
 | `tool/call` | `{turn, step, call_id, name, arguments(原始JSON字符串), parent_call_id?}` |
-| `tool/result` | `{turn, step, call_id, name, content(string), error?, meta?, parent_call_id?}`。`meta` 含 `{duration_ms, render:"terminal"\|"diff"\|"search"\|"read"\|"generic", truncated?, sandbox_id?}` |
+| `tool/result` | `{turn, step, call_id, name, content(string), error?, meta?, attachments?, parent_call_id?}`。`meta` 含 `{duration_ms, render:"terminal"\|"diff"\|"search"\|"read"\|"generic", truncated?, sandbox_id?}`。`attachments` 为工具产出图片的引用数组（read_media；结构与 `user/message.attachments` 相同——不透明引用，绝无 base64，字节经 `GET /attachments/{id}` 获取） |
 
 ### 6.3 会话事件
 
@@ -197,7 +197,7 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 输入：`seq ≤ N` 的全部事件。输出：`[]*schema.Message`。
 
 1. 取最后一个 `turn/start` 之前的全部事件（进行中的 turn 不入历史）。
-2. 按 seq 顺序： `user/message` → user 消息（带 `attachments` 时投影附件引用，模型侧组装为图片+文本多模态消息，见 runtime.md §8.3）；`assistant/message` → assistant 消息（content 含 tool-call 块则展开为 `ToolCalls`）；`tool/result` → tool 消息（`ToolCallID=call_id`，name 从配对 `tool/call` 取，error 时 content 为错误描述）。
+2. 按 seq 顺序： `user/message` → user 消息（带 `attachments` 时投影附件引用，模型侧组装为图片+文本多模态消息，见 runtime.md §8.3）；`assistant/message` → assistant 消息（content 含 tool-call 块则展开为 `ToolCalls`）；`tool/result` → tool 消息（`ToolCallID=call_id`，name 从配对 `tool/call` 取，error 时 content 为错误描述；带 `attachments` 时同样投影附件引用，模型侧组装为 `[text 信封, image]` 多模态 tool 消息，见 runtime.md §4.10）。
 3. 悬空配对保护：`assistant/message` 中 tool-call 块缺少对应 `tool/result`（中断场景）→ 合成 `tool/result{error:"interrupted"}` 保证消息序列合法（模型 API 要求每个 tool_call 有响应）。
 4. 子 Agent 嵌套事件（带 `parent_call_id`）不进入主消息流——它们在主 Agent 视角只体现为一次 `task` 工具的 call/result。
 5. `compaction/summary`（M4）：命中区间内的消息整体替换为一条 user 角色的摘要消息。

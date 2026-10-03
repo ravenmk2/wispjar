@@ -79,7 +79,7 @@ type ChatModelFactory interface {
 
 ## 4. 工具规格（模型可见 schema）
 
-> 全部用 `utils.InferTool` 实现。模型侧只暴露 name/description/parameters。每个工具有：风险等级（审批）、`render` 词汇（UI 卡片）、超时。
+> 纯文本工具用 `utils.InferTool` 实现；read_media 用 `utils.InferEnhancedTool`（返回 `schema.ToolResult`，tool 消息可携带图片 part）。模型侧只暴露 name/description/parameters。每个工具有：风险等级（审批）、`render` 词汇（UI 卡片）、超时。
 > 沙箱工具从 ctx 取 `SandboxHandle`（首次调用惰性创建，§7）；工作目录默认 `/workspace`。
 
 ### 4.1 exec（风险 high，render terminal）
@@ -207,6 +207,27 @@ Use this when a subtask is focused and independent; include everything the subag
 
 实现：internal/runtime/question.go（等待语义与子 Agent 规则见 §5.3）。任何 approval_mode 下不被审批中间件拦截（交互工具，豁免方式同 activate_skill）。仅 depth=0 根 Agent 可用；depth=1 注册同 schema 拒绝桩（§5.3）。
 
+### 4.10 read_media（风险 low，render read）
+
+```jsonc
+// name: read_media —— 读取沙箱内 PNG/JPEG/WebP/GIF 图片并把图片本身返回给模型查看
+{ "path": "string（必填，沙箱内绝对路径，与 read 工具同语义）" }
+// 返回（eino ToolResult，tool 消息直接携带多模态 parts）：
+//   parts[0] text:  { "path", "mime", "width", "height", "bytes",
+//                     "sha256": "<前8位>", "attachment_id": "sha256:<64 hex>" }（确定性信封）
+//   parts[1] image: Base64Data + MIMEType（原始字节，v1 不归一化）
+// 域拒绝均为文本工具结果（非 Go error，不中断 run）：
+//   当前模型非 vision → "当前模型不支持图片输入…"（先于任何沙箱 I/O）
+//   非图片（魔数嗅探 png/jpeg/webp/gif）→ "不是可读取的图片…"
+//   原图 >8MB / >64M 像素 → 拒绝并建议用 exec 缩放后再读
+```
+
+实现（internal/runtime/tools/read_media.go）：沙箱读文件（FileInfo 预检大小 → download）→ `attachment.ValidateImage`（与上传准入同一套 8MB/64M 像素闸值）→ 字节原样写入内容寻址存储（`attachment.Service.Upload`，同字节去重命中同一引用，跨轮字节一致）→ 附件引用登记进 tool/result 事件的 `attachments`（结构同 user/message.attachments）。**v1 决策：不做 DSH 式归一化管线**（EXIF 转正/重编码/尺寸压缩；纯 Go 图像栈的定参与版本化留待后续，字节原样 = 天然确定性）。vision 门控按**当前 Agent 模型** `capabilities.vision` 在工具构建期捕获（主/子 Agent 各自判定；子 Agent 非 vision 模型同样拒绝）。审批分级与 read 同级（low，strict 也不拦）。
+
+回放与卸载：derive 把 tool/result 的 attachments 投影到 tool 消息；history 组装时从附件存储读字节重组 `[text 信封, image]`（顺序与 in-run 一致，逐字节确定）。`planImageOffload` 对 user 与 tool 消息图片共用同一预算与最旧优先量子化规则（§8.3）；tool 图片卸载位占位文本为确定性字符串（文件名 + sha256 前 8 位 + "可用 read_media 重新读取，路径见本工具结果的 path 字段"）。
+
+**供应商兼容注意**：eino 链路（acl openai）允许 tool 角色消息携带 content 数组（text+image_url），与 DSH 的 tool_result 带图同构；但严格 OpenAI 规范里 tool 消息 content 是 string，各家兼容实现（DeepSeek/doubao/qwen）对 tool 消息多模态的接受度**需实测**——实测不通的供应商后续在 provider 层降级为占位文本（只发信封）。
+
 ## 5. 审批实现（internal/runtime/approval）
 
 ### 5.1 拦截点与状态机
@@ -229,7 +250,7 @@ pending 审批登记内存表 `map[callID]pendingApproval{sessionID, checkpointI
 |---|---|---|---|
 | exec | 确认 | 确认 | 免 |
 | write / edit | 确认 | 免 | 免 |
-| read / glob / grep / activate_skill / task / ask_user_question | 免 | 免 | 免 |
+| read / read_media / glob / grep / activate_skill / task / ask_user_question | 免 | 免 | 免 |
 
 - `grep` 虽走 exec 通道，按工具自身 low 风险归类（实现通道不影响风险语义）。
 - 子 Agent 内的工具调用继承同一会话的 approval_mode（嵌套 asked/decided 带 `parent_call_id`）。
@@ -340,9 +361,10 @@ iter := runner.Run(ctx, history, opt)
 
 链路：`POST /sessions/{id}/attachments` 上传（魔数嗅探/8MB/64M 像素校验 → 内容寻址存储 + attachment 表）→ prompt 携带附件 id 引用（校验后写入 `user/message.attachments`，base64 不进事件）→ 每轮 history 组装时把引用投影为图片 part。
 
-- **组装**（eino `UserInputMultiContent`，仅 user 角色可用；system 角色不支持多模态）：带附件的 user 消息构造 `schema.Message{Role: User, UserInputMultiContent: [...image parts, text part]}`——**图片在前、文本在后**（ark 官方建议多图时文字在后；固定顺序保证逐字节确定性）。image part 用 `Base64Data`+`MIMEType` 内联（DeepSeek/ark/qwen 三家唯一共同路径），字节从内容寻址存储读取并校验 sha256。
-- **vision 门控**：prompt 带附件而当前模型 `capabilities.vision=false` → 422 `model/not_vision` 提示换模型（用户主动挂图，不做 DSH 式静默文本降级）；PATCH 换到非 vision 模型且历史含图 → 409 `session/vision_locked` 拒绝（否则历史投影要从图片变占位文本，前缀从此处失效）。
-- **卸载（offload），规则版本 `image-offload-v1`**：每请求预算 `maxImages=8`、`maxImageBytes=16MB`（base64 后合计，按最严格供应商 ark 64MB 请求体留足余量）。超限按**最旧优先 + 量子化**卸载：张数超限部分向上取整到 2 的倍数；字节超限的卸载目标向上取整到 4MB 的倍数，最终卸载张数再按 2 取整。被卸载的图片出现位替换为确定性占位文本（含文件名与 sha256 前 8 位，注明已被卸载、可请用户重新发送）。卸载集只依赖已提交历史 → 同一历史前缀永远产出同一请求前缀；量子化避免每轮多一张图就挪一次边界。**规则变更 = 历史前缀失效**：任何调整必须整体更换版本号（代码常量 `imageOffloadVersion`，带图 turn 的 `request/header.image_offload` 记录该版本供审计）。后续可演进为 DSH 式持久卸载标记（追加新事件记录卸载集）。
+- **组装**（eino `UserInputMultiContent`，user 与 tool 角色可用；system 角色不支持多模态）：带附件的 user 消息构造 `schema.Message{Role: User, UserInputMultiContent: [...image parts, text part]}`——**图片在前、文本在后**（ark 官方建议多图时文字在后；固定顺序保证逐字节确定性）。image part 用 `Base64Data`+`MIMEType` 内联（DeepSeek/ark/qwen 三家唯一共同路径），字节从内容寻址存储读取并校验 sha256。
+- **agent 主动读图（read_media）**：模型经 read_media 工具读沙箱图片（§4.10），tool 消息经 eino `ToolResult` 直接携带 `[text 信封, image part]`；tool/result 事件只记附件引用（结构同 user/message.attachments，base64 不进事件），回放时按引用从存储读字节重组多模态 tool 消息。
+- **vision 门控**：prompt 带附件而当前模型 `capabilities.vision=false` → 422 `model/not_vision` 提示换模型（用户主动挂图，不做 DSH 式静默文本降级）；PATCH 换到非 vision 模型且历史含图 → 409 `session/vision_locked` 拒绝（否则历史投影要从图片变占位文本，前缀从此处失效）；read_media 在非 vision 模型下调用直接返回错误文本（先于任何沙箱 I/O，按当前 Agent 模型判定，子 Agent 同）。
+- **卸载（offload），规则版本 `image-offload-v1`**：每请求预算 `maxImages=8`、`maxImageBytes=16MB`（base64 后合计，按最严格供应商 ark 64MB 请求体留足余量），**user 与 tool 消息的图片出现位共用同一预算**。超限按**最旧优先 + 量子化**卸载：张数超限部分向上取整到 2 的倍数；字节超限的卸载目标向上取整到 4MB 的倍数，最终卸载张数再按 2 取整。被卸载的图片出现位替换为确定性占位文本（含文件名与 sha256 前 8 位；user 图片注明可请用户重新发送，tool 图片注明可用 read_media 重新读取、路径见同条工具结果信封的 path 字段）。卸载集只依赖已提交历史 → 同一历史前缀永远产出同一请求前缀；量子化避免每轮多一张图就挪一次边界。**规则变更 = 历史前缀失效**：任何调整必须整体更换版本号（代码常量 `imageOffloadVersion`，带图 turn 的 `request/header.image_offload` 记录该版本供审计）。后续可演进为 DSH 式持久卸载标记（追加新事件记录卸载集）。
 - **trimContext 计入图片**：卸载决策在裁剪之前；估算时保留图片按视觉 token 折算（1280 tok/图保守上沿，不按 base64 体积），卸载后的占位文本按文本计（§8.1）。
 - **删除与 GC**：删除会话不删附件 blob 与表行——附件永不自动删除（fork 共享同一不可变对象），引用感知 GC 后续另做（data-model.md §10）。
 

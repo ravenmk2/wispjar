@@ -125,13 +125,16 @@ type ToolResultMeta struct {
 }
 
 type ToolResultData struct {
-	Turn         int             `json:"turn"`
-	Step         int             `json:"step"`
-	CallID       string          `json:"call_id"`
-	Name         string          `json:"name"`
-	Content      string          `json:"content"`
-	Error        string          `json:"error,omitempty"`
-	Meta         *ToolResultMeta `json:"meta,omitempty"`
+	Turn    int             `json:"turn"`
+	Step    int             `json:"step"`
+	CallID  string          `json:"call_id"`
+	Name    string          `json:"name"`
+	Content string          `json:"content"`
+	Error   string          `json:"error,omitempty"`
+	Meta    *ToolResultMeta `json:"meta,omitempty"`
+	// Attachments 工具产出图片的持久引用（read_media；与 user/message.attachments 同结构，
+	// base64 不进事件，回放时按引用从附件存储读字节重组多模态 tool 消息）。
+	Attachments  []AttachmentRef `json:"attachments,omitempty"`
 	ParentCallID string          `json:"parent_call_id,omitempty"`
 }
 

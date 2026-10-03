@@ -17,6 +17,7 @@ import (
 
 	"github.com/ravenmk2/wispjar/internal/agent"
 	"github.com/ravenmk2/wispjar/internal/sandbox"
+	"github.com/ravenmk2/wispjar/internal/session"
 )
 
 type ctxKey struct{}
@@ -39,6 +40,9 @@ type Meta struct {
 	SandboxID  string
 	Diff       string
 	DurationMS int64
+	// Attachments 工具产出图片的持久引用（read_media；tool/result data 记录用，
+	// 回放时按引用从附件存储读字节重组多模态 tool 消息）。
+	Attachments []session.AttachmentRef
 }
 
 const (
@@ -70,6 +74,8 @@ func WrapManager(m sandbox.Manager) SandboxProvider { return sandboxManagerAdapt
 type Context struct {
 	SessionID string
 	OrgID     string
+	// UserID 会话所属用户（read_media 图片入库的 created_by，贴合 attachment 表 CHAR(32)）。
+	UserID string
 
 	Sandbox   SandboxProvider
 	Image     string
@@ -79,6 +85,10 @@ type Context struct {
 	Skills  []agent.SnapshotSkill
 
 	PublishToolOutput func(callID, stream, delta string)
+
+	// Images read_media 图片入库（内容寻址存储 + attachment 表；*attachment.Service 实现）。
+	// nil 时 read_media 拒绝执行。
+	Images ImageSaver
 
 	// OnSkillUploadFailed 技能目录上传沙箱失败回调（非阻断；builder 注入以记录会话事件）。
 	OnSkillUploadFailed func(skillName, sandboxID string, err error)

@@ -46,6 +46,10 @@ type Deps struct {
 	ToolContextFactory func(sess *store.Session, snap *agent.Snapshot) *tools.Context
 	// Attachments 附件字节读取（图片组装用；历史含附件时必配）。
 	Attachments AttachmentReader
+	// ImageSaver read_media 图片入库（*attachment.Service；nil 时 read_media 拒绝执行）。
+	ImageSaver tools.ImageSaver
+	// Vision 按 model_id 查 capabilities.vision（read_media 门控；nil 按不支持处理）。
+	Vision func(ctx context.Context, modelID string) bool
 	// QuestionWaitTimeout 提问工具前台等待窗口（0 = 默认 10 分钟；测试注入小值）。
 	QuestionWaitTimeout time.Duration
 }
@@ -213,7 +217,15 @@ func (o *orchestrator) history(ctx context.Context, sessionID string) ([]*schema
 			}
 			msgs = append(msgs, schema.AssistantMessage(m.Content, calls))
 		case session.RoleTool:
-			msgs = append(msgs, schema.ToolMessage(m.Content, m.ToolCallID, schema.WithToolName(m.ToolName)))
+			if len(m.Attachments) > 0 {
+				msg, err := o.buildToolMessage(ctx, m, offloaded[i])
+				if err != nil {
+					return nil, err
+				}
+				msgs = append(msgs, msg)
+			} else {
+				msgs = append(msgs, schema.ToolMessage(m.Content, m.ToolCallID, schema.WithToolName(m.ToolName)))
+			}
 		}
 	}
 	return o.trimContext(ctx, sessionID, msgs)
@@ -416,7 +428,7 @@ func (o *orchestrator) toolResult(sessionID string, rs *runState, msg *schema.Me
 		Step:    rs.step,
 		CallID:  msg.ToolCallID,
 		Name:    msg.ToolName,
-		Content: msg.Content,
+		Content: toolMessageContent(msg),
 	}
 	if m := rs.toolCtx.TakeMeta(msg.ToolCallID); m != nil {
 		data.Meta = &session.ToolResultMeta{
@@ -426,6 +438,7 @@ func (o *orchestrator) toolResult(sessionID string, rs *runState, msg *schema.Me
 			SandboxID:  m.SandboxID,
 			Diff:       m.Diff,
 		}
+		data.Attachments = m.Attachments
 	}
 	if _, denied := rs.denied[msg.ToolCallID]; denied {
 		delete(rs.denied, msg.ToolCallID)

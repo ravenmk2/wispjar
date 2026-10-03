@@ -188,3 +188,38 @@ func TestDeriveUserMessageAttachments(t *testing.T) {
 		t.Fatalf("text-only message must have no attachments: %+v", msgs[1])
 	}
 }
+
+func TestDeriveToolResultAttachments(t *testing.T) {
+	ref := AttachmentRef{
+		ID:   "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		MIME: "image/png", Bytes: 20, Width: 4, Height: 2, Name: "a.png",
+	}
+	events := []store.SessionEvent{
+		ev(1, EventTurnStart, TurnStartData{Turn: 1, RequestID: "r1"}),
+		ev(2, EventUserMessage, UserMessageData{Turn: 1, Content: "看看沙箱里的图", RequestID: "r1"}),
+		ev(3, EventAssistantMessage, assistantMsg(1, 1,
+			ContentBlock{Type: "tool-call", ID: "call_1", Name: "read_media", Arguments: `{"path":"/workspace/a.png"}`},
+		)),
+		ev(4, EventToolCall, ToolCallData{Turn: 1, Step: 1, CallID: "call_1", Name: "read_media", Arguments: `{"path":"/workspace/a.png"}`}),
+		ev(5, EventToolResult, ToolResultData{
+			Turn: 1, Step: 1, CallID: "call_1", Name: "read_media",
+			Content:     `{"path":"/workspace/a.png"}`,
+			Attachments: []AttachmentRef{ref},
+		}),
+		ev(6, EventAssistantMessage, assistantMsg(1, 2, ContentBlock{Type: "text", Text: "是一张截图"})),
+		ev(7, EventTurnEnd, TurnEndData{Turn: 1, Reason: "completed"}),
+		ev(8, EventTurnStart, TurnStartData{Turn: 2, RequestID: "r2"}),
+		ev(9, EventUserMessage, UserMessageData{Turn: 2, Content: "继续", RequestID: "r2"}),
+	}
+	msgs := DeriveMessages(events)
+	if len(msgs) != 4 {
+		t.Fatalf("want 4 messages, got %+v", msgs)
+	}
+	tool := msgs[2]
+	if tool.Role != RoleTool || tool.ToolCallID != "call_1" {
+		t.Fatalf("msg[2] must be the tool message: %+v", tool)
+	}
+	if len(tool.Attachments) != 1 || tool.Attachments[0].ID != ref.ID || tool.Attachments[0].Width != 4 {
+		t.Fatalf("tool result attachments must project onto derived tool message: %+v", tool)
+	}
+}

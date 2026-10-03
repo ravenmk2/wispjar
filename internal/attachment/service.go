@@ -76,7 +76,7 @@ func refOf(row *store.Attachment) session.AttachmentRef {
 
 // Upload 校验图片 → 写内容寻址存储 → 插表（同内容命中去重，幂等返回既有行）。
 func (s *Service) Upload(ctx context.Context, orgID, actorID, name string, data []byte) (*session.AttachmentRef, error) {
-	mime, w, h, err := validateImage(data)
+	mime, w, h, err := ValidateImage(data)
 	if err != nil {
 		return nil, errInvalid(err.Error(), map[string]any{"size": len(data)})
 	}

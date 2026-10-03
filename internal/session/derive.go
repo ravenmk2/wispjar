@@ -135,7 +135,7 @@ func DeriveMessages(events []store.SessionEvent) []Message {
 			if d.Error != "" {
 				content = d.Error
 			}
-			msgs = append(msgs, Message{Role: RoleTool, ToolCallID: d.CallID, ToolName: name, Content: content})
+			msgs = append(msgs, Message{Role: RoleTool, ToolCallID: d.CallID, ToolName: name, Content: content, Attachments: d.Attachments})
 			for i, tc := range pending {
 				if tc.ID == d.CallID {
 					pending = append(pending[:i], pending[i+1:]...)

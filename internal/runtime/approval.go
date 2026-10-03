@@ -25,6 +25,7 @@ const (
 var toolRisk = map[string]string{
 	"exec":           RiskHigh,
 	"read":           RiskLow,
+	"read_media":     RiskLow,
 	"write":          RiskMedium,
 	"edit":           RiskMedium,
 	"glob":           RiskLow,
@@ -69,6 +70,8 @@ func init() {
 const deniedResult = "denied by user"
 
 // approvalMiddleware 在工具执行前按会话 approval_mode 拦截（runtime.md §5.1）。
+// Invokable 与 EnhancedInvokable 双分支同逻辑：read_media 等 enhanced 工具
+// （tool 消息携带多模态 parts）不经 Invokable 链，缺省会被绕过。
 func approvalMiddleware(mode string) compose.ToolMiddleware {
 	return compose.ToolMiddleware{
 		Invokable: func(next compose.InvokableToolEndpoint) compose.InvokableToolEndpoint {
@@ -88,6 +91,29 @@ func approvalMiddleware(mode string) compose.ToolMiddleware {
 				isTarget, hasData, allow := etool.GetResumeContext[bool](ctx)
 				if isTarget && hasData && !allow {
 					return &compose.ToolOutput{Result: deniedResult}, nil
+				}
+				return next(ctx, input)
+			}
+		},
+		EnhancedInvokable: func(next compose.EnhancedInvokableToolEndpoint) compose.EnhancedInvokableToolEndpoint {
+			return func(ctx context.Context, input *compose.ToolInput) (*compose.EnhancedInvokableToolOutput, error) {
+				if !needsApproval(mode, input.Name) {
+					return next(ctx, input)
+				}
+				wasInterrupted, _, _ := etool.GetInterruptState[any](ctx)
+				if !wasInterrupted {
+					return nil, etool.Interrupt(ctx, ApprovalInterruptInfo{
+						CallID:    input.CallID,
+						Name:      input.Name,
+						Arguments: input.Arguments,
+						Risk:      riskOf(input.Name),
+					})
+				}
+				isTarget, hasData, allow := etool.GetResumeContext[bool](ctx)
+				if isTarget && hasData && !allow {
+					return &compose.EnhancedInvokableToolOutput{Result: &schema.ToolResult{
+						Parts: []schema.ToolOutputPart{{Type: schema.ToolPartTypeText, Text: deniedResult}},
+					}}, nil
 				}
 				return next(ctx, input)
 			}

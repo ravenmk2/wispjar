@@ -104,7 +104,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
   | terminal | exec | 灰卡：`$命令` 头（状态点按退出码绿/红）+ exit 码徽标 + 复制；stdout/stderr 滚动（live 期间接 tool-output 帧），超 2000 字截断"查看全部" |
   | diff | write/edit | 文件路径头 + unified diff 着色（新增绿/删除红） |
   | search | glob/grep | 查询词头 + 结果列表（path:line） |
-  | read | read | 路径头 + 内容代码块 |
+  | read | read/read_media | 路径头 + 内容代码块（read_media 附带 `attachments` 引用时渲染图片缩略图，经附件 objectURL 通道加载） |
   | generic | activate_skill/task | 参数 + 结果等宽文本 |
 - **task 子轨迹**：task 卡折叠行显示"委派给 {subagent}：任务摘要"，收起时附"N 条嵌套轨迹"；展开后渲染 `parent_call_id` 相同的嵌套事件序列（递归用同一套节点渲染，层级缩进 + 左侧竖线）。
 - **审批**：顶层待审批不在消息流渲染小卡，由 composer 位的 ApprovalTakeover 接管（见 §6.2）；嵌套子智能体审批（task 卡内）保持消息流内嵌小卡：工具名 + 参数展示（exec 命令高亮 / write/edit 显示 diff）+ 「允许」「拒绝」按钮 + 10 分钟倒计时。已 decided 或 auto-deny 的审批显示结果态一行。点击调 REST 或 uplink（实现任选，协议等价）。
@@ -146,7 +146,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 1. **基本信息**：名称、描述（hint：将作为 task 委派时的能力说明）、头像（内置图标集选择）。
 2. **模型**：下拉（`/orgs/{org}/models`，显示供应商/上下文长度）；参数：temperature 滑块（0-2）、max_tokens 数字。
 3. **提示词**：等宽字体 textarea（行数自适应，支持全屏）。
-4. **工具**：六沙箱工具开关组（默认全开）。
+4. **工具**：沙箱工具开关组（exec/read/write/edit/glob/grep/read_media，默认全开）。
 5. **Skills**：本机构 skills 多选列表（名称+描述），可排序（拖拽）。
 6. **子智能体**：本机构其他 published 智能体多选；保存时前端提示环/层级限制（服务端 409 校验为准）；hint 说明"通过 task 工具委派"。
 7. **沙箱**：镜像下拉（`GET /orgs/{orgId}/admin/sandbox-settings` 的 images 只读展示）、资源覆盖（CPU/内存，留空用平台默认）。

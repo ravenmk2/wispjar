@@ -148,7 +148,7 @@ CREATE TABLE agent (
   model_id       CHAR(32)      NOT NULL,
   model_params   JSON          NULL,                    -- 覆盖 model.default_params
   max_iterations INT           NOT NULL DEFAULT 20,
-  tools_enabled  JSON          NOT NULL,                -- {"exec":true,"read":true,"write":true,"edit":true,"glob":true,"grep":true}
+  tools_enabled  JSON          NOT NULL,                -- {"exec":true,"read":true,"write":true,"edit":true,"glob":true,"grep":true,"read_media":true}
   sandbox_config JSON          NULL,                    -- {"image":"","resources":{"cpu":"2","memory":"2Gi"}}；空/缺省=平台默认
   status         VARCHAR(16)   NOT NULL DEFAULT 'draft',-- draft / published / archived
   created_by     CHAR(32)      NOT NULL,
@@ -273,6 +273,7 @@ CREATE TABLE attachment (
 
 - 字节本体在库外内容寻址存储（§13），表只存元数据：鉴权（`org_id` 作用域防跨租户读图）、展示（宽高/文件名）、读时校验依据。
 - 同字节内容全局只有一行（首发机构胜出）；上传幂等，重复上传同图直接返回既有行。
+- 写入方有两类：用户上传（`POST /sessions/{id}/attachments`）与 read_media 工具（agent 读沙箱图片入库，created_by 记会话所属用户 id；与用户上传同一套魔数/8MB/64M 像素闸门）。
 - **附件永不自动删除**：删除会话不删 blob 与表行（fork 共享同一不可变对象）；引用感知 GC（扫描 `session_event` 引用 + orphan 清理）后续另做。
 
 ## 11. usage_daily / audit_log

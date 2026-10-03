@@ -113,6 +113,16 @@ func main() {
 			return typ
 		},
 		Attachments: attachmentSvc,
+		ImageSaver:  attachmentSvc,
+		Vision: func(ctx context.Context, modelID string) bool {
+			var m store.Model
+			if err := db.WithContext(ctx).Select("capabilities").First(&m, "id = ?", modelID).Error; err != nil {
+				return false
+			}
+			caps := provider.Capabilities{}
+			_ = json.Unmarshal(m.Capabilities, &caps)
+			return caps.Vision
+		},
 	})
 	if sandboxSvc != nil {
 		sandboxSvc.OnEvent(runtime.SandboxEventHook(repo, eventStore, bus))

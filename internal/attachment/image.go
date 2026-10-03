@@ -33,24 +33,47 @@ func sniffMIME(data []byte) (string, bool) {
 	return "", false
 }
 
-// validateImage 校验并返回 (mime, width, height)：魔数白名单 → 解码宽高 → 像素上限。
-func validateImage(data []byte) (string, int, int, error) {
+// ImageGateKind 图片准入闸门的拒绝类别（read_media 工具据此生成可恢复建议）。
+type ImageGateKind string
+
+const (
+	GateNotImage      ImageGateKind = "not_image"
+	GateTooLarge      ImageGateKind = "too_large"
+	GateTooManyPixels ImageGateKind = "too_many_pixels"
+	GateDecodeFailed  ImageGateKind = "decode_failed"
+)
+
+// ImageError 是图片准入校验的语义化错误；Message 为用户可读中文描述。
+type ImageError struct {
+	Kind    ImageGateKind
+	Message string
+}
+
+func (e *ImageError) Error() string { return e.Message }
+
+// ValidateImage 校验并返回 (mime, width, height)：魔数白名单 → 解码宽高 → 像素上限。
+// 上传准入与 read_media 工具共用同一套闸值（8MB / 64M 像素）。
+func ValidateImage(data []byte) (string, int, int, error) {
 	if len(data) == 0 {
-		return "", 0, 0, errors.New("空文件")
+		return "", 0, 0, &ImageError{Kind: GateNotImage, Message: "空文件"}
 	}
 	if len(data) > MaxImageBytes {
-		return "", 0, 0, fmt.Errorf("图片大小 %d 字节超过 8MB 限制", len(data))
+		return "", 0, 0, &ImageError{Kind: GateTooLarge,
+			Message: fmt.Sprintf("图片大小 %d 字节超过 8MB 限制", len(data))}
 	}
 	mime, ok := sniffMIME(data)
 	if !ok {
-		return "", 0, 0, errors.New("仅支持 PNG / JPEG / WebP / GIF 图片（按文件内容识别）")
+		return "", 0, 0, &ImageError{Kind: GateNotImage,
+			Message: "仅支持 PNG / JPEG / WebP / GIF 图片（按文件内容识别）"}
 	}
 	w, h, err := imageDimensions(data, mime)
 	if err != nil {
-		return "", 0, 0, fmt.Errorf("图片解码失败: %v", err)
+		return "", 0, 0, &ImageError{Kind: GateDecodeFailed,
+			Message: fmt.Sprintf("图片解码失败: %v", err)}
 	}
 	if w < 1 || h < 1 || int64(w)*int64(h) > MaxPixels {
-		return "", 0, 0, fmt.Errorf("图片尺寸 %dx%d 超出 64M 像素限制", w, h)
+		return "", 0, 0, &ImageError{Kind: GateTooManyPixels,
+			Message: fmt.Sprintf("图片尺寸 %dx%d 超出 64M 像素限制", w, h)}
 	}
 	return mime, w, h, nil
 }

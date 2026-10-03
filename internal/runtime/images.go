@@ -87,6 +87,68 @@ func offloadedImageText(ref session.AttachmentRef) string {
 	return fmt.Sprintf("[图片已卸载] %q (sha256:%s)：因超出单次请求图片预算未随历史发送；如需模型查看该图片，请提醒用户重新发送。", ref.Name, short)
 }
 
+// offloadedToolImageText tool 消息图片卸载位的确定性占位文本：文件名 + sha256 前 8 位，
+// 并指示模型可用 read_media 重新读取（完整沙箱路径在同条工具结果的文本信封 path 字段中；
+// 读回闭环：同字节内容寻址去重，重读命中同一引用）。
+func offloadedToolImageText(ref session.AttachmentRef) string {
+	short := strings.TrimPrefix(ref.ID, "sha256:")
+	if len(short) > 8 {
+		short = short[:8]
+	}
+	return fmt.Sprintf("[图片已卸载] %q (sha256:%s)：因超出单次请求图片预算未随历史发送；可用 read_media 工具重新读取（路径见本工具结果的 path 字段）。", ref.Name, short)
+}
+
+// toolMessageContent 取 tool 消息的文本内容：enhanced 工具（read_media）的消息 Content 为空、
+// 文本在 UserInputMultiContent 的 text part 中（事件只记录文本信封，图片 part 以附件引用还原）。
+func toolMessageContent(msg *schema.Message) string {
+	if msg.Content != "" {
+		return msg.Content
+	}
+	var b strings.Builder
+	for _, p := range msg.UserInputMultiContent {
+		if p.Type == schema.ChatMessagePartTypeText {
+			b.WriteString(p.Text)
+		}
+	}
+	return b.String()
+}
+
+// buildToolMessage 组装带图片附件的 tool 消息（read_media 回放）：文本信封在前、图片在后，
+// 与工具实时返回的 ToolResult parts 顺序一致（逐字节确定性，缓存前缀稳定）。
+// 卸载位替换为 offloadedToolImageText 占位文本。
+func (o *orchestrator) buildToolMessage(ctx context.Context, m session.Message, offloaded []bool) (*schema.Message, error) {
+	if o.deps.Attachments == nil {
+		return nil, fmt.Errorf("会话历史包含工具图片附件，但未配置附件存储")
+	}
+	parts := make([]schema.MessageInputPart, 0, len(m.Attachments)+1)
+	parts = append(parts, schema.MessageInputPart{Type: schema.ChatMessagePartTypeText, Text: m.Content})
+	for j, ref := range m.Attachments {
+		if j < len(offloaded) && offloaded[j] {
+			parts = append(parts, schema.MessageInputPart{
+				Type: schema.ChatMessagePartTypeText, Text: offloadedToolImageText(ref),
+			})
+			continue
+		}
+		data, err := o.deps.Attachments.ReadBytes(ctx, ref.ID)
+		if err != nil {
+			return nil, fmt.Errorf("读取附件 %s 失败: %w", ref.ID, err)
+		}
+		b64 := base64.StdEncoding.EncodeToString(data)
+		parts = append(parts, schema.MessageInputPart{
+			Type: schema.ChatMessagePartTypeImageURL,
+			Image: &schema.MessageInputImage{
+				MessagePartCommon: schema.MessagePartCommon{Base64Data: &b64, MIMEType: ref.MIME},
+			},
+		})
+	}
+	return &schema.Message{
+		Role:                  schema.Tool,
+		ToolCallID:            m.ToolCallID,
+		ToolName:              m.ToolName,
+		UserInputMultiContent: parts,
+	}, nil
+}
+
 // buildUserMessage 组装带附件的 user 消息：图片在前、文本在后（ark 官方建议顺序；
 // 固定顺序保证逐字节确定性）。图片用 Base64Data+MIME 内联（三家供应商唯一共同路径）。
 func (o *orchestrator) buildUserMessage(ctx context.Context, m session.Message, offloaded []bool) (*schema.Message, error) {

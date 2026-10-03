@@ -46,6 +46,7 @@ func (o *orchestrator) buildToolContext(sess *store.Session, snap *agent.Snapsho
 	}
 	sc := parseSandboxConfig(snap.SandboxConfig)
 	tc := tools.NewContext(sess.ID, sess.OrgID)
+	tc.UserID = sess.UserID
 	if o.deps.Sandbox != nil {
 		tc.Sandbox = tools.WrapManager(o.deps.Sandbox)
 	}
@@ -53,6 +54,7 @@ func (o *orchestrator) buildToolContext(sess *store.Session, snap *agent.Snapsho
 	tc.Resources = sc.Resources
 	tc.DataDir = o.deps.DataDir
 	tc.Skills = snap.Skills
+	tc.Images = o.deps.ImageSaver
 	tc.OnSkillUploadFailed = func(name, sandboxID string, err error) {
 		o.recordSkillUploadFailure(sess.ID, name, sandboxID, err)
 	}
@@ -62,10 +64,20 @@ func (o *orchestrator) buildToolContext(sess *store.Session, snap *agent.Snapsho
 	return tc
 }
 
-func buildTools(tc *tools.Context, snap *agent.Snapshot, approvalMode string) ([]tool.BaseTool, []string, error) {
-	list, err := tools.All(parseToolsEnabled(snap.ToolsEnabled))
+func buildTools(tc *tools.Context, snap *agent.Snapshot, approvalMode string, vision bool) ([]tool.BaseTool, []string, error) {
+	enabled := parseToolsEnabled(snap.ToolsEnabled)
+	list, err := tools.All(enabled)
 	if err != nil {
 		return nil, nil, err
+	}
+	// read_media 是 enhanced 工具（tool 消息携带图片 part），单独构建：
+	// vision 门控按当前 Agent 模型在构建期捕获（主/子 Agent 各自判定）。
+	if enabled["read_media"] {
+		rm, err := tools.ReadMedia(vision)
+		if err != nil {
+			return nil, nil, err
+		}
+		list = append(list, rm)
 	}
 	if len(snap.Skills) > 0 {
 		sk, err := tools.ActivateSkill()
@@ -114,6 +126,15 @@ func sessionEffort(raw json.RawMessage) (string, bool) {
 	return s, ok && s != ""
 }
 
+// visionOf 查模型图片输入能力（read_media 门控；Deps.Vision 未配置时按不支持处理——
+// 未知能力在文件系统与附件工作之前拒绝，对齐 DSH 的严格拒绝语义）。
+func (o *orchestrator) visionOf(ctx context.Context, modelID string) bool {
+	if o.deps.Vision == nil {
+		return false
+	}
+	return o.deps.Vision(ctx, modelID)
+}
+
 // buildAgent 按会话快照构建 adk.ChatModelAgent（runtime.md §2）。
 func (o *orchestrator) buildAgent(ctx context.Context, sess *store.Session, snap *agent.Snapshot, tc *tools.Context, rs *runState) (adk.Agent, []string, error) {
 	modelID := sess.ModelID
@@ -135,7 +156,7 @@ func (o *orchestrator) buildAgent(ctx context.Context, sess *store.Session, snap
 	if err != nil {
 		return nil, nil, err
 	}
-	toolList, toolNames, err := buildTools(tc, snap, sess.ApprovalMode)
+	toolList, toolNames, err := buildTools(tc, snap, sess.ApprovalMode, o.visionOf(ctx, modelID))
 	if err != nil {
 		return nil, nil, err
 	}

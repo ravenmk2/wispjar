@@ -51,16 +51,17 @@ func NewService(db *gorm.DB) *Service {
 }
 
 type ToolsEnabled struct {
-	Exec  bool `json:"exec"`
-	Read  bool `json:"read"`
-	Write bool `json:"write"`
-	Edit  bool `json:"edit"`
-	Glob  bool `json:"glob"`
-	Grep  bool `json:"grep"`
+	Exec      bool `json:"exec"`
+	Read      bool `json:"read"`
+	Write     bool `json:"write"`
+	Edit      bool `json:"edit"`
+	Glob      bool `json:"glob"`
+	Grep      bool `json:"grep"`
+	ReadMedia bool `json:"read_media"`
 }
 
 func defaultToolsEnabled() json.RawMessage {
-	b, _ := json.Marshal(ToolsEnabled{Exec: true, Read: true, Write: true, Edit: true, Glob: true, Grep: true})
+	b, _ := json.Marshal(ToolsEnabled{Exec: true, Read: true, Write: true, Edit: true, Glob: true, Grep: true, ReadMedia: true})
 	return b
 }
 
@@ -90,7 +91,7 @@ func parseToolsEnabled(raw json.RawMessage) (json.RawMessage, error) {
 	}
 	tools := ToolsEnabled{}
 	if err := json.Unmarshal(raw, &tools); err != nil {
-		return nil, errInvalid("tools_enabled 必须是 {exec,read,write,edit,glob,grep} 布尔对象", map[string]any{"field": "tools_enabled"})
+		return nil, errInvalid("tools_enabled 必须是 {exec,read,write,edit,glob,grep,read_media} 布尔对象", map[string]any{"field": "tools_enabled"})
 	}
 	b, err := json.Marshal(tools)
 	if err != nil {
