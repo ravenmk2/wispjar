@@ -218,3 +218,30 @@ func TestTrimContextCountsImages(t *testing.T) {
 		t.Fatalf("text-only history must not be trimmed, got %d messages", len(trimmed))
 	}
 }
+
+// 大图回归：几 MB 的照片 base64 体积巨大，但视觉模型按像素折算 token，
+// 不得把 base64 字符数计入窗口估算（否则普通照片即报"上下文超出模型窗口"）。
+func TestTrimContextLargeImageNotBlownUp(t *testing.T) {
+	repo := &fakeRepo{sess: &store.Session{ModelID: "model-1"}, es: &fakeEventStore{}}
+	o := &orchestrator{deps: Deps{
+		Sessions:    repo,
+		ContextSize: func(_ context.Context, _ string) int { return 128000 },
+	}}
+	b64 := strings.Repeat("x", 7_000_000) // 约 5MB 照片的 base64
+	msgs := []*schema.Message{
+		{Role: schema.User, UserInputMultiContent: []schema.MessageInputPart{
+			{Type: schema.ChatMessagePartTypeImageURL,
+				Image: &schema.MessageInputImage{MessagePartCommon: schema.MessagePartCommon{Base64Data: &b64, MIMEType: "image/png"}}},
+			{Type: schema.ChatMessagePartTypeText, Text: "看图"},
+		}},
+		schema.AssistantMessage("好的", nil),
+		schema.UserMessage("第二轮"),
+	}
+	trimmed, err := o.trimContext(context.Background(), "sess-1", msgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trimmed) != 3 {
+		t.Fatalf("large photo must count as vision tokens, not base64 bytes; got %d messages", len(trimmed))
+	}
+}

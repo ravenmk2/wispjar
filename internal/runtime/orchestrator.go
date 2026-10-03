@@ -219,6 +219,10 @@ func (o *orchestrator) history(ctx context.Context, sessionID string) ([]*schema
 	return o.trimContext(ctx, sessionID, msgs)
 }
 
+// imageTokenEstimate 是 trimContext 对单张图片的保守 token 估值：
+// 视觉模型按像素折算（DeepSeek ≤512、ark high 1280 tok/图），取最保守上沿。
+const imageTokenEstimate = 1280
+
 func (o *orchestrator) trimContext(ctx context.Context, sessionID string, msgs []*schema.Message) ([]*schema.Message, error) {
 	limit := 64000 * 8 / 10
 	sess, err := o.deps.Sessions.SessionByID(ctx, sessionID)
@@ -234,8 +238,9 @@ func (o *orchestrator) trimContext(ctx context.Context, sessionID string, msgs [
 			for _, p := range m.UserInputMultiContent {
 				total += len(p.Text)
 				if p.Image != nil && p.Image.Base64Data != nil {
-					// 图片按 base64 长度计入（字符/4 粗估 tokens；卸载后的占位文本按文本计）。
-					total += len(*p.Image.Base64Data)
+					// 视觉模型按像素折算 token（DeepSeek ≤512、ark high 1280 tok/图），
+					// 与 base64 体积无关；取最保守值计入。卸载后的占位文本按文本计。
+					total += imageTokenEstimate * 4
 				}
 			}
 			for _, tc := range m.ToolCalls {

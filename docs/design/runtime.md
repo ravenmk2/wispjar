@@ -321,7 +321,7 @@ type Handle struct {
 
 ### 8.1 上下文管理（v1）
 
-- derive 后估算 tokens（粗估：字符数/4 或按供应商 tokenizer 可后补；多模态消息的图片按 base64 长度一并计入、同样除 4，卸载后的占位文本按文本计）；超过 `context_size * 0.8` → **按 turn 整块丢弃**：从最早的用户轮次开始整轮（user 消息 + 后续 assistant/tool 消息）丢弃直到估算量达标；system 恒保留；单轮即超窗 → 返回错误事件建议用户开新会话。裁剪边界恒落在轮次边界，不随每轮新增内容逐条漂移（《缓存命中优先设计原则》§12 第 7 条）。
+- derive 后估算 tokens（粗估：字符数/4 或按供应商 tokenizer 可后补；多模态消息的图片按视觉 token 折算——DeepSeek ≤512、ark high 1280 tok/图，取保守上沿 1280 计入，与 base64 体积无关；卸载后的占位文本按文本计）；超过 `context_size * 0.8` → **按 turn 整块丢弃**：从最早的用户轮次开始整轮（user 消息 + 后续 assistant/tool 消息）丢弃直到估算量达标；system 恒保留；单轮即超窗 → 返回错误事件建议用户开新会话。裁剪边界恒落在轮次边界，不随每轮新增内容逐条漂移（《缓存命中优先设计原则》§12 第 7 条）。
 - M4：接 `adk/middlewares/summarization` 自动摘要（事件侧 `compaction/summary`）。
 
 ### 8.2 取消
@@ -343,7 +343,7 @@ iter := runner.Run(ctx, history, opt)
 - **组装**（eino `UserInputMultiContent`，仅 user 角色可用；system 角色不支持多模态）：带附件的 user 消息构造 `schema.Message{Role: User, UserInputMultiContent: [...image parts, text part]}`——**图片在前、文本在后**（ark 官方建议多图时文字在后；固定顺序保证逐字节确定性）。image part 用 `Base64Data`+`MIMEType` 内联（DeepSeek/ark/qwen 三家唯一共同路径），字节从内容寻址存储读取并校验 sha256。
 - **vision 门控**：prompt 带附件而当前模型 `capabilities.vision=false` → 422 `model/not_vision` 提示换模型（用户主动挂图，不做 DSH 式静默文本降级）；PATCH 换到非 vision 模型且历史含图 → 409 `session/vision_locked` 拒绝（否则历史投影要从图片变占位文本，前缀从此处失效）。
 - **卸载（offload），规则版本 `image-offload-v1`**：每请求预算 `maxImages=8`、`maxImageBytes=16MB`（base64 后合计，按最严格供应商 ark 64MB 请求体留足余量）。超限按**最旧优先 + 量子化**卸载：张数超限部分向上取整到 2 的倍数；字节超限的卸载目标向上取整到 4MB 的倍数，最终卸载张数再按 2 取整。被卸载的图片出现位替换为确定性占位文本（含文件名与 sha256 前 8 位，注明已被卸载、可请用户重新发送）。卸载集只依赖已提交历史 → 同一历史前缀永远产出同一请求前缀；量子化避免每轮多一张图就挪一次边界。**规则变更 = 历史前缀失效**：任何调整必须整体更换版本号（代码常量 `imageOffloadVersion`，带图 turn 的 `request/header.image_offload` 记录该版本供审计）。后续可演进为 DSH 式持久卸载标记（追加新事件记录卸载集）。
-- **trimContext 计入图片**：卸载决策在裁剪之前；估算时保留图片按 base64 长度计入（/4 粗估 tokens），卸载后的占位文本按文本计（§8.1）。
+- **trimContext 计入图片**：卸载决策在裁剪之前；估算时保留图片按视觉 token 折算（1280 tok/图保守上沿，不按 base64 体积），卸载后的占位文本按文本计（§8.1）。
 - **删除与 GC**：删除会话不删附件 blob 与表行——附件永不自动删除（fork 共享同一不可变对象），引用感知 GC 后续另做（data-model.md §10）。
 
 ## 9. 瞬态通道补充（tool-output live 帧）
