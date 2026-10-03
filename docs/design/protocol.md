@@ -121,7 +121,8 @@
   "argumentsDelta": "{\"command\":\"ls -" }   // 原始 JSON 字符串增量
 { "type": "block-end",       "index": 0, "block": { ... } }           // 组装好的完整块，前端免重组
 { "type": "usage",           "usage": { "inputTokens": 10, "outputTokens": 20,
-  "cacheReadTokens": 0, "cacheWriteTokens": 0, "reasoningTokens": 0 } }
+  "cacheReadTokens": 0, "cacheWriteTokens": 0, "reasoningTokens": 0,
+  "cacheReported": true } }   // cacheReported 可缺省：供应商是否上报缓存字段（runtime.md §3.1）
 { "type": "finish",          "reason": "stop" }  // stop | tool-calls | max-tokens | aborted | error
 ```
 
@@ -171,7 +172,7 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 | type | data |
 |---|---|
 | `user/message` | `{turn, content, request_id, attachments?, source?}`。`attachments` 为图片附件引用数组（向后兼容，老事件无此字段）：`[{id: "sha256:<64 hex>", mime, bytes, width, height, name}]`——不透明引用，绝无 base64/路径/URL；字节经 `GET /attachments/{id}` 获取（api.md §3）。`source` 仅合成消息携带（普通用户消息无此字段）：`{kind:"question-reply", call_id}` 表示迟到提问答复（content 为 JSON `{"kind":"answer_to_pending_question","call_id","questions","answers"}`，见 §10） |
-| `assistant/message` | `{turn, step, message, usage?, interrupted?}`。`message` 为完整 assistant 消息：`{role:"assistant", content:[ContentBlock...]}`，ContentBlock = `{type:"text",text}` / `{type:"reasoning",text}` / `{type:"tool-call",id,name,arguments}`。`usage` 结构同 StreamChunk usage（snake_case） |
+| `assistant/message` | `{turn, step, message, usage?, interrupted?}`。`message` 为完整 assistant 消息：`{role:"assistant", content:[ContentBlock...]}`，ContentBlock = `{type:"text",text}` / `{type:"reasoning",text}` / `{type:"tool-call",id,name,arguments}`。`usage` 结构同 StreamChunk usage（snake_case），含可选 `cache_reported`（供应商是否上报缓存字段，false/缺省 = 未上报，区别于命中为 0；runtime.md §3.1） |
 | `assistant/attempt` | `{turn, step, chunks:[StreamChunk...]（压缩存储）, error?}` —— 失败/取消的尝试留痕，**不进模型历史** |
 | `tool/call` | `{turn, step, call_id, name, arguments(原始JSON字符串), parent_call_id?}` |
 | `tool/result` | `{turn, step, call_id, name, content(string), error?, meta?, attachments?, parent_call_id?}`。`meta` 含 `{duration_ms, render:"terminal"\|"diff"\|"search"\|"read"\|"generic", truncated?, sandbox_id?}`。`attachments` 为工具产出图片的引用数组（read_media；结构与 `user/message.attachments` 相同——不透明引用，绝无 base64，字节经 `GET /attachments/{id}` 获取） |

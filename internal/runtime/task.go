@@ -17,6 +17,7 @@ import (
 
 	"github.com/ravenmk2/wispjar/internal/agent"
 	"github.com/ravenmk2/wispjar/internal/id"
+	"github.com/ravenmk2/wispjar/internal/provider"
 	"github.com/ravenmk2/wispjar/internal/runtime/tools"
 	"github.com/ravenmk2/wispjar/internal/session"
 	"github.com/ravenmk2/wispjar/internal/store"
@@ -100,6 +101,7 @@ func (t *taskTool) invoke(ctx context.Context, in taskArgs) (string, error) {
 		turn:         t.rs.turn,
 		step:         t.rs.currentStep(),
 		denied:       newDenySet(),
+		usageSink:    t.rs.usageSink,
 	}
 	checkpointID := id.New()
 	sr.checkpointID = checkpointID
@@ -315,6 +317,8 @@ type subRun struct {
 	step         int // 主 step（task 调用所在 step）
 	subStep      int
 	denied       *denySet
+	// usageSink 共享主 turn 的抓取收集器（子运行与主流程串行，取最新一条即本 step）。
+	usageSink *provider.UsageSink
 
 	lastText  string // 最近一条 assistant 消息文本（失败时的部分输出）
 	finalText string // 最近一条无 tool-call 的 assistant 消息文本（completed 时的 output）
@@ -388,7 +392,9 @@ func (sr *subRun) stepStream(stream *schema.StreamReader[*schema.Message]) error
 	if err := sr.commit([]session.EventInput{{Type: session.EventStepStart, Data: sr.stepData()}}); err != nil {
 		return err
 	}
-	if err := attempt.drainStream(stream, func(framedChunk) {}); err != nil {
+	err := attempt.drainStream(stream, func(framedChunk) {})
+	attempt.captured = sr.usageSink.TakeLatest()
+	if err != nil {
 		if attempt.text != nil && attempt.text.text != "" {
 			sr.lastText = attempt.text.text
 		}
@@ -401,6 +407,7 @@ func (sr *subRun) stepMessage(msg *schema.Message) error {
 	sr.subStep++
 	attempt := newAttempt(sr.turn, sr.subStep)
 	attempt.feed(msg)
+	attempt.captured = sr.usageSink.TakeLatest()
 	if err := sr.commit([]session.EventInput{{Type: session.EventStepStart, Data: sr.stepData()}}); err != nil {
 		return err
 	}
@@ -431,7 +438,7 @@ func (sr *subRun) commitAssistant(attempt *attemptState) error {
 			SubTurn: 1, SubStep: sr.subStep,
 			ParentCallID: sr.parentCallID,
 			Message:      asst,
-			Usage:        eventUsage(attempt.usage),
+			Usage:        eventUsage(attempt.usage, attempt.captured),
 		}},
 	}
 	for _, b := range asst.Content {

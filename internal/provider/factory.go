@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
@@ -59,12 +60,16 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 	if err != nil {
 		return nil, err
 	}
+	adapter := AdapterFor(row.ProviderType)
 	cfg := &openai.ChatModelConfig{
 		APIKey:  apiKey,
 		BaseURL: row.BaseURL,
 		Model:   row.ModelCode,
+		// 旁路抓取原始 usage（eino acl 丢弃供应商特有缓存字段）；
+		// 设置 HTTPClient 后组件不再用 Timeout（组件默认亦无超时，行为不变）。
+		HTTPClient: &http.Client{Transport: newUsageCaptureTransport(nil, adapter)},
 	}
-	applyParams(cfg, row.ProviderType, merged)
+	adapter.ApplyParams(cfg, merged)
 	cm, err := openai.NewChatModel(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("provider: 构建模型实例失败: %w", err)
@@ -73,35 +78,9 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 	return actual.(model.ToolCallingChatModel), nil
 }
 
-// applyParams 把合并后的参数白名单映射到 openai 组件配置（runtime.md §3）。
-// 未识别键忽略。reasoning_effort 任意值透传；qwen 无枚举档位，
-// 按固定映射折算为 enable_thinking/thinking_budget 非标准顶层字段。
-func applyParams(cfg *openai.ChatModelConfig, providerType string, merged map[string]any) {
-	if v, ok := numberParam(merged, "temperature"); ok {
-		f32 := float32(v)
-		cfg.Temperature = &f32
-	}
-	if v, ok := numberParam(merged, "top_p"); ok {
-		f32 := float32(v)
-		cfg.TopP = &f32
-	}
-	if v, ok := numberParam(merged, "max_tokens"); ok {
-		n := int(v)
-		cfg.MaxTokens = &n
-	}
-	if v, ok := stringParam(merged, "reasoning_effort"); ok {
-		if providerType == "qwen" {
-			for k, val := range qwenThinkingExtra(v) {
-				setExtraField(cfg, k, val)
-			}
-		} else {
-			cfg.ReasoningEffort = openai.ReasoningEffortLevel(v)
-		}
-	}
-	if v, ok := stringParam(merged, "prompt_cache_key"); ok {
-		setExtraField(cfg, "prompt_cache_key", v)
-	}
-}
+// 参数映射已收敛进适配器注册表（adapters.go，runtime.md §3）：
+// temperature/top_p/max_tokens 通用；reasoning_effort 透传（qwen 按固定映射
+// 折算为 enable_thinking/thinking_budget 非标准顶层字段）；prompt_cache_key 仅 ark 放行。
 
 // qwenThinkingExtra 公共档位 → 千问 thinking_budget 固定映射（runtime.md §3）。
 // 未识别值返回 nil（忽略，不透传）。

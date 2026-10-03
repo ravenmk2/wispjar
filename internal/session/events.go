@@ -37,6 +37,9 @@ type Usage struct {
 	CacheReadTokens  int64 `json:"cache_read_tokens"`
 	CacheWriteTokens int64 `json:"cache_write_tokens"`
 	ReasoningTokens  int64 `json:"reasoning_tokens"`
+	// CacheReported 区分「未命中」与「供应商未上报缓存用量」（runtime.md §3）：
+	// 原始 usage 旁路抓取到该家缓存字段时为 true；抓取失败/无字段时为 false。
+	CacheReported bool `json:"cache_reported,omitempty"`
 }
 
 type ContentBlock struct {

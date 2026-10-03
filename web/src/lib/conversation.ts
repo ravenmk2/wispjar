@@ -139,6 +139,7 @@ export function foldChunks(chunks: StreamChunk[]): { blocks: ContentBlock[]; usa
           cache_read_tokens: chunk.usage.cacheReadTokens,
           cache_write_tokens: chunk.usage.cacheWriteTokens,
           reasoning_tokens: chunk.usage.reasoningTokens,
+          cache_reported: chunk.usage.cacheReported,
         }
         break
       case "finish":

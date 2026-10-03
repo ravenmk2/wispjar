@@ -8,6 +8,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/ravenmk2/wispjar/internal/id"
+	"github.com/ravenmk2/wispjar/internal/provider"
 	"github.com/ravenmk2/wispjar/internal/session"
 )
 
@@ -29,6 +30,8 @@ type attemptState struct {
 	reason   *blockState
 	chunks   []StreamChunk // 压缩合并后的 chunk（连续同块 delta 合并，保序）
 	usage    *schema.TokenUsage
+	// captured 旁路抓取的归一化缓存用量（UsageSink 取数；nil = 未抓取/未消费）。
+	captured *provider.CapturedUsage
 	finish   string
 }
 
@@ -159,7 +162,7 @@ func (a *attemptState) endChunks(aborted bool) []framedChunk {
 		out = append(out, a.emit(StreamChunk{Type: ChunkBlockEnd, Index: bs.index, Block: bs.contentBlock()}))
 	}
 	if a.usage != nil {
-		out = append(out, a.emit(StreamChunk{Type: ChunkUsage, Usage: streamUsage(a.usage)}))
+		out = append(out, a.emit(StreamChunk{Type: ChunkUsage, Usage: streamUsage(a.usage, a.captured)}))
 	}
 	reason := finishReason(a.finish, len(a.blockIdx) > 0)
 	if aborted {

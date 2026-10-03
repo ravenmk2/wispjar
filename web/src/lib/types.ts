@@ -220,6 +220,8 @@ export interface Usage {
   cache_read_tokens: number
   cache_write_tokens: number
   reasoning_tokens: number
+  /** false/缺省 = 供应商未上报缓存用量（区别于命中为 0） */
+  cache_reported?: boolean
 }
 
 export interface ChunkUsage {
@@ -228,6 +230,7 @@ export interface ChunkUsage {
   cacheReadTokens: number
   cacheWriteTokens: number
   reasoningTokens: number
+  cacheReported?: boolean
 }
 
 export type ContentBlock =

@@ -64,9 +64,13 @@ func TestMergeParams(t *testing.T) {
 }
 
 func TestApplyParams(t *testing.T) {
-	t.Run("basic numeric params", func(t *testing.T) {
+	apply := func(providerType string, params map[string]any) *openai.ChatModelConfig {
 		cfg := &openai.ChatModelConfig{}
-		applyParams(cfg, "deepseek", map[string]any{"temperature": 0.5, "top_p": 1.0, "max_tokens": 1024})
+		AdapterFor(providerType).ApplyParams(cfg, params)
+		return cfg
+	}
+	t.Run("basic numeric params", func(t *testing.T) {
+		cfg := apply("deepseek", map[string]any{"temperature": 0.5, "top_p": 1.0, "max_tokens": 1024})
 		if cfg.Temperature == nil || *cfg.Temperature != 0.5 {
 			t.Fatalf("temperature not mapped: %+v", cfg)
 		}
@@ -78,8 +82,7 @@ func TestApplyParams(t *testing.T) {
 		}
 	})
 	t.Run("reasoning_effort passthrough", func(t *testing.T) {
-		cfg := &openai.ChatModelConfig{}
-		applyParams(cfg, "deepseek", map[string]any{"reasoning_effort": "max"})
+		cfg := apply("deepseek", map[string]any{"reasoning_effort": "max"})
 		if cfg.ReasoningEffort != openai.ReasoningEffortLevel("max") {
 			t.Fatalf("want passthrough, got %q", cfg.ReasoningEffort)
 		}
@@ -100,8 +103,7 @@ func TestApplyParams(t *testing.T) {
 			{"max", true, 32768},
 		}
 		for _, tc := range cases {
-			cfg := &openai.ChatModelConfig{}
-			applyParams(cfg, "qwen", map[string]any{"reasoning_effort": tc.effort})
+			cfg := apply("qwen", map[string]any{"reasoning_effort": tc.effort})
 			if cfg.ReasoningEffort != "" {
 				t.Fatalf("%s: qwen must not set ReasoningEffort, got %q", tc.effort, cfg.ReasoningEffort)
 			}
@@ -120,22 +122,25 @@ func TestApplyParams(t *testing.T) {
 		}
 	})
 	t.Run("qwen unknown effort ignored", func(t *testing.T) {
-		cfg := &openai.ChatModelConfig{}
-		applyParams(cfg, "qwen", map[string]any{"reasoning_effort": "ultra"})
+		cfg := apply("qwen", map[string]any{"reasoning_effort": "ultra"})
 		if cfg.ReasoningEffort != "" || len(cfg.ExtraFields) != 0 {
 			t.Fatalf("unknown qwen effort must be ignored: %+v", cfg)
 		}
 	})
-	t.Run("prompt_cache_key to ExtraFields", func(t *testing.T) {
-		cfg := &openai.ChatModelConfig{}
-		applyParams(cfg, "ark", map[string]any{"prompt_cache_key": "sess-1"})
+	t.Run("prompt_cache_key ark only", func(t *testing.T) {
+		cfg := apply("ark", map[string]any{"prompt_cache_key": "sess-1"})
 		if cfg.ExtraFields["prompt_cache_key"] != "sess-1" {
 			t.Fatalf("prompt_cache_key not mapped: %v", cfg.ExtraFields)
 		}
+		for _, pt := range []string{"deepseek", "qwen", "openai_compat", "unknown"} {
+			cfg := apply(pt, map[string]any{"prompt_cache_key": "sess-1"})
+			if len(cfg.ExtraFields) != 0 {
+				t.Fatalf("%s: prompt_cache_key must not pass, got %v", pt, cfg.ExtraFields)
+			}
+		}
 	})
 	t.Run("unknown keys ignored", func(t *testing.T) {
-		cfg := &openai.ChatModelConfig{}
-		applyParams(cfg, "deepseek", map[string]any{"foo": "bar", "n": 1})
+		cfg := apply("deepseek", map[string]any{"foo": "bar", "n": 1})
 		if cfg.ReasoningEffort != "" || len(cfg.ExtraFields) != 0 {
 			t.Fatalf("unknown keys must be ignored: %+v", cfg)
 		}

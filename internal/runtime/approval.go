@@ -12,6 +12,7 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/ravenmk2/wispjar/internal/provider"
 	"github.com/ravenmk2/wispjar/internal/runtime/tools"
 	"github.com/ravenmk2/wispjar/internal/session"
 )
@@ -282,6 +283,7 @@ func (o *orchestrator) resume(p *pendingApproval, allow bool) {
 	}
 	go func() {
 		ctx := tools.WithContext(context.Background(), rs.toolCtx)
+		ctx = provider.WithUsageSink(ctx, rs.usageSink)
 		runner := adk.NewRunner(ctx, adk.RunnerConfig{
 			Agent:           rs.agent,
 			EnableStreaming: true,

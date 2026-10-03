@@ -14,6 +14,7 @@ import (
 
 	"github.com/ravenmk2/wispjar/internal/agent"
 	"github.com/ravenmk2/wispjar/internal/id"
+	"github.com/ravenmk2/wispjar/internal/provider"
 	"github.com/ravenmk2/wispjar/internal/runtime/tools"
 	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/session"
@@ -77,6 +78,8 @@ type runState struct {
 	attempt         *attemptState
 	denied          map[string]struct{}
 	toolCtx         *tools.Context
+	// usageSink 本 turn 的原始 usage 抓取收集器（挂 iterCtx，transport 旁路写入）。
+	usageSink       *provider.UsageSink
 }
 
 func (rs *runState) incrStep() int {
@@ -144,6 +147,7 @@ func (o *orchestrator) StartTurn(ctx context.Context, sessionID string) error {
 	}
 
 	iterCtx := tools.WithContext(context.Background(), rs.toolCtx)
+	iterCtx = provider.WithUsageSink(iterCtx, rs.usageSink)
 	cancelOpt, cancelFn := adk.WithCancel()
 	rs.cancel = cancelFn
 	runner := adk.NewRunner(iterCtx, adk.RunnerConfig{
@@ -162,6 +166,7 @@ func (o *orchestrator) StartTurn(ctx context.Context, sessionID string) error {
 }
 
 func (o *orchestrator) prepare(ctx context.Context, sessionID string, rs *runState) error {
+	rs.usageSink = provider.NewUsageSink()
 	sess, err := o.deps.Sessions.SessionByID(ctx, sessionID)
 	if err != nil {
 		return err
@@ -356,6 +361,9 @@ func (o *orchestrator) stepStream(sessionID string, rs *runState, stream *schema
 			Type: "chunk", AttemptID: attempt.id, Index: fc.index, Time: nowMs(), Chunk: fc.chunk,
 		}))
 	})
+	// 取本 step 旁路抓取的归一化缓存用量（usage 在末帧，drain 完成后已入 sink）；
+	// 失败路径同样取走丢弃，避免残留进下一 step。
+	attempt.captured = rs.usageSink.TakeLatest()
 	if err != nil {
 		rs.attempt = nil
 		if rs.cancelRequested {
@@ -385,6 +393,8 @@ func (o *orchestrator) stepMessage(sessionID string, rs *runState, msg *schema.M
 	rs.incrStep()
 	attempt := newAttempt(rs.turn, rs.step)
 	attempt.feed(msg)
+	// 非流式响应 body 在 Generate 返回前已读尽，抓取结果已入 sink。
+	attempt.captured = rs.usageSink.TakeLatest()
 	inputs := []session.EventInput{
 		{Type: session.EventStepStart, Data: session.StepData{Turn: rs.turn, Step: rs.step}},
 	}
@@ -397,7 +407,7 @@ func (o *orchestrator) assistantInputs(rs *runState, attempt *attemptState, inte
 	inputs := []session.EventInput{
 		{Type: session.EventAssistantMessage, Data: session.AssistantMessageData{
 			Turn: rs.turn, Step: rs.step, Message: asst,
-			Usage: eventUsage(attempt.usage), Interrupted: interrupted,
+			Usage: eventUsage(attempt.usage, attempt.captured), Interrupted: interrupted,
 		}},
 	}
 	for _, b := range asst.Content {
@@ -484,6 +494,10 @@ func (o *orchestrator) finishInterrupted(sessionID string, rs *runState) {
 }
 
 func (o *orchestrator) finishInterruptedAttempt(sessionID string, rs *runState, attempt *attemptState) {
+	if attempt.captured == nil {
+		// 中断时消费可能已抓到的 usage（多数情况流未读到末帧，返回 nil），避免残留。
+		attempt.captured = rs.usageSink.TakeLatest()
+	}
 	for _, fc := range attempt.endChunks(true) {
 		o.deps.Bus.Publish(sessionID, AssistantStreamFrame(StreamChunkFrame{
 			Type: "chunk", AttemptID: attempt.id, Index: fc.index, Time: nowMs(), Chunk: fc.chunk,

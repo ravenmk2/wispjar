@@ -70,12 +70,34 @@ type ChatModelFactory interface {
 
 - 分派：v1 所有供应商类型（`deepseek/ark/qwen/openai_compat`）统一走 `eino-ext/components/model/openai` 兼容组件（BaseURL+APIKey）。
 - 密钥解密仅在工厂内部（data-model.md §5 加密约定）；ChatModel 实例按 `(model_id, hash(params))` sync.Map 缓存——参数变化（含 effort 档位）经 paramsHash 自然分实例。
+- **适配器注册表**（`adapters.go`）：各家差异收敛为按 `provider_type` 分派的 `ProviderAdapter`，`openai_compat` 为兜底适配器（宽容解析、默认「未上报」，新增供应商零适配可跑）。接口三方法：
+  - `Capabilities()` → `AdapterCapabilities`：`UsageCacheReadField`/`UsageCacheWriteField`（usage 字段口径）、`SupportsPromptCacheKey`、`MinCacheTokens`（ark 1024、qwen 1024、deepseek 0、compat 0）；
+  - `ApplyParams(cfg, params)`：参数映射（白名单，未识别键忽略）；
+  - `NormalizeUsage(raw)`：原始 usage 归一化（见下）。
 - 参数映射（白名单，未识别键忽略）：
-  - `temperature/top_p/max_tokens` → 组件对应字段；
+  - `temperature/top_p/max_tokens` → 组件对应字段（各家通用）；
   - `reasoning_effort`（string）→ `cfg.ReasoningEffort`，任意值透传（OpenAI 兼容顶层标准字段；`capabilities.reasoning=true` 且组件支持时开启 reasoning 输出）；
   - `provider_type=="qwen"` 特化：千问无枚举档位，`enable_thinking`/`thinking_budget` 为非标准顶层参数，按固定映射进 `ExtraFields`——`minimal`→`{"enable_thinking":false}`；`low/medium/high`→`{"enable_thinking":true,"thinking_budget":1024/8192/32768}`；`max`→32768；未识别值忽略不透传；
-  - `prompt_cache_key`（string）→ `cfg.ExtraFields`：ark 上下文缓存的路由亲和参数，上下文连续的请求用同一取值（builder 对 ark 供应商注入 `sessionID`，同 key 流量 ≤15 rpm）。
+  - `prompt_cache_key`（string）→ `cfg.ExtraFields`，**仅 ark 放行**：ark 上下文缓存的路由亲和参数，上下文连续的请求用同一取值（builder 对 ark 供应商注入 `sessionID`，同 key 流量 ≤15 rpm）；其余各家（含 openai_compat）不放行。
 - 模型能力声明 `capabilities.reasoning_efforts`（可选档位列表）+ `reasoning_effort_default`（缺省档）由平台逐模型录入；空 = 不支持选档。
+
+### 3.1 usage 按供应商归一化（原始 usage 旁路抓取）
+
+eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字段，供应商特有的缓存字段在转换时被丢弃（fork 层 `Usage.ExtraFields` 捕获了顶层未知键但 acl 不透传；`prompt_tokens_details` 内的未知键在 fork 层即丢），`schema.TokenUsage` 无扩展口子。因此工厂在注入组件的 `HTTPClient` 上包一层 `usageCaptureTransport`（`usage_capture.go`）旁路抓取原始 usage：
+
+- **注入点**：`components/model/openai` 的 `ChatModelConfig.HTTPClient`（acl `Config.HTTPClient` 同理）；go-openai 经 `http.NewRequestWithContext` 发请求，调用方 ctx 透传到 `http.Request`——orchestrator 在 StartTurn/审批 resume 前把 turn 级 `UsageSink` 挂到 ctx value，transport 从 `req.Context()` 取 sink 写入，按请求路由到正确的 turn（模型实例跨会话/并发共享也安全）。
+- **抓取**：非流式 tee body（上限 8MB）解析 JSON 取 `usage`；流式 SSE 逐行扫描 `data:` 帧找含 `"usage"` 的 chunk（acl 已设 `stream_options.include_usage`，usage 在末帧），不全量缓冲；body 与 eino 顺序共享（无并发 tee goroutine）。抓取失败一律静默降级，绝不影响主请求。
+- **归一化顺序**（`NormalizeUsage(raw)` → cacheRead/cacheWrite/reported）：
+
+  | provider_type | cache_read | cache_write |
+  |---|---|---|
+  | deepseek | 顶层 `prompt_cache_hit_tokens` → fallback `prompt_tokens_details.cached_tokens` | 无 |
+  | ark | `prompt_tokens_details.cached_tokens` | 无 |
+  | qwen | `prompt_tokens_details.cached_tokens` | `prompt_tokens_details.cache_creation_input_tokens`（显式缓存） |
+  | openai_compat | `prompt_tokens_details.cached_tokens`（宽容解析，容忍畸形） | 无 |
+
+  raw 中没有该家任何缓存字段 → `reported=false`（区分「未命中」与「供应商未上报」）。
+- **合并**：orchestrator 每个 step 提交时从 sink 取最新一条（主流程与 task 子运行均串行，一一对应）；`reported=true` 时覆盖 assistant/message 事件 usage 的 cache_read/cache_write 并置 `cache_reported=true`，否则回退 eino 侧 `CachedTokens`（抓取失败维持原行为）。`cache_reported` 语义：本次调用供应商上报了缓存字段（命中可为 0）；前端据此区分「命中率 0%」与「未上报」（StatsPills 显示「缓存命中 —」）。usage_daily 聚合口径不变。
 
 ## 4. 工具规格（模型可见 schema）
 
@@ -387,12 +409,13 @@ exec 的流式 stdout 为增强体验，在 `tool/result` 落库前经瞬态帧�
 ## 11. 用量回收
 
 - 挂 eino 全局 callbacks handler：`OnEndWithStreamOutputFn` 读 `ResponseMeta.Usage`；每个 step 结束把 usage 暂存 turn 上下文。
+- 缓存读/写字段以原始 usage 旁路抓取 + 按供应商归一化为准（§3.1），eino 侧 `CachedTokens` 作 fallback；`cache_reported` 标记供应商是否上报了缓存字段。
 - `assistant/message` 提交时写入事件 `data.usage`；异步 worker 按事件日期 `INSERT ... ON DUPLICATE KEY UPDATE` 聚合到 `usage_daily`（子 Agent 用量记主 Agent，事件保留 `sub_agent_id`）。
 - 中断/失败 attempt 的 usage 记入 `assistant/attempt` 事件但不聚合（口径：只计成功产出，报表页注明）。
 
 ## 12. 缓存命中优先设计原则
 
-> 背景：DeepSeek / ark / qwen 的上下文缓存均按**输入 token 前缀**命中（system 在 messages[0]，其后任何一个字节变化都会让其后的全部历史前缀失配；tools 定义在 token 化时位于消息之前，同理）。下列原则是运行时与协议变更的评审基线；前缀命中率经 `usage.prompt_tokens_details.cached_tokens` 观测。
+> 背景：DeepSeek / ark / qwen 的上下文缓存均按**输入 token 前缀**命中（system 在 messages[0]，其后任何一个字节变化都会让其后的全部历史前缀失配；tools 定义在 token 化时位于消息之前，同理）。下列原则是运行时与协议变更的评审基线；前缀命中率经缓存读 tokens 观测（各家 usage 字段口径见 §3.1）。
 
 1. **前缀稳定第一**：进入 messages[0]（system）或历史消息前缀的任何内容，必须在会话生命周期内逐字节不变。
 2. **system 是冻结区**：system 中禁止出现 `time.Now`、请求 ID、随机数、在线计数等逐轮/逐天变化值；必需的时间上下文用会话创建时刻（如"当前日期"取 `sess.CreatedAt`），或放首条 user 消息。
@@ -403,7 +426,7 @@ exec 的流式 stdout 为增强体验，在 `tool/result` 落库前经瞬态帧�
 7. **裁剪对齐边界**：上下文裁剪必须确定性、阶梯式——按 turn 整块丢弃（§8.1），禁止窗口起点随输入量逐条漂移；中长期以 compaction 摘要替换头部而非滑动窗口。
 8. **子智能体前缀自治**：子智能体独立上下文，不追求与父会话共享前缀；其 system 与工具定义须稳定，以命中平台级公共前缀缓存。
 9. **采样参数与缓存解耦**：`temperature/top_p`、`reasoning_effort` 等是请求级参数，不进消息前缀、不影响命中，只影响输出，纳入会话级配置稳定治理；接入 ark 显式缓存时保持 thinking/caching 字段逐轮一致。
-10. **命中可观测**：所有模型调用记录 cache_read/cache_write tokens（`usage.prompt_tokens_details.cached_tokens`），按会话/模型/供应商聚合；命中率突降视为回归。
-11. **供应商能力路由**：ark 会话设置稳定 `prompt_cache_key`（取 sessionID，同 key ≤15 rpm，§3）；认知各供应商最小命中粒度（ark/qwen 默认 1024 tokens），前缀过短场景不预期命中。
+10. **命中可观测**：所有模型调用记录 cache_read/cache_write tokens（字段口径按供应商归一化，§3.1），按会话/模型/供应商聚合；命中率突降视为回归。
+11. **供应商能力路由**：ark 会话设置稳定 `prompt_cache_key`（取 sessionID，同 key ≤15 rpm，§3）；认知各供应商最小命中粒度（ark/qwen 默认 1024 tokens），前缀过短场景不预期命中；usage 按供应商归一化——各家缓存字段口径不同（§3.1），观测命中率须经适配器归一化并以 `cache_reported` 区分「未命中」与「未上报」，禁止把 `cached_tokens==0` 一律当未命中。
 12. **合理失效显式化**：新建会话（新快照）、skills/子智能体/模型配置变更后的新会话、超窗裁剪或 compaction、跨供应商切换属合理失效，在此列举评审；此外的任何前缀变化视为缺陷。
 13. **图片前缀自治**：图片字节来自不可变内容寻址对象，base64 天然逐轮一致；历史中的图片位置一旦提交永不移动/改写；多轮增长控制只走版本化的最旧优先 + 量子化卸载（§8.3），禁止滑动窗口式"仅最近 N 轮带图"（窗口每轮滑动 = 历史每轮都变 = 缓存全毁）。

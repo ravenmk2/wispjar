@@ -9,6 +9,7 @@ interface Stats {
   steps: number
   tokens: number
   cacheHit: number | null
+  cacheUnreported: boolean
 }
 
 function computeStats(events: ReturnType<typeof useSessionStore.getState>["events"], liveUsage?: Usage): Stats {
@@ -18,8 +19,12 @@ function computeStats(events: ReturnType<typeof useSessionStore.getState>["event
   let output = 0
   let cacheRead = 0
   let cacheWrite = 0
+  let hasUsage = false
+  let cacheReported = false
   const add = (u?: Usage) => {
     if (!u) return
+    hasUsage = true
+    if (u.cache_reported) cacheReported = true
     input += u.input_tokens
     output += u.output_tokens
     cacheRead += u.cache_read_tokens
@@ -43,7 +48,9 @@ function computeStats(events: ReturnType<typeof useSessionStore.getState>["event
     // 非全中时不显示 100%
     cacheHit = hit >= 100 && cacheRead < billed ? 99 : hit
   }
-  return { rounds, steps, tokens, cacheHit }
+  // 有 usage 记录但全部未上报缓存字段：显示「缓存命中 —」，不静默隐藏也不误报 0%
+  const cacheUnreported = hasUsage && !cacheReported && cacheRead === 0
+  return { rounds, steps, tokens, cacheHit, cacheUnreported }
 }
 
 export function StatsPills() {
@@ -65,6 +72,9 @@ export function StatsPills() {
       <span className="rounded-full bg-muted/70 px-2.5 py-0.5">
         {formatCompactNumber(stats.tokens)} tok
         {stats.cacheHit !== null && ` · 缓存命中 ${stats.cacheHit}%`}
+        {stats.cacheHit === null && stats.cacheUnreported && (
+          <span title="当前供应商未上报缓存用量"> · 缓存命中 —</span>
+        )}
       </span>
     </div>
   )

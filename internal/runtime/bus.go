@@ -26,6 +26,7 @@ type StreamUsage struct {
 	CacheReadTokens  int64 `json:"cacheReadTokens"`
 	CacheWriteTokens int64 `json:"cacheWriteTokens"`
 	ReasoningTokens  int64 `json:"reasoningTokens"`
+	CacheReported    bool  `json:"cacheReported,omitempty"`
 }
 
 const (
