@@ -49,6 +49,18 @@ export function formatRelativeTime(s?: string | null): string {
   return d.toLocaleDateString("zh-CN")
 }
 
+export function formatCompactTime(s?: string | null): string {
+  if (!s) return "-"
+  const d = new Date(s)
+  if (Number.isNaN(d.getTime())) return s
+  const diff = Date.now() - d.getTime()
+  if (diff < 60_000) return "刚刚"
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}分`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}时`
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}天`
+  return `${d.getMonth() + 1}月${d.getDate()}日`
+}
+
 export function formatBytes(n?: number | null): string {
   if (n === undefined || n === null || Number.isNaN(n)) return "-"
   if (n < 1024) return `${n} B`

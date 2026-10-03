@@ -22,7 +22,7 @@ export default function WorkspaceLayout() {
 
   return (
     <div className="flex h-screen">
-      <aside className="flex w-60 shrink-0 flex-col border-r">
+      <aside className="flex w-[280px] shrink-0 flex-col border-r bg-sidebar">
         <div className="flex h-12 shrink-0 items-center px-4 text-sm font-semibold">WispJar</div>
         <Separator />
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-4">

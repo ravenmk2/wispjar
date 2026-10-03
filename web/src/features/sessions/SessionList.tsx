@@ -19,8 +19,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { Input } from "@/components/ui/input"
-import { formatRelativeTime } from "@/lib/format"
+import { formatCompactTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { SessionStatus } from "@/lib/types"
 import { useCurrentOrg } from "@/stores/identity"
@@ -152,63 +153,18 @@ export function SessionList() {
       ) : (
         <div className="space-y-0.5 px-1">
           {items.map((item) => (
-            <div key={item.id} className="group relative">
-              <NavLink
-                to={`/c/${item.id}`}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-2 py-1.5 pr-7 text-sm text-muted-foreground hover:bg-accent hover:text-foreground",
-                  item.id === activeId && "bg-accent font-medium text-foreground",
-                )}
-              >
-                <span
-                  className={cn(
-                    "size-1.5 shrink-0 rounded-full",
-                    item.running ? "animate-pulse bg-green-500" : "bg-transparent",
-                  )}
-                />
-                <span className="min-w-0 flex-1 truncate">{item.title || "新会话"}</span>
-                <span className="shrink-0 text-[11px] text-muted-foreground group-hover:opacity-0">
-                  {formatRelativeTime(item.lastActiveAt)}
-                </span>
-              </NavLink>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0.5 top-1/2 size-6 -translate-y-1/2 opacity-0 group-hover:opacity-100"
-                  >
-                    <MoreHorizontal className="size-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-36">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setRenameTarget(item)
-                      setRenameValue(item.title)
-                    }}
-                  >
-                    <Pencil className="size-3.5" />
-                    重命名
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void archive(item)}>
-                    <Archive className="size-3.5" />
-                    归档
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void forkFromEnd(item)}>
-                    <GitFork className="size-3.5" />
-                    从结尾分叉
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() => setDeleteTarget(item)}
-                  >
-                    <Trash2 className="size-3.5" />
-                    删除
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <SessionRow
+              key={item.id}
+              item={item}
+              active={item.id === activeId}
+              onRename={() => {
+                setRenameTarget(item)
+                setRenameValue(item.title)
+              }}
+              onFork={() => void forkFromEnd(item)}
+              onArchive={() => void archive(item)}
+              onDelete={() => setDeleteTarget(item)}
+            />
           ))}
         </div>
       )}
@@ -244,6 +200,91 @@ export function SessionList() {
         loading={acting}
         onConfirm={() => void remove()}
       />
+    </div>
+  )
+}
+
+function SessionRow({
+  item,
+  active,
+  onRename,
+  onFork,
+  onArchive,
+  onDelete,
+}: {
+  item: ListItem
+  active: boolean
+  onRename: () => void
+  onFork: () => void
+  onArchive: () => void
+  onDelete: () => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  return (
+    <div className="group relative">
+      <HoverCard openDelay={500} closeDelay={100} open={menuOpen ? false : undefined}>
+        <HoverCardTrigger asChild>
+          <NavLink
+            to={`/c/${item.id}`}
+            className={cn(
+              "flex h-8 items-center gap-2 rounded-lg px-2 pr-7 text-sm text-fg-secondary hover:bg-accent hover:text-foreground",
+              active && "bg-accent font-medium text-foreground",
+            )}
+          >
+            <span
+              className={cn(
+                "size-1.5 shrink-0 rounded-full",
+                item.running ? "animate-pulse bg-primary" : "bg-transparent",
+              )}
+            />
+            <span className="min-w-0 flex-1 truncate">{item.title || "新会话"}</span>
+            <span className="shrink-0 text-[11px] text-fg-caption group-hover:opacity-0">
+              {formatCompactTime(item.lastActiveAt)}
+            </span>
+          </NavLink>
+        </HoverCardTrigger>
+        <HoverCardContent side="right" sideOffset={8}>
+          <div className="text-[13px] font-medium leading-5">{item.title || "新会话"}</div>
+          <div className="mt-1 text-white/60">{formatCompactTime(item.lastActiveAt)}</div>
+          <div className="mt-1.5 flex items-center gap-1.5 text-white/80">
+            <span className={cn("size-1.5 rounded-full", item.running ? "bg-primary" : "bg-white/40")} />
+            {item.running ? "运行中" : "空闲"}
+          </div>
+        </HoverCardContent>
+      </HoverCard>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "absolute right-0.5 top-1/2 size-6 -translate-y-1/2 opacity-0 group-hover:opacity-100",
+              menuOpen && "opacity-100",
+            )}
+          >
+            <MoreHorizontal className="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-36">
+          <DropdownMenuItem onClick={onRename}>
+            <Pencil className="size-3.5" />
+            重命名
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onFork}>
+            <GitFork className="size-3.5" />
+            分叉会话
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onArchive}>
+            <Archive className="size-3.5" />
+            归档会话
+          </DropdownMenuItem>
+          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
+            <Trash2 className="size-3.5" />
+            删除会话
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
