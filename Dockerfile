@@ -10,6 +10,7 @@ RUN pnpm build
 
 # 后端构建
 FROM golang:1.26-alpine AS go
+ENV GOPROXY=https://goproxy.cn,direct
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
