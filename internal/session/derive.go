@@ -15,11 +15,12 @@ type ToolCall struct {
 }
 
 type Message struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
-	ToolName   string     `json:"tool_name,omitempty"`
+	Role        string          `json:"role"`
+	Content     string          `json:"content"`
+	Attachments []AttachmentRef `json:"attachments,omitempty"`
+	ToolCalls   []ToolCall      `json:"tool_calls,omitempty"`
+	ToolCallID  string          `json:"tool_call_id,omitempty"`
+	ToolName    string          `json:"tool_name,omitempty"`
 }
 
 func DeriveMessages(events []store.SessionEvent) []Message {
@@ -103,7 +104,7 @@ func DeriveMessages(events []store.SessionEvent) []Message {
 			if err := json.Unmarshal(ev.Data, &d); err != nil {
 				continue
 			}
-			msgs = append(msgs, Message{Role: RoleUser, Content: d.Content})
+			msgs = append(msgs, Message{Role: RoleUser, Content: d.Content, Attachments: d.Attachments})
 		case EventAssistantMessage:
 			flush()
 			var d AssistantMessageData

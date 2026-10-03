@@ -163,6 +163,20 @@ type SessionEvent struct {
 
 func (SessionEvent) TableName() string { return "session_event" }
 
+type Attachment struct {
+	ID        string    `gorm:"column:id;primaryKey;size:71" json:"id"`
+	OrgID     string    `gorm:"column:org_id;size:32" json:"org_id"`
+	MIME      string    `gorm:"column:mime;size:64" json:"mime"`
+	Bytes     int64     `gorm:"column:bytes" json:"bytes"`
+	Width     int       `gorm:"column:width" json:"width"`
+	Height    int       `gorm:"column:height" json:"height"`
+	Name      string    `gorm:"column:name;size:256" json:"name"`
+	CreatedBy string    `gorm:"column:created_by;size:32" json:"created_by"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+}
+
+func (Attachment) TableName() string { return "attachment" }
+
 type AgentCheckpoint struct {
 	ID        string    `gorm:"column:id;primaryKey;size:32" json:"id"`
 	SessionID string    `gorm:"column:session_id;size:32" json:"session_id"`
@@ -173,17 +187,17 @@ type AgentCheckpoint struct {
 func (AgentCheckpoint) TableName() string { return "agent_checkpoint" }
 
 type UsageDaily struct {
-	Date             string    `gorm:"column:date;primaryKey;type:date" json:"date"`
-	OrgID            string    `gorm:"column:org_id;primaryKey;size:32" json:"org_id"`
-	UserID           string    `gorm:"column:user_id;primaryKey;size:32" json:"user_id"`
-	AgentID          string    `gorm:"column:agent_id;primaryKey;size:32" json:"agent_id"`
-	ModelID          string    `gorm:"column:model_id;primaryKey;size:32" json:"model_id"`
-	Requests         int       `gorm:"column:requests" json:"requests"`
-	InputTokens      int64     `gorm:"column:input_tokens" json:"input_tokens"`
-	OutputTokens     int64     `gorm:"column:output_tokens" json:"output_tokens"`
-	CacheReadTokens  int64     `gorm:"column:cache_read_tokens" json:"cache_read_tokens"`
-	CacheWriteTokens int64     `gorm:"column:cache_write_tokens" json:"cache_write_tokens"`
-	ReasoningTokens  int64     `gorm:"column:reasoning_tokens" json:"reasoning_tokens"`
+	Date             string `gorm:"column:date;primaryKey;type:date" json:"date"`
+	OrgID            string `gorm:"column:org_id;primaryKey;size:32" json:"org_id"`
+	UserID           string `gorm:"column:user_id;primaryKey;size:32" json:"user_id"`
+	AgentID          string `gorm:"column:agent_id;primaryKey;size:32" json:"agent_id"`
+	ModelID          string `gorm:"column:model_id;primaryKey;size:32" json:"model_id"`
+	Requests         int    `gorm:"column:requests" json:"requests"`
+	InputTokens      int64  `gorm:"column:input_tokens" json:"input_tokens"`
+	OutputTokens     int64  `gorm:"column:output_tokens" json:"output_tokens"`
+	CacheReadTokens  int64  `gorm:"column:cache_read_tokens" json:"cache_read_tokens"`
+	CacheWriteTokens int64  `gorm:"column:cache_write_tokens" json:"cache_write_tokens"`
+	ReasoningTokens  int64  `gorm:"column:reasoning_tokens" json:"reasoning_tokens"`
 }
 
 func (UsageDaily) TableName() string { return "usage_daily" }

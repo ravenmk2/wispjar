@@ -170,7 +170,7 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 
 | type | data |
 |---|---|
-| `user/message` | `{turn, content, request_id}` |
+| `user/message` | `{turn, content, request_id, attachments?}`。`attachments` 为图片附件引用数组（向后兼容，老事件无此字段）：`[{id: "sha256:<64 hex>", mime, bytes, width, height, name}]`——不透明引用，绝无 base64/路径/URL；字节经 `GET /attachments/{id}` 获取（api.md §3） |
 | `assistant/message` | `{turn, step, message, usage?, interrupted?}`。`message` 为完整 assistant 消息：`{role:"assistant", content:[ContentBlock...]}`，ContentBlock = `{type:"text",text}` / `{type:"reasoning",text}` / `{type:"tool-call",id,name,arguments}`。`usage` 结构同 StreamChunk usage（snake_case） |
 | `assistant/attempt` | `{turn, step, chunks:[StreamChunk...]（压缩存储）, error?}` —— 失败/取消的尝试留痕，**不进模型历史** |
 | `tool/call` | `{turn, step, call_id, name, arguments(原始JSON字符串), parent_call_id?}` |
@@ -185,7 +185,7 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 | `session/approval-mode` | `{mode: "strict"\|"default"\|"auto", changed_by}` |
 | `session/effort` | `{effort: "<档位>", changed_by}` —— 会话思考强度改档（仅 `last_seq = 0` 时可改，见 api.md §3） |
 | `model/selection` | `{model_id, changed_by}` |
-| `request/header` | `{turn, provider_id, model_id, model_code, params, tools:[string]}` —— 本 turn 请求快照（审计/复现用） |
+| `request/header` | `{turn, provider_id, model_id, model_code, params, tools:[string], image_offload?}` —— 本 turn 请求快照（审计/复现用）；`image_offload` 为图片卸载策略版本（本 turn 携带附件时记录，如 `image-offload-v1`，见 runtime.md §8.3） |
 | `approval/asked` | `{turn, step, call_id, name, arguments, risk: "high"\|"medium", parent_call_id?}` |
 | `approval/decided` | `{call_id, decision: "allow"\|"deny", decided_by, auto: false}` —— 超时/重启 fail-closed 的 deny 记 `auto:true, decided_by:"system"` |
 | `compaction/summary`（M4 预留） | `{covers: {start_seq, end_seq}, summary}` —— derive 时替换该区间的消息（surface replace 语义） |
@@ -195,7 +195,7 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 输入：`seq ≤ N` 的全部事件。输出：`[]*schema.Message`。
 
 1. 取最后一个 `turn/start` 之前的全部事件（进行中的 turn 不入历史）。
-2. 按 seq 顺序： `user/message` → user 消息；`assistant/message` → assistant 消息（content 含 tool-call 块则展开为 `ToolCalls`）；`tool/result` → tool 消息（`ToolCallID=call_id`，name 从配对 `tool/call` 取，error 时 content 为错误描述）。
+2. 按 seq 顺序： `user/message` → user 消息（带 `attachments` 时投影附件引用，模型侧组装为图片+文本多模态消息，见 runtime.md §8.3）；`assistant/message` → assistant 消息（content 含 tool-call 块则展开为 `ToolCalls`）；`tool/result` → tool 消息（`ToolCallID=call_id`，name 从配对 `tool/call` 取，error 时 content 为错误描述）。
 3. 悬空配对保护：`assistant/message` 中 tool-call 块缺少对应 `tool/result`（中断场景）→ 合成 `tool/result{error:"interrupted"}` 保证消息序列合法（模型 API 要求每个 tool_call 有响应）。
 4. 子 Agent 嵌套事件（带 `parent_call_id`）不进入主消息流——它们在主 Agent 视角只体现为一次 `task` 工具的 call/result。
 5. `compaction/summary`（M4）：命中区间内的消息整体替换为一条 user 角色的摘要消息。

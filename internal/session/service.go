@@ -150,8 +150,9 @@ func (s *Service) Create(ctx context.Context, actorID, orgID string, in CreateIn
 	return detailOf(&sess), nil
 }
 
-// capabilities 是会话域关心的 model.capabilities 子集（思考强度档位声明）。
+// capabilities 是会话域关心的 model.capabilities 子集（思考强度档位声明、视觉能力）。
 type capabilities struct {
+	Vision                 bool     `json:"vision"`
 	ReasoningEfforts       []string `json:"reasoning_efforts"`
 	ReasoningEffortDefault string   `json:"reasoning_effort_default"`
 }
@@ -375,14 +376,27 @@ func (s *Service) Update(ctx context.Context, uid, sessionID string, in UpdateIn
 	}
 	if in.ModelID != nil {
 		modelID := strings.TrimSpace(*in.ModelID)
-		var count int64
-		if err := s.db.WithContext(ctx).Model(&store.Model{}).
+		var m store.Model
+		if err := s.db.WithContext(ctx).
 			Where("id = ? AND status = ?", modelID, StatusActive).
-			Count(&count).Error; err != nil {
+			First(&m).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, errInvalid("model_id 对应的模型不存在或未上架（active）", map[string]any{"field": "model_id"})
+			}
 			return nil, err
 		}
-		if count == 0 {
-			return nil, errInvalid("model_id 对应的模型不存在或未上架（active）", map[string]any{"field": "model_id"})
+		caps := capabilities{}
+		_ = json.Unmarshal(m.Capabilities, &caps)
+		if !caps.Vision {
+			has, err := s.hasImageHistory(ctx, sess.ID)
+			if err != nil {
+				return nil, err
+			}
+			if has {
+				return nil, &Error{Status: http.StatusConflict, Code: "session/vision_locked",
+					Message: "会话历史包含图片，不能切换到不支持视觉的模型",
+					Details: map[string]any{"model_id": modelID}}
+			}
 		}
 		updates["model_id"] = modelID
 		events = append(events, EventInput{Type: EventModelSelection, Data: ModelSelectionData{ModelID: modelID, ChangedBy: uid}})
@@ -431,6 +445,16 @@ func (s *Service) Update(ctx context.Context, uid, sessionID string, in UpdateIn
 		s.AfterEvents(sess.ID, evs)
 	}
 	return s.Get(ctx, uid, sessionID)
+}
+
+// hasImageHistory 判断会话历史是否包含图片附件（PATCH 换模型的 vision 门控用）。
+func (s *Service) hasImageHistory(ctx context.Context, sessionID string) (bool, error) {
+	var n int64
+	err := s.db.WithContext(ctx).Model(&store.SessionEvent{}).
+		Where("session_id = ? AND type = ? AND JSON_LENGTH(JSON_EXTRACT(data, '$.attachments')) > 0",
+			sessionID, EventUserMessage).
+		Count(&n).Error
+	return n > 0, err
 }
 
 func (s *Service) Delete(ctx context.Context, uid, sessionID string) error {

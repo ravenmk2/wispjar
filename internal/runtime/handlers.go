@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ravenmk2/wispjar/internal/agent"
+	"github.com/ravenmk2/wispjar/internal/attachment"
 	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/gateway/respond"
 	"github.com/ravenmk2/wispjar/internal/runtime/tools"
@@ -25,27 +26,40 @@ import (
 	"github.com/ravenmk2/wispjar/internal/store"
 )
 
+// SessionService 是 Handler 对会话服务的窄接口（*session.Service 实现；测试可替换）。
+type SessionService interface {
+	Get(ctx context.Context, uid, sessionID string) (*session.Detail, error)
+	Delete(ctx context.Context, uid, sessionID string) error
+}
+
+// AttachmentResolver 校验并解析 prompt 携带的附件引用（internal/attachment.Service 实现）。
+type AttachmentResolver interface {
+	Resolve(ctx context.Context, orgID string, ids []string) ([]session.AttachmentRef, error)
+}
+
 // Handler 承载会话运行时相关 REST 端点（api.md §3）。
 type Handler struct {
-	orch     Orchestrator
-	sessions *session.Service
-	events   EventStore
-	repo     SessionRepo
-	sandbox  sandbox.Manager
-	bus      *Bus
-	model    func(ctx context.Context, modelID string) (modelCode, providerID string, err error)
-	dataDir  string
+	orch        Orchestrator
+	sessions    SessionService
+	events      EventStore
+	repo        SessionRepo
+	sandbox     sandbox.Manager
+	bus         *Bus
+	model       func(ctx context.Context, modelID string) (modelCode, providerID string, vision bool, err error)
+	attachments AttachmentResolver
+	dataDir     string
 
 	skillsMu     sync.Mutex
 	skillsSynced map[string]string // sessionID -> 已完成技能目录同步的 sandboxID
 }
 
-func NewHandler(orch Orchestrator, sessions *session.Service, events EventStore, repo SessionRepo,
+func NewHandler(orch Orchestrator, sessions SessionService, events EventStore, repo SessionRepo,
 	sb sandbox.Manager, bus *Bus,
-	modelLookup func(ctx context.Context, modelID string) (string, string, error), dataDir string) *Handler {
+	modelLookup func(ctx context.Context, modelID string) (string, string, bool, error), dataDir string,
+	attachments AttachmentResolver) *Handler {
 	return &Handler{
 		orch: orch, sessions: sessions, events: events, repo: repo,
-		sandbox: sb, bus: bus, model: modelLookup,
+		sandbox: sb, bus: bus, model: modelLookup, attachments: attachments,
 		dataDir: dataDir, skillsSynced: map[string]string{},
 	}
 }
@@ -72,12 +86,18 @@ func fail(c *gin.Context, err error) {
 		respond.Error(c, se.Status, se.Code, se.Message, se.Details)
 		return
 	}
+	var ae *attachment.Error
+	if errors.As(err, &ae) {
+		respond.Error(c, ae.Status, ae.Code, ae.Message, ae.Details)
+		return
+	}
 	respond.Error(c, http.StatusInternalServerError, respond.CodeInternal, "服务器内部错误", nil)
 }
 
 type promptRequest struct {
-	Content   string `json:"content" binding:"required"`
-	RequestID string `json:"request_id" binding:"required"`
+	Content     string   `json:"content" binding:"required"`
+	RequestID   string   `json:"request_id" binding:"required"`
+	Attachments []string `json:"attachments"`
 }
 
 // Prompt POST /sessions/:id/prompts：幂等投递 + 异步 StartTurn。
@@ -116,9 +136,26 @@ func (h *Handler) Prompt(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	modelCode, providerID, err := h.model(ctx, sess.ModelID)
+	var attachments []session.AttachmentRef
+	if len(req.Attachments) > 0 {
+		if h.attachments == nil {
+			fail(c, ErrAttachmentsUnavailable)
+			return
+		}
+		refs, err := h.attachments.Resolve(ctx, sess.OrgID, req.Attachments)
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		attachments = refs
+	}
+	modelCode, providerID, vision, err := h.model(ctx, sess.ModelID)
 	if err != nil {
 		fail(c, err)
+		return
+	}
+	if len(attachments) > 0 && !vision {
+		fail(c, ErrModelNotVision)
 		return
 	}
 	toolNames := enabledToolNames(&snap)
@@ -133,14 +170,18 @@ func (h *Handler) Prompt(c *gin.Context) {
 		fail(c, err)
 		return
 	}
+	headerData := session.RequestHeaderData{
+		Turn: turn, ProviderID: providerID, ModelID: sess.ModelID, ModelCode: modelCode,
+		Params: reqParams, Tools: toolNames,
+	}
+	if len(attachments) > 0 {
+		headerData.ImageOffload = imageOffloadVersion
+	}
 
 	events, err := h.events.AppendBatch(ctx, sess.ID, []session.EventInput{
-		{Type: session.EventUserMessage, Data: session.UserMessageData{Turn: turn, Content: req.Content, RequestID: req.RequestID}},
+		{Type: session.EventUserMessage, Data: session.UserMessageData{Turn: turn, Content: req.Content, RequestID: req.RequestID, Attachments: attachments}},
 		{Type: session.EventTurnStart, Data: session.TurnStartData{Turn: turn, RequestID: req.RequestID}},
-		{Type: session.EventRequestHeader, Data: session.RequestHeaderData{
-			Turn: turn, ProviderID: providerID, ModelID: sess.ModelID, ModelCode: modelCode,
-			Params: reqParams, Tools: toolNames,
-		}},
+		{Type: session.EventRequestHeader, Data: headerData},
 	})
 	if err != nil {
 		fail(c, err)

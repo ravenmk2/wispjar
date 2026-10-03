@@ -25,6 +25,11 @@ type ModelFactory interface {
 	NewChatModel(ctx context.Context, modelID string, params map[string]any) (model.ToolCallingChatModel, error)
 }
 
+// AttachmentReader 按引用读附件字节（internal/attachment.Service 实现；读时校验 sha256）。
+type AttachmentReader interface {
+	ReadBytes(ctx context.Context, id string) ([]byte, error)
+}
+
 type Deps struct {
 	Events      EventStore
 	Sessions    SessionRepo
@@ -39,6 +44,8 @@ type Deps struct {
 	ProviderType func(ctx context.Context, modelID string) string
 	// ToolContextFactory 覆盖工具上下文装配（测试注入用；生产为 nil）。
 	ToolContextFactory func(sess *store.Session, snap *agent.Snapshot) *tools.Context
+	// Attachments 附件字节读取（图片组装用；历史含附件时必配）。
+	Attachments AttachmentReader
 }
 
 // Orchestrator 是运行时总链路的入口（runtime.md §1）。
@@ -168,11 +175,20 @@ func (o *orchestrator) history(ctx context.Context, sessionID string) ([]*schema
 		return nil, err
 	}
 	derived := session.DeriveMessages(events)
+	offloaded := planImageOffload(derived)
 	msgs := make([]*schema.Message, 0, len(derived))
-	for _, m := range derived {
+	for i, m := range derived {
 		switch m.Role {
 		case session.RoleUser:
-			msgs = append(msgs, schema.UserMessage(m.Content))
+			if len(m.Attachments) > 0 {
+				msg, err := o.buildUserMessage(ctx, m, offloaded[i])
+				if err != nil {
+					return nil, err
+				}
+				msgs = append(msgs, msg)
+			} else {
+				msgs = append(msgs, schema.UserMessage(m.Content))
+			}
 		case session.RoleAssistant:
 			calls := make([]schema.ToolCall, 0, len(m.ToolCalls))
 			for _, tc := range m.ToolCalls {
@@ -202,6 +218,13 @@ func (o *orchestrator) trimContext(ctx context.Context, sessionID string, msgs [
 		total := 0
 		for _, m := range ms {
 			total += len(m.Content) + len(m.ReasoningContent)
+			for _, p := range m.UserInputMultiContent {
+				total += len(p.Text)
+				if p.Image != nil && p.Image.Base64Data != nil {
+					// 图片按 base64 长度计入（字符/4 粗估 tokens；卸载后的占位文本按文本计）。
+					total += len(*p.Image.Base64Data)
+				}
+			}
 			for _, tc := range m.ToolCalls {
 				total += len(tc.Function.Arguments)
 			}

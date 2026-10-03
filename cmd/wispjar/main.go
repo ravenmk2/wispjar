@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"log"
@@ -16,6 +17,7 @@ import (
 	"github.com/cloudwego/eino/adk"
 
 	"github.com/ravenmk2/wispjar/internal/agent"
+	"github.com/ravenmk2/wispjar/internal/attachment"
 	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/config"
 	"github.com/ravenmk2/wispjar/internal/gateway"
@@ -77,6 +79,7 @@ func main() {
 
 	agentSvc := agent.NewService(db)
 	sessionSvc := session.NewService(db, agentSvc)
+	attachmentSvc := attachment.NewService(db, cfg.Storage.DataDir)
 	eventStore := session.NewStore(db)
 	eventStore.AfterAppend = usage.NewRecorder(db).OnEvents
 	repo := runtime.NewSessionRepo(db)
@@ -109,6 +112,7 @@ func main() {
 			}
 			return typ
 		},
+		Attachments: attachmentSvc,
 	})
 	if sandboxSvc != nil {
 		sandboxSvc.OnEvent(runtime.SandboxEventHook(repo, eventStore, bus))
@@ -118,13 +122,15 @@ func main() {
 	}
 
 	runtimeH := runtime.NewHandler(orch, sessionSvc, eventStore, repo, sandboxSvc, bus,
-		func(ctx context.Context, modelID string) (string, string, error) {
+		func(ctx context.Context, modelID string) (string, string, bool, error) {
 			var m store.Model
 			if err := db.WithContext(ctx).First(&m, "id = ?", modelID).Error; err != nil {
-				return "", "", err
+				return "", "", false, err
 			}
-			return m.ModelCode, m.ProviderID, nil
-		}, cfg.Storage.DataDir)
+			caps := provider.Capabilities{}
+			_ = json.Unmarshal(m.Capabilities, &caps)
+			return m.ModelCode, m.ProviderID, caps.Vision, nil
+		}, cfg.Storage.DataDir, attachmentSvc)
 	wsServer := ws.NewServer(ws.Deps{
 		JWTSecret:      []byte(jwtSecret),
 		Store:          ws.NewGormStore(db),

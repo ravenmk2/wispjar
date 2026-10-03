@@ -163,3 +163,28 @@ func TestDeriveEmpty(t *testing.T) {
 		t.Fatalf("want empty non-nil slice, got %+v", msgs)
 	}
 }
+
+func TestDeriveUserMessageAttachments(t *testing.T) {
+	ref := AttachmentRef{
+		ID:   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		MIME: "image/png", Bytes: 10, Width: 2, Height: 2, Name: "a.png",
+	}
+	events := []store.SessionEvent{
+		ev(1, EventTurnStart, TurnStartData{Turn: 1, RequestID: "r1"}),
+		ev(2, EventUserMessage, UserMessageData{Turn: 1, Content: "看图", RequestID: "r1", Attachments: []AttachmentRef{ref}}),
+		ev(3, EventAssistantMessage, assistantMsg(1, 1, ContentBlock{Type: "text", Text: "是一只猫"})),
+		ev(4, EventTurnEnd, TurnEndData{Turn: 1, Reason: "completed"}),
+		ev(5, EventTurnStart, TurnStartData{Turn: 2, RequestID: "r2"}),
+		ev(6, EventUserMessage, UserMessageData{Turn: 2, Content: "继续", RequestID: "r2"}),
+	}
+	msgs := DeriveMessages(events)
+	if len(msgs) != 2 {
+		t.Fatalf("want 2 messages, got %+v", msgs)
+	}
+	if len(msgs[0].Attachments) != 1 || msgs[0].Attachments[0].ID != ref.ID || msgs[0].Attachments[0].MIME != "image/png" {
+		t.Fatalf("attachments must project onto derived user message: %+v", msgs[0])
+	}
+	if msgs[1].Attachments != nil {
+		t.Fatalf("text-only message must have no attachments: %+v", msgs[1])
+	}
+}

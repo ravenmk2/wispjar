@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/ravenmk2/wispjar/internal/agent"
+	"github.com/ravenmk2/wispjar/internal/attachment"
 	"github.com/ravenmk2/wispjar/internal/audit"
 	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/config"
@@ -59,10 +60,13 @@ func NewRouter(deps Deps) *gin.Engine {
 	}
 	sessionH := session.NewHandler(sessionSvc)
 	agentH := agent.NewHandler(agentSvc)
+	attachmentH := attachment.NewHandler(attachment.NewService(deps.DB, deps.Config.Storage.DataDir), sessionSvc)
 
 	authed.GET("/sessions/:id", sessionH.GetSession)
 	authed.PATCH("/sessions/:id", sessionH.PatchSession)
 	authed.POST("/sessions/:id/fork", sessionH.ForkSession)
+	authed.POST("/sessions/:id/attachments", attachmentH.Upload)
+	authed.GET("/attachments/:id", attachmentH.Download)
 	if deps.Runtime != nil {
 		authed.DELETE("/sessions/:id", deps.Runtime.DeleteSession)
 		authed.POST("/sessions/:id/prompts", deps.Runtime.Prompt)

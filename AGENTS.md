@@ -8,7 +8,7 @@ WispJar：多租户智能体平台（服务端应用，Go 实现）。
 wispjar/
 ├── cmd/wispjar/      # 程序入口，只做组装与启动，不含业务逻辑
 ├── internal/        # 应用私有代码（按业务域分层：config/id/store/auth/tenant/provider/
-│                    #   skill/agent/runtime/sandbox/session/gateway/usage/audit，见设计文档 §4.2）
+│                    #   skill/agent/runtime/sandbox/session/gateway/attachment/usage/audit，见设计文档 §4.2）
 ├── web/             # 前端源码与构建产物（embed 进二进制，dist/ 不入库）
 ├── docs/            # 设计文档
 ├── scripts/         # 辅助脚本（build.sh 本地多平台构建；sandbox-image/ 沙箱基础镜像 Dockerfile）

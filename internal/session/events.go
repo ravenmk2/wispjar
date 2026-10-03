@@ -61,10 +61,21 @@ type StepData struct {
 	Step int `json:"step"`
 }
 
+// AttachmentRef 是图片附件的持久引用（不透明 id，绝无 base64/路径/URL）。
+type AttachmentRef struct {
+	ID     string `json:"id"` // "sha256:<64 hex>"
+	MIME   string `json:"mime"`
+	Bytes  int64  `json:"bytes"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	Name   string `json:"name"`
+}
+
 type UserMessageData struct {
-	Turn      int    `json:"turn"`
-	Content   string `json:"content"`
-	RequestID string `json:"request_id"`
+	Turn        int             `json:"turn"`
+	Content     string          `json:"content"`
+	RequestID   string          `json:"request_id"`
+	Attachments []AttachmentRef `json:"attachments,omitempty"`
 }
 
 type AssistantMessage struct {
@@ -149,6 +160,8 @@ type RequestHeaderData struct {
 	ModelCode  string          `json:"model_code"`
 	Params     json.RawMessage `json:"params"`
 	Tools      []string        `json:"tools"`
+	// ImageOffload 图片卸载策略版本（本 turn 携带附件时记录；规则变更=历史前缀失效，审计用）。
+	ImageOffload string `json:"image_offload,omitempty"`
 }
 
 type ApprovalAskedData struct {

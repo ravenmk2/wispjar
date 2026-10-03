@@ -27,10 +27,10 @@ func (f *recordingFactory) NewChatModel(_ context.Context, modelID string, param
 	return f.m, nil
 }
 
-func userMsg(s string) *schema.Message  { return schema.UserMessage(s) }
-func asstMsg(s string) *schema.Message  { return schema.AssistantMessage(s, nil) }
-func toolMsg(s string) *schema.Message  { return schema.ToolMessage(s, "call-1") }
-func sysMsg(s string) *schema.Message   { return &schema.Message{Role: schema.System, Content: s} }
+func userMsg(s string) *schema.Message { return schema.UserMessage(s) }
+func asstMsg(s string) *schema.Message { return schema.AssistantMessage(s, nil) }
+func toolMsg(s string) *schema.Message { return schema.ToolMessage(s, "call-1") }
+func sysMsg(s string) *schema.Message  { return &schema.Message{Role: schema.System, Content: s} }
 
 func newTrimOrchestrator(contextSize int) *orchestrator {
 	return &orchestrator{deps: Deps{

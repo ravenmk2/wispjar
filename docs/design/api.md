@@ -31,6 +31,10 @@
 | 409 | `session/effort_locked` | 对话已开始（`last_seq > 0`），思考强度不可再改（details 含当前值） |
 | 409 | `approval/not_pending` | 审批已决定或已过期 |
 | 410 | `approval/expired` | 审批超时 |
+| 409 | `session/vision_locked` | 会话历史包含图片，不能切换到非视觉模型（PATCH model_id） |
+| 422 | `model/not_vision` | 带图 prompt 命中不支持视觉的模型，需换模型 |
+| 404 | `attachment/not_found` | 附件不存在或无权访问（不区分，防枚举） |
+| 422 | `attachment/invalid` | 图片校验失败（格式/大小/像素，details 含原因） |
 | 422 | `skill/invalid` | skill zip 校验失败（details 含原因） |
 | 429 | `auth/rate_limited` | 登录尝试过多 |
 | 502 | `provider/upstream` | 调用模型供应商失败 |
@@ -103,23 +107,49 @@
 
 请求（均可选）：`{ "title": "...(改名并 title_pinned=1)", "approval_mode": "strict|default|auto", "status": "active|archived", "model_id": "...(会话级切换模型)", "reasoning_effort": "...(思考强度档位)" }`
 - 改 `approval_mode` 追加 `session/approval-mode` 事件；改 `model_id` 追加 `model/selection` 事件；改 `reasoning_effort` 追加 `session/effort` 事件（事件词表见 protocol.md §6）。
+- 改 `model_id`：若目标模型 `capabilities.vision=false` 且会话历史已含图片附件（任一 `user/message` 带 `attachments`），返回 409 `session/vision_locked`（否则历史投影要从图片变占位文本，前缀从此处失效）。
 - `reasoning_effort` 仅当 `last_seq = 0`（对话未开始）可设置；`last_seq > 0` 返回 409 `session/effort_locked`（details 带当前值）。值必须在目标模型 `capabilities.reasoning_efforts` 内，否则 400（同请求改 `model_id` 时按新模型校验）。
 
 ### DELETE /api/v1/sessions/{id}
 
-软删（`status=deleted`）；若沙箱存在则异步销毁；进行中的 turn 先 cancel。
+软删（`status=deleted`）；若沙箱存在则异步销毁；进行中的 turn 先 cancel。**附件 blob 与 attachment 行不删**（附件永不自动删除，GC 后续另做，见 data-model.md §10）。
 
 ### POST /api/v1/sessions/{id}/prompts
 
 投递用户消息（启动一个 turn）。请求：
 
 ```json
-{ "content": "...", "request_id": "<客户端 uuid>" }
+{ "content": "...", "request_id": "<客户端 uuid>",
+  "attachments": ["sha256:<64 hex>", "...（可选，先经 attachments 端点上传）"] }
 ```
 
 - `request_id` 幂等：相同 `(session_id, request_id)` 重复投递直接返回 200 + 已存在的 `user/message` seq（乐观对账，见 protocol.md §8）。
+- `attachments`（可选）：附件 id 数组，≤9 个；每个 id 必须已存在于 attachment 表且 `org_id` 与会话一致，任一不满足 → 400 `request/invalid`（整条消息拒绝，不产生任何事件）。
+- vision 门控：携带附件而当前模型 `capabilities.vision=false` → 422 `model/not_vision`（提示换模型；不静默降级，避免"模型假装看不见"）。
 - 会话 `running=1` 时返回 409 `session/running`（v1 不支持排队；steer/queue 在 M4）。
 - 成功 202：`{ "accepted": true, "seq": <user/message 事件 seq> }`。流式输出经 `session.follow` 推送（protocol.md）。
+
+### POST /api/v1/sessions/{id}/attachments
+
+上传图片附件（`multipart/form-data`，字段名 `file`）。校验：
+
+- mime 白名单 png/jpeg/webp/gif，**按魔数嗅探**（不信客户端声明）；
+- 单图 ≤8MB（原图字节）；
+- 解码读取宽高，总像素 ≤64M（超出拒绝）；
+- 全部失败 → 422 `attachment/invalid`；缺少 `file` 字段 → 400。
+
+服务端写内容寻址存储（同字节去重，重复上传幂等返回既有行）+ 插 attachment 表，201 返回：
+
+```json
+{ "id": "sha256:<64 hex>", "mime": "image/png", "bytes": 183420,
+  "width": 1600, "height": 900, "name": "截图.png" }
+```
+
+### GET /api/v1/attachments/{id}
+
+下载附件字节。登录 + 机构成员校验（`attachment.org_id ∈ 用户机构`，非成员按 404 `attachment/not_found` 处理，防枚举）。
+按表记录 mime 回字节（读时按 id 校验 sha256），响应头 `Cache-Control: private, immutable` + `ETag: "<sha256 hex>"`（支持 `If-None-Match` → 304）。
+前端 `<img>` 无法带 Authorization 头：fetch 拉 blob 转 objectURL，会话级缓存 attachmentId→objectURL。
 
 ### POST /api/v1/sessions/{id}/cancel
 

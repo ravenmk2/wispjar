@@ -253,7 +253,29 @@ CREATE TABLE agent_checkpoint (
 5. `agent_checkpoint` 定期清理：`DELETE WHERE created_at < NOW() - INTERVAL 7 DAY`（审批 checkpoint 在 decided 后立即删除）。
 6. 沙箱状态读写一律经 `session.sandbox` JSON（`JSON_SET` / 应用层整体改写均可）；崩溃恢复时 `WHERE JSON_UNQUOTE(JSON_EXTRACT(sandbox,'$.status'))='running'` 仅在启动扫描执行一次，无需独立列。
 
-## 10. usage_daily / audit_log
+## 10. attachment（图片附件，机构级）
+
+```sql
+CREATE TABLE attachment (
+  id         CHAR(71)     NOT NULL PRIMARY KEY,            -- "sha256:" + 64 位小写 hex（内容寻址，全局去重）
+  org_id     CHAR(32)     NOT NULL,
+  mime       VARCHAR(64)  NOT NULL,                        -- image/png / image/jpeg / image/webp / image/gif（上传时按魔数嗅探）
+  bytes      BIGINT       NOT NULL,
+  width      INT          NOT NULL,
+  height     INT          NOT NULL,
+  name       VARCHAR(256) NOT NULL DEFAULT '',
+  created_by CHAR(32)     NOT NULL,
+  created_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY idx_attachment_org (org_id, created_at),
+  CONSTRAINT fk_attachment_org FOREIGN KEY (org_id) REFERENCES organization(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+- 字节本体在库外内容寻址存储（§13），表只存元数据：鉴权（`org_id` 作用域防跨租户读图）、展示（宽高/文件名）、读时校验依据。
+- 同字节内容全局只有一行（首发机构胜出）；上传幂等，重复上传同图直接返回既有行。
+- **附件永不自动删除**：删除会话不删 blob 与表行（fork 共享同一不可变对象）；引用感知 GC（扫描 `session_event` 引用 + orphan 清理）后续另做。
+
+## 11. usage_daily / audit_log
 
 ```sql
 CREATE TABLE usage_daily (
@@ -285,7 +307,7 @@ CREATE TABLE audit_log (
 
 `usage_daily` 聚合方式：runtime 在每个 `assistant/message` 事件提交后，从事件 `data.usage` 异步 `INSERT ... ON DUPLICATE KEY UPDATE ... = ... + VALUES(...)`（按事件发生日的本地日期）。子 Agent 的用量记在主 Agent 行上（事件中保留 `sub_agent_id` 供明细分析，报表 v1 不展示）。
 
-## 11. 种子数据（000001_init.up.sql 尾部）
+## 12. 种子数据（000001_init.up.sql 尾部）
 
 ```sql
 -- 平台管理机构（固定 id 便于引用：全 0 变体不符合 UUIDv7，仅作内置常量，见 internal/id/wellknown.go）
@@ -302,9 +324,10 @@ INSERT INTO platform_setting (`key`, value, updated_by) VALUES
   ('sandbox.ttl_seconds',      '3600',                         'system');
 ```
 
-## 12. 库外文件存储
+## 13. 库外文件存储
 
 | 内容 | 位置 | 说明 |
 |---|---|---|
 | Skill zip 解压目录 | `<data_dir>/skills/<org_id>/<skill_id>/` | 原始 zip 保留为 `_source.zip` 便于重新校验；路径配置化，保留对象存储扩展口 |
+| 图片附件 blob | `<data_dir>/attachments/v1/objects/<sha256[:2]>/<sha256>` | 内容寻址、不可变、字节去重；写：临时文件→校验→原子 rename；读：按记录 sha256 校验后再服务（`internal/attachment`）。永不自动删除 |
 | 沙箱内文件 | 沙箱容器内 | 经 execd 上传/下载；沙箱回收即销毁 |
