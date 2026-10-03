@@ -210,7 +210,7 @@ export interface AuditItem {
 
 export type ApprovalMode = "strict" | "default" | "auto"
 
-export type SandboxStatus = "none" | "creating" | "running" | "recycled"
+export type SandboxStatus = "none" | "creating" | "running" | "paused" | "recycled"
 
 export type SessionStatus = "active" | "archived" | "deleted"
 

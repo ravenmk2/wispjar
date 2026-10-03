@@ -27,6 +27,7 @@ const STATUS_LABEL: Record<SandboxStatus, string> = {
   none: "无沙箱",
   creating: "创建中",
   running: "运行中",
+  paused: "已暂停",
   recycled: "已回收",
 }
 

@@ -35,7 +35,7 @@ export default function SettingsPage() {
   const [images, setImages] = useState<string[]>(["python:3.12"])
   const [egress, setEgress] = useState<EgressPolicy>(DEFAULT_EGRESS)
   const [resources, setResources] = useState<ResourceLimits>(DEFAULT_RESOURCES)
-  const [idleTtl, setIdleTtl] = useState("1800")
+  const [idleTtl, setIdleTtl] = useState("28800")
   const [ttl, setTtl] = useState("3600")
   const [saving, setSaving] = useState(false)
 
