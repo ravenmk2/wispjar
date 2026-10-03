@@ -1,0 +1,11 @@
+.git
+.agents
+.github
+data
+docs
+scripts
+web/dist
+web/node_modules
+node_modules
+*.log
+.playwright-cli
