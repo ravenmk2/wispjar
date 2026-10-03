@@ -1,10 +1,11 @@
 import { Bot, CircleAlert, ListTree, MessagesSquare, PanelRight, WifiOff } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link, useParams } from "react-router"
 import { ApiError, errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
 import { Button } from "@/components/ui/button"
 import { EmptyState, TableSkeleton } from "@/components/common"
+import { ApprovalTakeover } from "@/features/chat/ApprovalCard"
 import { Composer } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
 import { SandboxPanel } from "@/features/sandbox/SandboxPanel"
@@ -32,10 +33,20 @@ export default function ChatView() {
   const currentOrg = useCurrentOrg()
   const header = useSessionStore((s) => s.header)
   const followStatus = useSessionStore((s) => s.followStatus)
+  const pendingApprovals = useSessionStore((s) => s.pendingApprovals)
   const composerReset = useComposerStore((s) => s.reset)
   const [loadError, setLoadError] = useState<LoadError | null>(null)
   const [tab, setTab] = useState<"chat" | "trajectory">("chat")
   const [sandboxOpen, setSandboxOpen] = useState(false)
+
+  // 顶层待审批队列（嵌套子智能体审批仍在 task 卡内处理），逐条接管 composer 区
+  const pendingApproval = useMemo(
+    () =>
+      Object.values(pendingApprovals)
+        .filter((a) => !a.parentCallId)
+        .sort((a, b) => a.askedAt - b.askedAt)[0] ?? null,
+    [pendingApprovals],
+  )
 
   useEffect(() => {
     setLoadError(null)
@@ -129,7 +140,12 @@ export default function ChatView() {
         ) : (
           <TrajectoryView sessionId={sessionId} />
         )}
-        {tab === "chat" && <Composer sessionId={sessionId} />}
+        {tab === "chat" &&
+          (pendingApproval ? (
+            <ApprovalTakeover approval={pendingApproval} sessionId={sessionId} />
+          ) : (
+            <Composer sessionId={sessionId} />
+          ))}
       </div>
       {sandboxOpen && <SandboxPanel sessionId={sessionId} onClose={() => setSandboxOpen(false)} />}
     </div>
