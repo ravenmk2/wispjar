@@ -29,12 +29,13 @@ web/src/
 ├── mux/                       # WS mux 客户端（§4）
 ├── stores/                    # Zustand stores（§5）
 ├── components/ui/             # shadcn/ui 生成物
-├── components/                # 通用：Markdown、CodeBlock、DiffBlock、ConfirmDialog、EmptyState...
+├── components/                # 通用：Markdown、CodeBlock、DiffBlock、CopyIconButton、ConfirmDialog、EmptyState...
 ├── features/
-│   ├── chat/                  # ChatView、MessageList、AssistantMessage、ToolCallCard（§6）、
-│   │                          #   ApprovalCard、Composer（输入区）、TokenBadge、StreamingText
+│   ├── chat/                  # ChatView、MessageList、NodeList、AssistantMessage（含 TokenBadge）、
+│   │                          #   ToolCallCard、ApprovalCard（含 ApprovalTakeover）、Composer（输入区）、
+│   │                          #   ForkButton、StatsPills（§6）
 │   ├── trajectory/            # TrajectoryView（turn/step 时间线）
-│   ├── sessions/              # SessionList、SessionItem、重命名/归档菜单
+│   ├── sessions/              # SessionList（搜索 + 行 hover "…" 菜单：重命名/分叉/归档/删除）
 │   ├── agents/                # AgentPicker（侧栏智能体列表）
 │   ├── sandbox/               # SandboxPanel（文件树/预览/状态）
 │   └── admin/                 # 机构管理：AgentEditor（§8）、SkillManager、MemberManager、OrgUsage
@@ -95,31 +96,34 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 
 ### 6.1 消息流
 
-- **user**：气泡右置（或左置宽卡，风格按 harness：简洁、弱气泡、强排版）。
-- **assistant**：Markdown 流式渲染；`reasoning` 块折叠（"思考过程"，默认收起，流式时展开滚动）；usage 徽标（`in/out tokens`，hover 展开 cached/reasoning 明细）；`interrupted` 标记"已停止"。
-- **ToolCallCard**（按 `tool/result.meta.render` 或 live 工具名映射）：
-  | render | 工具 | 卡片 |
+- **user**：右置浅蓝气泡（`bg-bubble` #EDF3FE，max-w 85%）；下方操作条：时间戳 + 复制。操作条最新一轮常驻，更早轮次 hover/focus-within 浮现（无 hover 设备常显）。
+- **assistant**：Markdown 流式渲染（结尾光标闪烁）；`reasoning` 块折叠单行（"✦ 思考 · 摘要"，默认收起，流式时摘要 shimmer，点开展开）；操作条：复制 / 分叉 / token pill / 时间戳，显隐规则同用户气泡；usage 徽标（`↑in ↓out`，hover 展开 cached/reasoning 明细）；`interrupted` 标记"已停止"。
+- **ToolCallCard**：默认折叠单行（工具图标 + 名称 + 参数摘要；运行中摘要 shimmer、失败红字；write/edit 有 diff 数据显示 +N -M），点击展开灰底卡，内容按 `tool/result.meta.render` 或 live 工具名映射：
+  | render | 工具 | 展开内容 |
   |---|---|---|
-  | terminal | exec | 黑底终端样式：命令头 + stdout/stderr 滚动（live 期间接 tool-output 帧），退出码徽标 |
+  | terminal | exec | 灰卡：`$命令` 头（状态点按退出码绿/红）+ exit 码徽标 + 复制；stdout/stderr 滚动（live 期间接 tool-output 帧），超 2000 字截断"查看全部" |
   | diff | write/edit | 文件路径头 + unified diff 着色（新增绿/删除红） |
-  | search | glob/grep | 查询词头 + 结果列表（path:line 可点击定位预览） |
-  | read | read | 路径头 + 行号代码块 |
-  | generic | activate_skill/task | 名称头 + 可展开内容 |
-- **task 子轨迹**：task 卡片默认收起显示"委派给 {subagent}"+ 状态；展开后渲染 `parent_call_id` 相同的嵌套事件序列（递归用同一套节点渲染，层级缩进 + 左侧竖线）。
-- **ApprovalCard**：`approval/asked` 且 pending → 消息流内嵌卡片：工具名 + 参数展示（exec 命令高亮 / write/edit 显示 diff）+ 「允许」「拒绝」按钮 + 10 分钟倒计时；已 decided 或 auto-deny 显示结果态。点击调 REST 或 uplink（实现任选，协议等价）。
-- **消息分叉**（M4）：hover 消息节点显示分叉按钮（GitFork 图标，tooltip "从这条消息分叉出新会话"）；点击调 `POST /sessions/{id}/fork {at_seq}`，成功后跳转新会话（标题自动带"（分叉）"）。
+  | search | glob/grep | 查询词头 + 结果列表（path:line） |
+  | read | read | 路径头 + 内容代码块 |
+  | generic | activate_skill/task | 参数 + 结果等宽文本 |
+- **task 子轨迹**：task 卡折叠行显示"委派给 {subagent}：任务摘要"，收起时附"N 条嵌套轨迹"；展开后渲染 `parent_call_id` 相同的嵌套事件序列（递归用同一套节点渲染，层级缩进 + 左侧竖线）。
+- **审批**：顶层待审批不在消息流渲染小卡，由 composer 位的 ApprovalTakeover 接管（见 §6.2）；嵌套子智能体审批（task 卡内）保持消息流内嵌小卡：工具名 + 参数展示（exec 命令高亮 / write/edit 显示 diff）+ 「允许」「拒绝」按钮 + 10 分钟倒计时。已 decided 或 auto-deny 的审批显示结果态一行。点击调 REST 或 uplink（实现任选，协议等价）。
+- **消息分叉**（M4）：助手消息操作条与嵌套用户消息操作条内有分叉按钮（GitFork 图标，tooltip "从这条消息分叉出新会话"）；点击调 `POST /sessions/{id}/fork {at_seq}`，成功后跳转新会话（标题自动带"（分叉）"）。侧栏会话行菜单另有"分叉会话"（从末尾分叉）。
+- **滚动与流式指示**：自己刚发消息或已在底部时吸底跟随新内容；上翻阅读时不拉底；离底出"回到底部"浮钮。运行中列表底部显示"工作中，用时 Ns"蓝色 shimmer。
 
 ### 6.2 Composer（输入区）
 
-- 多行输入（Enter 发送 / Shift+Enter 换行）；发送按钮在 `running` 时变为**停止**（POST cancel）。
-- 左下：确认模式三段切换（`严格：全部确认 / 默认：仅命令确认 / 自动：全部放行`）→ PATCH session。
-- 右下：模型切换下拉（`/orgs/{org}/models`）+ token 用量徽标。
+- 胶囊卡（rounded-[28px]、柔和投影）：多行输入自适应长高，约 14 行封顶后内部滚动；Enter 发送 / Shift+Enter 换行；右下角 34px 蓝圆发送钮，会话 running 且无草稿时变为**停止**（POST cancel）。
+- 底行左侧：确认模式 chip 下拉（`严格：全部确认 / 默认：仅命令确认 / 自动：全部放行`，盾牌图标 + 描述，当前项加粗 + ✓）→ PATCH session。
+- 底行右侧：token 用量徽标 + 模型切换下拉（`/orgs/{org}/models`，按供应商分组，模型数 >4 时下拉顶部出搜索框）。
 - 乐观对账：发送即插入乐观节点（`request_id`），事件帧到达后替换（protocol.md §8.4）。
 - 会话 running 且来自**本会话**时不允许再发送（置灰 + 提示）；429/409 错误 toast。
+- **ApprovalTakeover**：顶层待审批时整个胶囊位被审批卡接管——琥珀描边卡：「等待审批 + 倒计时」头 + 工具参数明细（exec 命令高亮 / write/edit diff）+ 「拒绝」「允许一次」按钮；Enter 允许 / Esc 拒绝。嵌套审批不触发 takeover；仅聊天标签页渲染（轨迹标签页不渲染）。
+- **StatsPills**：胶囊下方居中统计（"N 轮 · M 步"、"X tok · 缓存命中 N%"），由会话事件投影在前端推导，无新增接口。
 
 ### 6.3 轨迹视图（features/trajectory）
 
-同一 store 数据的另一投影：按 `turn → step → (model request | tool calls)` 时间线展示；每节点显示 seq、时间、耗时（step 边界差值）、usage；默认折叠消息正文、展开工具与审批——用于调试 Agent 行为。tab 切换不重新取数。
+同一 store 数据的另一投影：按 `turn → step → (model request | tool calls)` 时间线展示；每节点显示 seq、时间、耗时（step 边界差值）、usage；消息正文与工具卡片默认折叠、点击展开；顶层待审批不在此渲染内嵌小卡（由聊天标签页的 ApprovalTakeover 处理），嵌套审批仍内嵌——用于调试 Agent 行为。tab 切换不重新取数。
 
 ### 6.4 沙箱面板（右侧，可折叠）
 
@@ -129,9 +133,10 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 
 ## 7. 侧栏（sessions + agents）
 
+- 宽度 280px，背景 `bg-sidebar`（#FAFAFB）。
 - 顶部：机构切换器 + 用户菜单（改密、退出）。
 - 智能体列表（AgentPicker）：本机构 published 智能体；点击 → POST 创建会话并跳转。
-- 会话列表：标题（自动生成中显示"新会话"）、running 呼吸点、相对时间；右键菜单：重命名 / 归档 / 删除（确认对话框）。数据源 `control` 流投影。
+- 会话列表：搜索框（防抖调 REST）+ 行项：标题（自动生成中显示"新会话"）、running 呼吸点、紧凑相对时间（刚刚/N分/N时/N天/M月D日）；hover 浮现 "…" 菜单：重命名 / 分叉会话 / 归档 / 删除（删除需确认对话框）；悬停出深色 HoverCard（标题 / 时间 / 运行状态）。数据源 `control` 流投影。
 - 底部入口：机构管理（admin 可见）、平台管理（超管可见）。
 
 ## 8. 智能体编辑器（features/admin/AgentEditor）
@@ -159,8 +164,10 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 
 ## 10. 视觉与体验基线
 
-- 主题：浅色默认 + 深色跟随系统（Tailwind `class` 策略）。
-- 字体：系统栈；代码 JetBrains Mono / ui-monospace。
+- 主题：浅色默认 + 深色跟随系统（Tailwind `class` 策略）。语义色经 CSS 变量 + Tailwind 扩展：`primary` 蓝 #4176E6、`sidebar` #FAFAFB、用户气泡 `bubble` #EDF3FE、`success`/`warning`、三级文字 `fg-secondary/tertiary/caption`、`tooltip`/`toast` 深色底。
+- 字体：系统栈（-apple-system / Segoe UI / PingFang SC 等）；等宽 SF Mono / JetBrains Mono / Consolas。
 - 密度：harness 式紧凑信息密度（消息间距小、卡片边框细、弱化阴影）。
-- 空态：无会话时中央 AgentPicker 大卡；无智能体时引导去管理页创建（admin）或联系管理员（member）。
+- 代码块：头部语言标签 + 复制钮；shiki 高亮按需加载语言。
+- 反馈：toast 用 sonner，深色横幅、顶部居中、3s；tooltip 深色底。
+- 空态：工作区首页 hero（"开始新的对话"标题 + 智能体卡片网格 + 最近会话列表）；无智能体时引导去管理页创建（admin）或联系管理员（member）。
 - 加载：会话切换骨架屏；followStatus=stalled 时顶栏提示"连接已断开，重连中…"。
