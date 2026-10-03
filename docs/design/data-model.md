@@ -11,7 +11,7 @@
 ## 0. 列 vs JSON 的取舍约定（避免频繁改表结构）
 
 - 用于 **WHERE / JOIN / ORDER BY / 唯一约束** 的字段必须是独立列（org_id、status、role、name、seq …）。
-- **纯配置、展示、扩展性字段优先进 JSON 列**：`model_provider.extra`、`model.capabilities`、`model.default_params`、`agent.model_params`、`agent.tools_enabled`、`agent.sandbox_config`、`session.agent_snapshot`、`session.sandbox`、`session.usage_total`、`session_event.data`、`platform_setting.value`、`audit_log.detail`。
+- **纯配置、展示、扩展性字段优先进 JSON 列**：`model_provider.extra`、`model.capabilities`、`model.default_params`、`agent.model_params`、`agent.tools_enabled`、`agent.sandbox_config`、`session.agent_snapshot`、`session.model_params`、`session.sandbox`、`session.usage_total`、`session_event.data`、`platform_setting.value`、`audit_log.detail`。
 - **未来新增配置项默认并入既有 JSON 列**（如新增沙箱旋钮 → `agent.sandbox_config`），只有需要查询/关联时才新增独立列并写 migration。
 
 ## 1. 迁移与种子
@@ -101,7 +101,8 @@ CREATE TABLE model (
   provider_id    CHAR(32)     NOT NULL,
   model_code     VARCHAR(128) NOT NULL,                 -- 调 API 的模型名：deepseek-chat / doubao-pro-32k / qwen-max
   display_name   VARCHAR(128) NOT NULL,
-  capabilities   JSON         NOT NULL,                 -- {"tools":true,"reasoning":true,"vision":false,"streaming":true}
+  capabilities   JSON         NOT NULL,                 -- {"tools":true,"reasoning":true,"vision":false,"streaming":true,
+                                                        --  "reasoning_efforts":["low","medium","high"],"reasoning_effort_default":"medium"}（后两个可选；空 = 不支持选档）
   context_size   INT          NOT NULL DEFAULT 64000,   -- tokens
   default_params JSON         NULL,                     -- {"temperature":0.7,"max_tokens":4096,...}
   status         VARCHAR(16)  NOT NULL DEFAULT 'active',
@@ -206,8 +207,9 @@ CREATE TABLE session (
   agent_snapshot JSON         NOT NULL,                 -- 创建时 Agent 全量配置快照（含 skills/subagents 解析结果）
   title          VARCHAR(256) NOT NULL DEFAULT '',
   title_pinned   TINYINT(1)   NOT NULL DEFAULT 0,
-  approval_mode  VARCHAR(16)  NOT NULL DEFAULT 'default', -- strict / default / auto
+  approval_mode  VARCHAR(16)  NOT NULL DEFAULT 'auto',    -- strict / default / auto
   model_id       CHAR(32)     NOT NULL,                 -- 会话级模型（创建时=agent.model_id，可切换）
+  model_params   JSON         NULL,                     -- 会话级模型参数（如 {"reasoning_effort":"high"}），覆盖 agent.model_params；思考强度在 last_seq>0 后锁定
   sandbox        JSON         NOT NULL,                 -- {"id":"","status":"none"}；status: none/creating/running/recycled/failed
   last_seq       BIGINT       NOT NULL DEFAULT 0,       -- 事件投影游标
   running        TINYINT(1)   NOT NULL DEFAULT 0,

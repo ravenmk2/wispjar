@@ -75,11 +75,12 @@ type AgentRef struct {
 
 type Detail struct {
 	store.Session
-	Agent AgentRef `json:"agent"`
+	Agent        AgentRef `json:"agent"`
+	EffortLocked bool     `json:"effort_locked"`
 }
 
 func detailOf(sess *store.Session) *Detail {
-	d := &Detail{Session: *sess}
+	d := &Detail{Session: *sess, EffortLocked: sess.LastSeq > 0}
 	var snap struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
@@ -91,8 +92,9 @@ func detailOf(sess *store.Session) *Detail {
 }
 
 type CreateInput struct {
-	AgentID string
-	Title   string
+	AgentID         string
+	Title           string
+	ReasoningEffort string
 }
 
 func (s *Service) Create(ctx context.Context, actorID, orgID string, in CreateInput) (*Detail, error) {
@@ -122,6 +124,10 @@ func (s *Service) Create(ctx context.Context, actorID, orgID string, in CreateIn
 	if err != nil {
 		return nil, err
 	}
+	modelParams, err := s.createModelParams(ctx, a.ModelID, in.ReasoningEffort)
+	if err != nil {
+		return nil, err
+	}
 	sess := store.Session{
 		ID:            id.New(),
 		OrgID:         orgID,
@@ -130,8 +136,9 @@ func (s *Service) Create(ctx context.Context, actorID, orgID string, in CreateIn
 		AgentSnapshot: snapRaw,
 		Title:         title,
 		TitlePinned:   title != "",
-		ApprovalMode:  ApprovalDefault,
+		ApprovalMode:  ApprovalAuto,
 		ModelID:       a.ModelID,
+		ModelParams:   modelParams,
 		Sandbox:       defaultSandbox,
 		UsageTotal:    zeroUsage(),
 		Status:        StatusActive,
@@ -141,6 +148,89 @@ func (s *Service) Create(ctx context.Context, actorID, orgID string, in CreateIn
 		return nil, err
 	}
 	return detailOf(&sess), nil
+}
+
+// capabilities 是会话域关心的 model.capabilities 子集（思考强度档位声明）。
+type capabilities struct {
+	ReasoningEfforts       []string `json:"reasoning_efforts"`
+	ReasoningEffortDefault string   `json:"reasoning_effort_default"`
+}
+
+func (s *Service) modelCapabilities(ctx context.Context, modelID string) (capabilities, error) {
+	var m store.Model
+	if err := s.db.WithContext(ctx).Select("capabilities").First(&m, "id = ?", modelID).Error; err != nil {
+		return capabilities{}, err
+	}
+	caps := capabilities{}
+	_ = json.Unmarshal(m.Capabilities, &caps)
+	return caps, nil
+}
+
+// createModelParams 计算新会话的 model_params：显式档位校验值域；
+// 缺省回落模型默认档；无默认则不注入（NULL）。
+func (s *Service) createModelParams(ctx context.Context, modelID, effort string) (json.RawMessage, error) {
+	caps, err := s.modelCapabilities(ctx, modelID)
+	if err != nil {
+		return nil, err
+	}
+	effort = strings.TrimSpace(effort)
+	if effort == "" {
+		effort = caps.ReasoningEffortDefault
+	} else if !effortAllowed(caps, effort) {
+		return nil, errEffortInvalid(effort, caps)
+	}
+	if effort == "" {
+		return nil, nil
+	}
+	return json.Marshal(map[string]any{"reasoning_effort": effort})
+}
+
+func effortAllowed(caps capabilities, effort string) bool {
+	for _, e := range caps.ReasoningEfforts {
+		if e == effort {
+			return true
+		}
+	}
+	return false
+}
+
+func errEffortInvalid(effort string, caps capabilities) *Error {
+	return errInvalid("reasoning_effort 不在目标模型支持的档位内",
+		map[string]any{"field": "reasoning_effort", "value": effort, "allowed": caps.ReasoningEfforts})
+}
+
+// currentEffort 从 model_params 取当前 reasoning_effort（无则空串）。
+func currentEffort(raw json.RawMessage) string {
+	m := map[string]any{}
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &m)
+	}
+	s, _ := m["reasoning_effort"].(string)
+	return s
+}
+
+// planEffortUpdate 校验并计算一次 effort 改档（api.md §3）：
+// last_seq > 0 锁档返回 409 session/effort_locked；值须在目标模型
+// capabilities.reasoning_efforts 内；成功后并入既有 model_params 的其它键。
+func planEffortUpdate(sess *store.Session, caps capabilities, effort string) (json.RawMessage, error) {
+	if sess.LastSeq > 0 {
+		return nil, &Error{Status: http.StatusConflict, Code: "session/effort_locked",
+			Message: "对话开始后不可更改思考强度",
+			Details: map[string]any{"reasoning_effort": currentEffort(sess.ModelParams)}}
+	}
+	effort = strings.TrimSpace(effort)
+	if effort == "" {
+		return nil, errInvalid("reasoning_effort 不能为空", map[string]any{"field": "reasoning_effort"})
+	}
+	if !effortAllowed(caps, effort) {
+		return nil, errEffortInvalid(effort, caps)
+	}
+	m := map[string]any{}
+	if len(sess.ModelParams) > 0 {
+		_ = json.Unmarshal(sess.ModelParams, &m)
+	}
+	m["reasoning_effort"] = effort
+	return json.Marshal(m)
 }
 
 type ListFilter struct {
@@ -245,10 +335,11 @@ func (s *Service) Get(ctx context.Context, uid, sessionID string) (*Detail, erro
 }
 
 type UpdateInput struct {
-	Title        *string
-	ApprovalMode *string
-	Status       *string
-	ModelID      *string
+	Title           *string
+	ApprovalMode    *string
+	Status          *string
+	ModelID         *string
+	ReasoningEffort *string
 }
 
 func (s *Service) Update(ctx context.Context, uid, sessionID string, in UpdateInput) (*Detail, error) {
@@ -295,6 +386,22 @@ func (s *Service) Update(ctx context.Context, uid, sessionID string, in UpdateIn
 		}
 		updates["model_id"] = modelID
 		events = append(events, EventInput{Type: EventModelSelection, Data: ModelSelectionData{ModelID: modelID, ChangedBy: uid}})
+	}
+	if in.ReasoningEffort != nil {
+		modelID := sess.ModelID
+		if in.ModelID != nil {
+			modelID = strings.TrimSpace(*in.ModelID)
+		}
+		caps, err := s.modelCapabilities(ctx, modelID)
+		if err != nil {
+			return nil, err
+		}
+		raw, err := planEffortUpdate(sess, caps, *in.ReasoningEffort)
+		if err != nil {
+			return nil, err
+		}
+		updates["model_params"] = raw
+		events = append(events, EventInput{Type: EventSessionEffort, Data: SessionEffortData{Effort: currentEffort(raw), ChangedBy: uid}})
 	}
 	if len(updates) == 0 {
 		return detailOf(sess), nil

@@ -65,6 +65,10 @@ type Capabilities struct {
 	Reasoning bool `json:"reasoning"`
 	Vision    bool `json:"vision"`
 	Streaming bool `json:"streaming"`
+	// ReasoningEfforts 声明模型支持的思考强度档位（如 ["low","medium","high"]）；
+	// 缺省/空 = 不支持选档。ReasoningEffortDefault 为缺省注入档位，须 ∈ ReasoningEfforts。
+	ReasoningEfforts       []string `json:"reasoning_efforts,omitempty"`
+	ReasoningEffortDefault string   `json:"reasoning_effort_default,omitempty"`
 }
 
 type ProviderView struct {
@@ -504,8 +508,19 @@ func parseCapabilities(raw json.RawMessage) (json.RawMessage, error) {
 	caps := Capabilities{}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &caps); err != nil {
-			return nil, errInvalid("capabilities 必须是 {tools, reasoning, vision, streaming} 布尔对象", nil)
+			return nil, errInvalid("capabilities 必须是 {tools, reasoning, vision, streaming} 布尔对象（可选 reasoning_efforts/reasoning_effort_default）", nil)
 		}
+	}
+	seen := map[string]bool{}
+	for _, e := range caps.ReasoningEfforts {
+		e = strings.TrimSpace(e)
+		if e == "" || seen[e] {
+			return nil, errInvalid("reasoning_efforts 必须是非空且不重复的字符串数组", nil)
+		}
+		seen[e] = true
+	}
+	if caps.ReasoningEffortDefault != "" && !seen[caps.ReasoningEffortDefault] {
+		return nil, errInvalid("reasoning_effort_default 必须在 reasoning_efforts 内", map[string]any{"default": caps.ReasoningEffortDefault})
 	}
 	b, err := json.Marshal(caps)
 	if err != nil {

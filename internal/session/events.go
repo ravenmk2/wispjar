@@ -15,6 +15,7 @@ const (
 	EventSessionTitle        = "session/title"
 	EventSessionSandbox      = "session/sandbox"
 	EventSessionApprovalMode = "session/approval-mode"
+	EventSessionEffort       = "session/effort"
 	EventModelSelection      = "model/selection"
 	EventRequestHeader       = "request/header"
 	EventApprovalAsked       = "approval/asked"
@@ -133,6 +134,11 @@ type ApprovalModeData struct {
 
 type ModelSelectionData struct {
 	ModelID   string `json:"model_id"`
+	ChangedBy string `json:"changed_by"`
+}
+
+type SessionEffortData struct {
+	Effort    string `json:"effort"`
 	ChangedBy string `json:"changed_by"`
 }
 

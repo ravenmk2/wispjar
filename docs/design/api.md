@@ -28,6 +28,7 @@
 | 404 | `*/not_found` | 资源不存在或无权访问（不区分，防枚举） |
 | 409 | `*/conflict` | 唯一性冲突（username、skill name 等） |
 | 409 | `session/running` | 会话有进行中的 turn，冲突操作（如重复 prompt 未走队列） |
+| 409 | `session/effort_locked` | 对话已开始（`last_seq > 0`），思考强度不可再改（details 含当前值） |
 | 409 | `approval/not_pending` | 审批已决定或已过期 |
 | 410 | `approval/expired` | 审批超时 |
 | 422 | `skill/invalid` | skill zip 校验失败（details 含原因） |
@@ -82,10 +83,11 @@
 创建会话。请求：
 
 ```json
-{ "agent_id": "...", "title": "可选，默认空（首条 prompt 后自动生成）" }
+{ "agent_id": "...", "title": "可选，默认空（首条 prompt 后自动生成）", "reasoning_effort": "可选，思考强度档位" }
 ```
 
 - 校验 agent 属于该机构且 `status=published`。
+- `reasoning_effort` 必须在目标模型 `capabilities.reasoning_efforts` 内，否则 400；缺省 = 模型的 `reasoning_effort_default`，模型未配默认则不注入。生效值写入 `session.model_params`（如 `{"reasoning_effort":"high"}`）。
 - 服务端：写 `session`（`agent_snapshot` 为创建时刻 Agent 全量配置 + 解析后的 skills/subagents 清单；`model_id=agent.model_id`）→ 201 返回会话对象。
 
 ### GET /api/v1/orgs/{orgId}/sessions
@@ -95,12 +97,13 @@
 
 ### GET /api/v1/sessions/{id}
 
-会话详情（owner）：会话对象全字段 + `agent`（快照中的名称/描述/头像）。
+会话详情（owner）：会话对象全字段（含 `model_params`）+ `agent`（快照中的名称/描述/头像）+ 派生 `effort_locked`（`last_seq > 0`，思考强度是否已锁定）。
 
 ### PATCH /api/v1/sessions/{id}
 
-请求（均可选）：`{ "title": "...(改名并 title_pinned=1)", "approval_mode": "strict|default|auto", "status": "active|archived", "model_id": "...(会话级切换模型)" }`
-- 改 `approval_mode` 追加 `session/approval-mode` 事件；改 `model_id` 追加 `model/selection` 事件（事件词表见 protocol.md §6）。
+请求（均可选）：`{ "title": "...(改名并 title_pinned=1)", "approval_mode": "strict|default|auto", "status": "active|archived", "model_id": "...(会话级切换模型)", "reasoning_effort": "...(思考强度档位)" }`
+- 改 `approval_mode` 追加 `session/approval-mode` 事件；改 `model_id` 追加 `model/selection` 事件；改 `reasoning_effort` 追加 `session/effort` 事件（事件词表见 protocol.md §6）。
+- `reasoning_effort` 仅当 `last_seq = 0`（对话未开始）可设置；`last_seq > 0` 返回 409 `session/effort_locked`（details 带当前值）。值必须在目标模型 `capabilities.reasoning_efforts` 内，否则 400（同请求改 `model_id` 时按新模型校验）。
 
 ### DELETE /api/v1/sessions/{id}
 
@@ -124,7 +127,7 @@
 
 ### POST /api/v1/sessions/{id}/fork （M4）
 
-请求 `{ "at_seq": 42 }` → 从该事件点分叉出新会话（复制 ≤at_seq 的事件 + 快照，标题追加"（分叉）"），201 返回 `{ "id": "<新会话 id>" }`；`at_seq` 不在 `1..last_seq` 时 400。
+请求 `{ "at_seq": 42 }` → 从该事件点分叉出新会话（复制 ≤at_seq 的事件 + 快照 + `model_params`，标题追加"（分叉）"），201 返回 `{ "id": "<新会话 id>" }`；`at_seq` 不在 `1..last_seq` 时 400。分叉会话 `last_seq ≥ 1`，思考强度天然处于锁定态。
 
 ### GET /api/v1/sessions/{id}/events
 

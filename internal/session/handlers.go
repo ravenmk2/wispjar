@@ -29,8 +29,9 @@ func fail(c *gin.Context, err error) {
 }
 
 type createSessionRequest struct {
-	AgentID string `json:"agent_id" binding:"required"`
-	Title   string `json:"title"`
+	AgentID         string `json:"agent_id" binding:"required"`
+	Title           string `json:"title"`
+	ReasoningEffort string `json:"reasoning_effort"`
 }
 
 func (h *Handler) CreateSession(c *gin.Context) {
@@ -76,10 +77,11 @@ func (h *Handler) GetSession(c *gin.Context) {
 }
 
 type patchSessionRequest struct {
-	Title        *string `json:"title"`
-	ApprovalMode *string `json:"approval_mode"`
-	Status       *string `json:"status"`
-	ModelID      *string `json:"model_id"`
+	Title           *string `json:"title"`
+	ApprovalMode    *string `json:"approval_mode"`
+	Status          *string `json:"status"`
+	ModelID         *string `json:"model_id"`
+	ReasoningEffort *string `json:"reasoning_effort"`
 }
 
 func (h *Handler) PatchSession(c *gin.Context) {

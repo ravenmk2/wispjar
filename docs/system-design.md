@@ -41,7 +41,7 @@ WispJar 是一个多租户智能体平台：
 | 5 | Agent 形态 | 单 Agent ReAct + `task` 工具委派子 Agent（子 Agent 独立上下文执行、返回最终结果） |
 | 6 | 沙箱粒度 | 每会话独占；首次调用沙箱工具时惰性创建，会话内复用，空闲超时自动回收 |
 | 7 | 前后端协议 | 所有 API 以 `/api` 开头：CRUD/动作走 REST，实时走单条 WebSocket 多路复用流（`/api/ws`） |
-| 8 | 工具确认 | 会话级三模式，用户自行切换：`strict`（exec/write/edit 全确认）/ `default`（仅 exec 确认）/ `auto`（全免确认） |
+| 8 | 工具确认 | 会话级三模式，用户自行切换：`strict`（exec/write/edit 全确认）/ `default`（仅 exec 确认）/ `auto`（全免确认，新会话默认） |
 | 9 | 普通用户边界 | 仅对话使用 + 管理自己的会话；会话对机构管理员也不可见（仅本人） |
 | 10 | 用量 | 记录 token 用量并按机构/用户/智能体/模型聚合，管理后台报表展示，无硬配额 |
 | 11 | 前端技术栈 | React 18 + Vite + TypeScript + Tailwind + shadcn/ui + Zustand + React Router |
@@ -50,6 +50,7 @@ WispJar 是一个多租户智能体平台：
 | 14 | 数据库 | MySQL 8；主键 UUIDv7 时序版、去掉 `-`（32 位 hex，`CHAR(32)`） |
 | 15 | 后端框架 | Go + gin + cloudwego/eino（`adk.ChatModelAgent` + `adk.Runner`）+ eino-ext 模型组件 |
 | 16 | 沙箱接入 | OpenSandbox 官方 Go SDK（lifecycle REST + execd API） |
+| 17 | 缓存命中优先 | 模型上下文缓存按输入前缀命中，system/历史前缀稳定优先于一切动态内容注入；原则清单与评审基线见 runtime.md §12《缓存命中优先设计原则》 |
 
 ## 3. 术语
 

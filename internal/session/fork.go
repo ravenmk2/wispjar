@@ -70,6 +70,7 @@ func planFork(src *store.Session, events []store.SessionEvent, atSeq int64, newI
 		TitlePinned:   src.TitlePinned,
 		ApprovalMode:  src.ApprovalMode,
 		ModelID:       src.ModelID,
+		ModelParams:   src.ModelParams,
 		Sandbox:       defaultSandbox,
 		LastSeq:       atSeq,
 		Running:       false,

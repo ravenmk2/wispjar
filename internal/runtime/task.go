@@ -145,6 +145,12 @@ func (o *orchestrator) buildSubAgent(ctx context.Context, sess *store.Session, s
 	if len(sub.ModelParams) > 0 {
 		_ = json.Unmarshal(sub.ModelParams, &params)
 	}
+	// 子 Agent 未显式指定 effort 时继承父会话锁定的档位（runtime.md §6）。
+	if _, ok := params["reasoning_effort"]; !ok {
+		if effort, ok := sessionEffort(sess.ModelParams); ok {
+			params["reasoning_effort"] = effort
+		}
+	}
 	chatModel, err := o.deps.Models.NewChatModel(ctx, sub.Model.ID, params)
 	if err != nil {
 		return nil, err
@@ -173,7 +179,7 @@ func (o *orchestrator) buildSubAgent(ctx context.Context, sess *store.Session, s
 	return adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:        sub.ID,
 		Description: sub.Description,
-		Instruction: renderInstruction(subSnap, sess.ApprovalMode),
+		Instruction: renderInstruction(subSnap, sess),
 		Model:       chatModel,
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{

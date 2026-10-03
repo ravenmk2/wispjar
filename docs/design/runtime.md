@@ -38,10 +38,14 @@ type Orchestrator interface {
 ## 2. Agent 构建（按会话快照）
 
 ```go
-func buildAgent(ctx context.Context, snap AgentSnapshot, deps Deps) (adk.Agent, error) {
-    chatModel := deps.ProviderFactory.NewChatModel(ctx, snap.ModelID, snap.ModelParams) // §3
-    tools := buildTools(ctx, snap, deps)                                               // §4
-    instruction := renderInstruction(snap)                                             // system_prompt + Skills 索引段 + 运行时变量
+func buildAgent(ctx context.Context, sess Session, snap AgentSnapshot, deps Deps) (adk.Agent, error) {
+    params := merge(snap.ModelParams, sess.ModelParams)                 // 会话级覆盖 Agent 级；factory 内再叠 model.default_params
+    if deps.ProviderType(ctx, modelID) == "ark" {
+        params["prompt_cache_key"] = sess.ID                            // ark 上下文缓存路由亲和（§3）
+    }
+    chatModel := deps.ProviderFactory.NewChatModel(ctx, modelID, params) // §3
+    tools := buildTools(ctx, snap, deps)                                 // §4
+    instruction := renderInstruction(snap, sess)                         // system_prompt + Skills 索引段 + 运行时变量
     return adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
         Name: snap.AgentID, Description: snap.Description,
         Instruction: instruction, Model: chatModel,
@@ -51,8 +55,9 @@ func buildAgent(ctx context.Context, snap AgentSnapshot, deps Deps) (adk.Agent, 
 }
 ```
 
-- `renderInstruction`：`agent.system_prompt` + 拼接"## 可用 Skills"索引段（每条 `- {name}: {description}`，提示"用 activate_skill 工具加载完整说明"）+ 末尾注入运行事实（当前日期、沙箱工作目录 `/workspace`、确认模式说明——strict 模式下提示模型"危险操作会被用户审查"）。
+- `renderInstruction`：`agent.system_prompt` + 拼接"## 可用 Skills"索引段（每条 `- {name}: {description}`，提示"用 activate_skill 工具加载完整说明"）+ 末尾注入运行事实（**会话创建日期**（`sess.CreatedAt`，非 `time.Now`——system 是 messages[0]，逐天变化会让其后全部历史的缓存前缀失配，见《缓存命中优先设计原则》§12）、沙箱工作目录 `/workspace`、确认模式说明——strict 模式下提示模型"危险操作会被用户审查"）。
 - 会话级 `model_id`（用户切换过）覆盖快照中的 model。
+- 模型参数三级优先级：**会话 `session.model_params` > Agent 快照 `model_params` > 模型 `default_params`**。会话级承载用户选档（如 `{"reasoning_effort":"high"}`），创建时缺省 = 模型 `capabilities.reasoning_effort_default`；`last_seq > 0` 后锁定（锁档理由：DeepSeek 思考模式带 tools 时要求完整回放历史 `reasoning_content`，中途换档会改变每轮输出形态与回放义务；且同会话内推理深度/时延/成本跳变体验断裂。effort 是请求级参数、不进消息前缀，与前缀缓存无关）。
 
 ## 3. 供应商工厂（internal/provider）
 
@@ -63,10 +68,14 @@ type ChatModelFactory interface {
 }
 ```
 
-- 分派：`deepseek|openai_compat` → `eino-ext/components/model/openai`（BaseURL+APIKey）；`qwen` → `eino-ext/components/model/qwen`；`ark` → `eino-ext/components/model/ark`。
-- 密钥解密仅在工厂内部（data-model.md §5 加密约定）；ChatModel 实例按 `(model_id, hash(params))` sync.Map 缓存。
-- 参数映射：`temperature/max_tokens/top_p` → 各组件 Option；`capabilities.reasoning=true` 且组件支持时开启 reasoning 输出。
-- M2 首周 spike：三家供应商真实连通（工具调用 + 流式 + usage 回收），择优固化；若官方组件缺陷，DeepSeek/千问退化到 openai 兼容端点。
+- 分派：v1 所有供应商类型（`deepseek/ark/qwen/openai_compat`）统一走 `eino-ext/components/model/openai` 兼容组件（BaseURL+APIKey）。
+- 密钥解密仅在工厂内部（data-model.md §5 加密约定）；ChatModel 实例按 `(model_id, hash(params))` sync.Map 缓存——参数变化（含 effort 档位）经 paramsHash 自然分实例。
+- 参数映射（白名单，未识别键忽略）：
+  - `temperature/top_p/max_tokens` → 组件对应字段；
+  - `reasoning_effort`（string）→ `cfg.ReasoningEffort`，任意值透传（OpenAI 兼容顶层标准字段；`capabilities.reasoning=true` 且组件支持时开启 reasoning 输出）；
+  - `provider_type=="qwen"` 特化：千问无枚举档位，`enable_thinking`/`thinking_budget` 为非标准顶层参数，按固定映射进 `ExtraFields`——`minimal`→`{"enable_thinking":false}`；`low/medium/high`→`{"enable_thinking":true,"thinking_budget":1024/8192/32768}`；`max`→32768；未识别值忽略不透传；
+  - `prompt_cache_key`（string）→ `cfg.ExtraFields`：ark 上下文缓存的路由亲和参数，上下文连续的请求用同一取值（builder 对 ark 供应商注入 `sessionID`，同 key 流量 ≤15 rpm）。
+- 模型能力声明 `capabilities.reasoning_efforts`（可选档位列表）+ `reasoning_effort_default`（缺省档）由平台逐模型录入；空 = 不支持选档。
 
 ## 4. 工具规格（模型可见 schema）
 
@@ -214,7 +223,7 @@ func NewTaskTool(snap AgentSnapshot, deps Deps) tool.InvokableTool // snap.SubAg
 执行流程：
 
 1. 校验 `subagent` 在快照的可委派清单（名称大小写不敏感匹配）。
-2. 构建子 Agent：子 Agent 快照（创建会话时随 agent_snapshot 固化）+ **共享 ctx 中的 SandboxHandle** + `depth=1`（子 Agent 不注册 task 工具）。
+2. 构建子 Agent：子 Agent 快照（创建会话时随 agent_snapshot 固化）+ **共享 ctx 中的 SandboxHandle** + `depth=1`（子 Agent 不注册 task 工具）。模型参数：子 Agent `model_params` 显式指定 `reasoning_effort` 时用子 Agent 的，否则继承父会话锁定的档位（同会话内输出形态/成本一致）。
 3. 独立上下文运行：`adk.Runner.Run(ctx, []Message{UserMessage(prompt)})`——**不带主会话历史**。
 4. 事件嵌套：消费子 AgentEvent 流，翻译为会话事件时全部附加 `parent_call_id=<本次 task 的 call_id>`（含 turn/step 用子序列 `sub_turn`/`sub_step` 字段避免与主冲突：data 内用 `turn:0, sub_turn:N` 表达，前端按 parent_call_id 聚合）。
 5. 结果合成：取子 Agent 最终 assistant 消息文本作为 `output`；`stopReason != completed` 时按"错误标题 + Diagnostic + Partial output"合成 error（参考 §4.8 返回约定）。
@@ -264,7 +273,7 @@ type Handle struct {
 
 ### 8.1 上下文管理（v1）
 
-- derive 后估算 tokens（粗估：字符数/4 或按供应商 tokenizer 可后补）；超过 `context_size * 0.8` → 从最老非 system 消息起丢弃，**tool 消息与其 assistant tool-call 块成对处理**；仍超 → 返回错误事件建议用户开新会话。
+- derive 后估算 tokens（粗估：字符数/4 或按供应商 tokenizer 可后补）；超过 `context_size * 0.8` → **按 turn 整块丢弃**：从最早的用户轮次开始整轮（user 消息 + 后续 assistant/tool 消息）丢弃直到估算量达标；system 恒保留；单轮即超窗 → 返回错误事件建议用户开新会话。裁剪边界恒落在轮次边界，不随每轮新增内容逐条漂移（《缓存命中优先设计原则》§12 第 7 条）。
 - M4：接 `adk/middlewares/summarization` 自动摘要（事件侧 `compaction/summary`）。
 
 ### 8.2 取消
@@ -300,3 +309,20 @@ exec 的流式 stdout 为增强体验，在 `tool/result` 落库前经瞬态帧�
 - 挂 eino 全局 callbacks handler：`OnEndWithStreamOutputFn` 读 `ResponseMeta.Usage`；每个 step 结束把 usage 暂存 turn 上下文。
 - `assistant/message` 提交时写入事件 `data.usage`；异步 worker 按事件日期 `INSERT ... ON DUPLICATE KEY UPDATE` 聚合到 `usage_daily`（子 Agent 用量记主 Agent，事件保留 `sub_agent_id`）。
 - 中断/失败 attempt 的 usage 记入 `assistant/attempt` 事件但不聚合（口径：只计成功产出，报表页注明）。
+
+## 12. 缓存命中优先设计原则
+
+> 背景：DeepSeek / ark / qwen 的上下文缓存均按**输入 token 前缀**命中（system 在 messages[0]，其后任何一个字节变化都会让其后的全部历史前缀失配；tools 定义在 token 化时位于消息之前，同理）。下列原则是运行时与协议变更的评审基线；前缀命中率经 `usage.prompt_tokens_details.cached_tokens` 观测。
+
+1. **前缀稳定第一**：进入 messages[0]（system）或历史消息前缀的任何内容，必须在会话生命周期内逐字节不变。
+2. **system 是冻结区**：system 中禁止出现 `time.Now`、请求 ID、随机数、在线计数等逐轮/逐天变化值；必需的时间上下文用会话创建时刻（如"当前日期"取 `sess.CreatedAt`），或放首条 user 消息。
+3. **会话快照即缓存契约**：会话创建时的 `agent_snapshot` 固定 system、tools、skills 索引；运行期配置变更只作用于新会话，此契约不可回退。
+4. **工具定义与顺序恒定**：tools 列表用显式有序 slice 注册，禁止 map 迭代；工具 schema/description 变更视为前缀变更，需评审对存量会话的影响。
+5. **动态内容一律后置**：时间戳、检索结果、易变状态只出现在消息尾部或工具结果中，永不进入 system 与历史前缀。
+6. **历史只追加不改写**：历史由事件确定性重放（derive），已落库内容永不编辑/重排；中断产生的部分消息一旦落库即冻结。
+7. **裁剪对齐边界**：上下文裁剪必须确定性、阶梯式——按 turn 整块丢弃（§8.1），禁止窗口起点随输入量逐条漂移；中长期以 compaction 摘要替换头部而非滑动窗口。
+8. **子智能体前缀自治**：子智能体独立上下文，不追求与父会话共享前缀；其 system 与工具定义须稳定，以命中平台级公共前缀缓存。
+9. **采样参数与缓存解耦**：`temperature/top_p`、`reasoning_effort` 等是请求级参数，不进消息前缀、不影响命中，只影响输出，纳入会话级配置稳定治理；接入 ark 显式缓存时保持 thinking/caching 字段逐轮一致。
+10. **命中可观测**：所有模型调用记录 cache_read/cache_write tokens（`usage.prompt_tokens_details.cached_tokens`），按会话/模型/供应商聚合；命中率突降视为回归。
+11. **供应商能力路由**：ark 会话设置稳定 `prompt_cache_key`（取 sessionID，同 key ≤15 rpm，§3）；认知各供应商最小命中粒度（ark/qwen 默认 1024 tokens），前缀过短场景不预期命中。
+12. **合理失效显式化**：新建会话（新快照）、skills/子智能体/模型配置变更后的新会话、超窗裁剪或 compaction、跨供应商切换属合理失效，在此列举评审；此外的任何前缀变化视为缺陷。

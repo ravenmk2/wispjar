@@ -86,15 +86,50 @@ func buildTools(tc *tools.Context, snap *agent.Snapshot, approvalMode string) ([
 	return list, names, nil
 }
 
+// mergeModelParams 合并模型参数：overlay（会话级）覆盖 base（Agent 快照级）。
+// factory 内再叠 model.default_params，形成 会话 > Agent > 模型默认 三级（runtime.md §2）。
+func mergeModelParams(base, overlay json.RawMessage) map[string]any {
+	params := map[string]any{}
+	if len(base) > 0 {
+		_ = json.Unmarshal(base, &params)
+	}
+	if len(overlay) > 0 {
+		over := map[string]any{}
+		if json.Unmarshal(overlay, &over) == nil {
+			for k, v := range over {
+				params[k] = v
+			}
+		}
+	}
+	return params
+}
+
+// sessionEffort 取会话锁定的 reasoning_effort（子智能体继承用，runtime.md §6）。
+func sessionEffort(raw json.RawMessage) (string, bool) {
+	m := map[string]any{}
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &m)
+	}
+	s, ok := m["reasoning_effort"].(string)
+	return s, ok && s != ""
+}
+
 // buildAgent 按会话快照构建 adk.ChatModelAgent（runtime.md §2）。
 func (o *orchestrator) buildAgent(ctx context.Context, sess *store.Session, snap *agent.Snapshot, tc *tools.Context, rs *runState) (adk.Agent, []string, error) {
 	modelID := sess.ModelID
 	if modelID == "" {
 		modelID = snap.Model.ID
 	}
-	params := map[string]any{}
-	if len(snap.ModelParams) > 0 {
-		_ = json.Unmarshal(snap.ModelParams, &params)
+	params := mergeModelParams(snap.ModelParams, sess.ModelParams)
+	providerType := ""
+	if o.deps.ProviderType != nil {
+		providerType = o.deps.ProviderType(ctx, modelID)
+	} else if modelID == snap.Model.ID {
+		providerType = snap.Model.ProviderType
+	}
+	if providerType == "ark" {
+		// ark 上下文缓存路由亲和：同会话请求携带同一 prompt_cache_key（runtime.md §3）。
+		params["prompt_cache_key"] = sess.ID
 	}
 	chatModel, err := o.deps.Models.NewChatModel(ctx, modelID, params)
 	if err != nil {
@@ -120,7 +155,7 @@ func (o *orchestrator) buildAgent(ctx context.Context, sess *store.Session, snap
 	a, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:        snap.AgentID,
 		Description: snap.Description,
-		Instruction: renderInstruction(snap, sess.ApprovalMode),
+		Instruction: renderInstruction(snap, sess),
 		Model:       chatModel,
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
@@ -136,7 +171,14 @@ func (o *orchestrator) buildAgent(ctx context.Context, sess *store.Session, snap
 	return a, toolNames, nil
 }
 
-func renderInstruction(snap *agent.Snapshot, approvalMode string) string {
+// renderInstruction 组装 system prompt。日期取会话创建日期（sess.CreatedAt）而非
+// time.Now：system 是 messages[0]，逐天变化会让其后全部历史的缓存前缀失配
+// （runtime.md《缓存命中优先设计原则》§2）。
+func renderInstruction(snap *agent.Snapshot, sess *store.Session) string {
+	date := sess.CreatedAt
+	if date.IsZero() {
+		date = time.Now()
+	}
 	var b strings.Builder
 	b.WriteString(snap.SystemPrompt)
 	if len(snap.Skills) > 0 {
@@ -154,8 +196,8 @@ func renderInstruction(snap *agent.Snapshot, approvalMode string) string {
 		b.WriteString("使用 task 工具把自包含的子任务委派给子智能体：子智能体在独立上下文中执行（看不到本会话历史），与你共享沙箱文件系统，只返回最终结果；prompt 中必须包含子智能体所需的全部信息。\n")
 	}
 	fmt.Fprintf(&b, "\n## 运行环境\n- 当前日期：%s\n- 沙箱工作目录：/workspace（exec/read/write/edit/glob/grep 工具均在沙箱内操作）\n",
-		time.Now().Format("2006-01-02"))
-	switch approvalMode {
+		date.Format("2006-01-02"))
+	switch sess.ApprovalMode {
 	case session.ApprovalStrict:
 		b.WriteString("- 确认模式：strict。危险操作（exec/write/edit）执行前会被用户审查，可能被拒绝；被拒绝后不要反复重试同一操作。\n")
 	case session.ApprovalAuto:

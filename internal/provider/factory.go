@@ -64,6 +64,19 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 		BaseURL: row.BaseURL,
 		Model:   row.ModelCode,
 	}
+	applyParams(cfg, row.ProviderType, merged)
+	cm, err := openai.NewChatModel(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("provider: 构建模型实例失败: %w", err)
+	}
+	actual, _ := f.cache.LoadOrStore(key, model.ToolCallingChatModel(cm))
+	return actual.(model.ToolCallingChatModel), nil
+}
+
+// applyParams 把合并后的参数白名单映射到 openai 组件配置（runtime.md §3）。
+// 未识别键忽略。reasoning_effort 任意值透传；qwen 无枚举档位，
+// 按固定映射折算为 enable_thinking/thinking_budget 非标准顶层字段。
+func applyParams(cfg *openai.ChatModelConfig, providerType string, merged map[string]any) {
 	if v, ok := numberParam(merged, "temperature"); ok {
 		f32 := float32(v)
 		cfg.Temperature = &f32
@@ -76,12 +89,50 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 		n := int(v)
 		cfg.MaxTokens = &n
 	}
-	cm, err := openai.NewChatModel(ctx, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("provider: 构建模型实例失败: %w", err)
+	if v, ok := stringParam(merged, "reasoning_effort"); ok {
+		if providerType == "qwen" {
+			for k, val := range qwenThinkingExtra(v) {
+				setExtraField(cfg, k, val)
+			}
+		} else {
+			cfg.ReasoningEffort = openai.ReasoningEffortLevel(v)
+		}
 	}
-	actual, _ := f.cache.LoadOrStore(key, model.ToolCallingChatModel(cm))
-	return actual.(model.ToolCallingChatModel), nil
+	if v, ok := stringParam(merged, "prompt_cache_key"); ok {
+		setExtraField(cfg, "prompt_cache_key", v)
+	}
+}
+
+// qwenThinkingExtra 公共档位 → 千问 thinking_budget 固定映射（runtime.md §3）。
+// 未识别值返回 nil（忽略，不透传）。
+func qwenThinkingExtra(effort string) map[string]any {
+	switch effort {
+	case "minimal":
+		return map[string]any{"enable_thinking": false}
+	case "low":
+		return map[string]any{"enable_thinking": true, "thinking_budget": 1024}
+	case "medium":
+		return map[string]any{"enable_thinking": true, "thinking_budget": 8192}
+	case "high", "max":
+		return map[string]any{"enable_thinking": true, "thinking_budget": 32768}
+	}
+	return nil
+}
+
+func setExtraField(cfg *openai.ChatModelConfig, key string, val any) {
+	if cfg.ExtraFields == nil {
+		cfg.ExtraFields = map[string]any{}
+	}
+	cfg.ExtraFields[key] = val
+}
+
+func stringParam(params map[string]any, name string) (string, bool) {
+	v, ok := params[name]
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	return s, ok && s != ""
 }
 
 // mergeParams 合并模型默认参数与会话级覆盖参数。

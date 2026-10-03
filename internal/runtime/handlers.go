@@ -128,13 +128,18 @@ func (h *Handler) Prompt(c *gin.Context) {
 		return
 	}
 	turn++
+	reqParams, err := json.Marshal(mergeModelParams(snap.ModelParams, sess.ModelParams))
+	if err != nil {
+		fail(c, err)
+		return
+	}
 
 	events, err := h.events.AppendBatch(ctx, sess.ID, []session.EventInput{
 		{Type: session.EventUserMessage, Data: session.UserMessageData{Turn: turn, Content: req.Content, RequestID: req.RequestID}},
 		{Type: session.EventTurnStart, Data: session.TurnStartData{Turn: turn, RequestID: req.RequestID}},
 		{Type: session.EventRequestHeader, Data: session.RequestHeaderData{
 			Turn: turn, ProviderID: providerID, ModelID: sess.ModelID, ModelCode: modelCode,
-			Params: snap.ModelParams, Tools: toolNames,
+			Params: reqParams, Tools: toolNames,
 		}},
 	})
 	if err != nil {

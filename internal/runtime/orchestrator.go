@@ -34,6 +34,9 @@ type Deps struct {
 	Bus         *Bus
 	DataDir     string
 	ContextSize func(ctx context.Context, modelID string) int
+	// ProviderType 按 model_id 查供应商类型（ark 注入 prompt_cache_key 用；测试可为 nil，
+	// 为 nil 时回退快照中的 provider_type）。
+	ProviderType func(ctx context.Context, modelID string) string
 	// ToolContextFactory 覆盖工具上下文装配（测试注入用；生产为 nil）。
 	ToolContextFactory func(sess *store.Session, snap *agent.Snapshot) *tools.Context
 }
@@ -205,19 +208,37 @@ func (o *orchestrator) trimContext(ctx context.Context, sessionID string, msgs [
 		}
 		return total / 4
 	}
-	for estimate(msgs) > limit && len(msgs) > 1 {
-		drop := 1
-		if len(msgs[0].ToolCalls) > 0 {
-			for drop < len(msgs)-1 && msgs[drop].Role == schema.Tool {
-				drop++
+	// system 恒保留（防御性：当前链路 system 走 Instruction 不在 msgs 内）。
+	var head []*schema.Message
+	if len(msgs) > 0 && msgs[0].Role == schema.System {
+		head, msgs = msgs[:1], msgs[1:]
+	}
+	// 按 turn 整块丢弃：从最早的用户轮次开始整轮（user 消息 + 后续 assistant/tool
+	// 消息）丢弃直到估算量达标。窗口起点恒落在轮次边界，不随每轮新增内容逐条漂移
+	// （runtime.md《缓存命中优先设计原则》§7）。
+	over := func() bool { return estimate(head)+estimate(msgs) > limit }
+	for over() {
+		drop := len(msgs)
+		seenUser := false
+		for i, m := range msgs {
+			if m.Role == schema.User {
+				if seenUser {
+					drop = i
+					break
+				}
+				seenUser = true
 			}
+		}
+		if drop == len(msgs) {
+			// 只剩一个轮次，无法继续按轮裁剪
+			break
 		}
 		msgs = msgs[drop:]
 	}
-	if estimate(msgs) > limit {
+	if over() {
 		return nil, errors.New("上下文超出模型窗口，建议开启新会话")
 	}
-	return msgs, nil
+	return append(head, msgs...), nil
 }
 
 // consume 消费事件迭代器：翻译 → 落库 → 广播；返回时 turn 已收尾或已暂停（审批中断）。

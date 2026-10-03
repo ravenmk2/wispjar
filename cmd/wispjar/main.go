@@ -98,6 +98,17 @@ func main() {
 			}
 			return m.ContextSize
 		},
+		ProviderType: func(ctx context.Context, modelID string) string {
+			var typ string
+			if err := db.WithContext(ctx).Model(&store.Model{}).
+				Select("model_provider.type").
+				Joins("JOIN model_provider ON model_provider.id = model.provider_id").
+				Where("model.id = ?", modelID).
+				Scan(&typ).Error; err != nil {
+				return ""
+			}
+			return typ
+		},
 	})
 	if sandboxSvc != nil {
 		sandboxSvc.OnEvent(runtime.SandboxEventHook(repo, eventStore, bus))

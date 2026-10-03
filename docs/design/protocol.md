@@ -183,6 +183,7 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 | `session/title` | `{title, auto: true\|false}`（latest-wins；用户改名 auto=false 且 pinned） |
 | `session/sandbox` | `{action: "created"\|"recycled"\|"failed", sandbox_id, image, error?}` |
 | `session/approval-mode` | `{mode: "strict"\|"default"\|"auto", changed_by}` |
+| `session/effort` | `{effort: "<档位>", changed_by}` —— 会话思考强度改档（仅 `last_seq = 0` 时可改，见 api.md §3） |
 | `model/selection` | `{model_id, changed_by}` |
 | `request/header` | `{turn, provider_id, model_id, model_code, params, tools:[string]}` —— 本 turn 请求快照（审计/复现用） |
 | `approval/asked` | `{turn, step, call_id, name, arguments, risk: "high"\|"medium", parent_call_id?}` |

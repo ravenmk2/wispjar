@@ -140,6 +140,7 @@ type Session struct {
 	TitlePinned   bool            `gorm:"column:title_pinned" json:"title_pinned"`
 	ApprovalMode  string          `gorm:"column:approval_mode;size:16" json:"approval_mode"`
 	ModelID       string          `gorm:"column:model_id;size:32" json:"model_id"`
+	ModelParams   json.RawMessage `gorm:"column:model_params;type:json" json:"model_params"`
 	Sandbox       json.RawMessage `gorm:"column:sandbox;type:json" json:"sandbox"`
 	LastSeq       int64           `gorm:"column:last_seq" json:"last_seq"`
 	Running       bool            `gorm:"column:running" json:"running"`
