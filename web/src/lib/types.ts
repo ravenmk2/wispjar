@@ -118,6 +118,8 @@ export interface ModelCapabilities {
   reasoning: boolean
   vision: boolean
   streaming: boolean
+  reasoning_efforts?: string[]
+  reasoning_effort_default?: string
 }
 
 export interface Model {
@@ -301,6 +303,7 @@ export type SessionEvent = SessionEventBase &
         data: { action: "created" | "recycled" | "failed"; sandbox_id: string; image: string; error?: string }
       }
     | { type: "session/approval-mode"; data: { mode: ApprovalMode; changed_by: string } }
+    | { type: "session/effort"; data: { effort: string; changed_by: string } }
     | { type: "model/selection"; data: { model_id: string; changed_by: string } }
     | {
         type: "request/header"
@@ -437,11 +440,14 @@ export interface SessionDetail extends SessionSummary {
   sandbox_status?: SandboxStatus
   status?: SessionStatus
   agent?: SessionAgentInfo
+  model_params?: Record<string, unknown> | null
+  effort_locked?: boolean
 }
 
 export interface CreateSessionRequest {
   agent_id: string
   title?: string
+  reasoning_effort?: string
 }
 
 export interface UpdateSessionRequest {
@@ -449,6 +455,7 @@ export interface UpdateSessionRequest {
   approval_mode?: ApprovalMode
   status?: "active" | "archived"
   model_id?: string
+  reasoning_effort?: string
 }
 
 export interface PromptRequest {

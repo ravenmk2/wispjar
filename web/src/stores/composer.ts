@@ -21,7 +21,7 @@ interface ComposerState {
 
 export const useComposerStore = create<ComposerState>()((set) => ({
   draft: "",
-  approvalMode: "default",
+  approvalMode: "auto",
   sending: false,
   optimistic: null,
   setDraft: (draft) => set({ draft }),
@@ -29,5 +29,5 @@ export const useComposerStore = create<ComposerState>()((set) => ({
   setSending: (sending) => set({ sending }),
   setOptimistic: (optimistic) => set({ optimistic }),
   clearOptimistic: () => set({ optimistic: null }),
-  reset: () => set({ draft: "", approvalMode: "default", sending: false, optimistic: null }),
+  reset: () => set({ draft: "", approvalMode: "auto", sending: false, optimistic: null }),
 }))

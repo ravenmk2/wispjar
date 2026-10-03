@@ -1,4 +1,4 @@
-import { ArrowUp, Check, ChevronDown, Shield, ShieldCheck, ShieldOff, Square } from "lucide-react"
+import { ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Shield, ShieldCheck, ShieldOff, Square } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { errorMessage } from "@/api/client"
@@ -11,6 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -35,10 +36,17 @@ const APPROVAL_MODES: Array<{
 // 内容自适应长高，约 14 行（leading-6）封顶后内部滚动
 const MAX_TEXTAREA_HEIGHT = 14 * 24
 
+function effortLabel(effort: string): string {
+  return effort.charAt(0).toUpperCase() + effort.slice(1)
+}
+
+type ModelMenuLevel = "root" | "model" | "effort"
+
 export function Composer({ sessionId }: { sessionId: string }) {
   const currentOrg = useCurrentOrg()
   const header = useSessionStore((s) => s.header)
   const liveAttempt = useSessionStore((s) => s.liveAttempt)
+  const lastSeq = useSessionStore((s) => s.lastSeq)
   const draft = useComposerStore((s) => s.draft)
   const sending = useComposerStore((s) => s.sending)
   const approvalMode = useComposerStore((s) => s.approvalMode)
@@ -51,11 +59,14 @@ export function Composer({ sessionId }: { sessionId: string }) {
   const [models, setModels] = useState<OrgModel[]>([])
   const [modelOverride, setModelOverride] = useState<string | null>(null)
   const [modelQuery, setModelQuery] = useState("")
+  const [menuLevel, setMenuLevel] = useState<ModelMenuLevel>("root")
+  const [effort, setEffort] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const running = header?.running ?? false
   const busy = running || liveAttempt !== null
   const modelId = modelOverride ?? header?.modelId ?? ""
+  const effortLocked = lastSeq > 0
 
   useEffect(() => {
     if (header?.approvalMode) setApprovalMode(header.approvalMode)
@@ -64,6 +75,17 @@ export function Composer({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     setModelOverride(null)
   }, [header?.modelId])
+
+  useEffect(() => {
+    setEffort(null)
+    sessionsApi
+      .detail(sessionId)
+      .then((d) => {
+        const v = d.model_params?.reasoning_effort
+        setEffort(typeof v === "string" && v ? v : null)
+      })
+      .catch(() => {})
+  }, [sessionId])
 
   useEffect(() => {
     if (!currentOrg) return
@@ -140,17 +162,44 @@ export function Composer({ sessionId }: { sessionId: string }) {
 
   async function changeModel(next: string) {
     if (!next || next === modelId) return
+    const prevEffort = effort
+    const nextModel = models.find((m) => m.id === next)
+    const nextDefault = nextModel?.capabilities.reasoning_effort_default ?? ""
     setModelOverride(next)
+    if (!effortLocked) setEffort(nextDefault || null)
     try {
-      await sessionsApi.update(sessionId, { model_id: next })
+      // 未锁定换模型时档位重置为新模型默认档；无默认档无法经 API 清空，仅本地显示"提供方默认"
+      const res = await sessionsApi.update(sessionId, {
+        model_id: next,
+        ...(!effortLocked && nextDefault ? { reasoning_effort: nextDefault } : {}),
+      })
+      const v = res.model_params?.reasoning_effort
+      if (!effortLocked) setEffort(typeof v === "string" && v ? v : null)
     } catch (e) {
       toast.error(errorMessage(e))
       setModelOverride(null)
+      setEffort(prevEffort)
     }
   }
 
-  const modelName = models.find((m) => m.id === modelId)?.display_name
-  const currentMode = APPROVAL_MODES.find((m) => m.value === approvalMode) ?? APPROVAL_MODES[1]
+  async function changeEffort(next: string) {
+    if (effortLocked || !next || next === effort) return
+    const prev = effort
+    setEffort(next)
+    try {
+      await sessionsApi.update(sessionId, { reasoning_effort: next })
+    } catch (e) {
+      toast.error(errorMessage(e))
+      setEffort(prev)
+    }
+  }
+
+  const currentModel = models.find((m) => m.id === modelId)
+  const modelName = currentModel?.display_name
+  const modelEfforts = currentModel?.capabilities.reasoning_efforts ?? []
+  const modelEffortDefault = currentModel?.capabilities.reasoning_effort_default ?? ""
+  const supportsEffort = modelEfforts.length > 0
+  const currentMode = APPROVAL_MODES.find((m) => m.value === approvalMode) ?? APPROVAL_MODES[2]
 
   return (
     <div className="shrink-0">
@@ -202,58 +251,158 @@ export function Composer({ sessionId }: { sessionId: string }) {
             </DropdownMenu>
             <div className="ml-auto flex items-center gap-1.5">
               {header?.usageTotal && <TokenBadge usage={header.usageTotal} />}
-              <DropdownMenu onOpenChange={(open) => !open && setModelQuery("")}>
+              <DropdownMenu
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setModelQuery("")
+                    setMenuLevel("root")
+                  }
+                }}
+              >
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
                     className="group flex h-7 max-w-48 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground"
                   >
                     <span className="truncate">{(modelName ?? modelId) || "选择模型"}</span>
+                    {supportsEffort && effort && (
+                      <span className="shrink-0 font-normal text-fg-caption">{effortLabel(effort)}</span>
+                    )}
                     <ChevronDown className="size-3 shrink-0 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="top" align="end" sideOffset={8} className="w-64">
-                  {models.length > 4 && (
-                    <div className="px-1 pb-1">
-                      <Input
-                        autoFocus
-                        value={modelQuery}
-                        onChange={(e) => setModelQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key !== "Escape" && e.key !== "ArrowDown" && e.key !== "ArrowUp") {
-                            e.stopPropagation()
-                          }
+                  {menuLevel === "root" && (
+                    <>
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          e.preventDefault()
+                          setMenuLevel("model")
                         }}
-                        placeholder="搜索模型…"
-                        className="h-8 px-2.5 text-xs shadow-none"
-                      />
-                    </div>
+                        className="px-2.5 py-2 text-[13px]"
+                      >
+                        <span>模型</span>
+                        <span className="ml-auto flex min-w-0 items-center gap-0.5 text-fg-caption">
+                          <span className="max-w-36 truncate">{modelName ?? modelId}</span>
+                          <ChevronRight className="size-3.5 shrink-0" />
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={!supportsEffort}
+                        onSelect={(e) => {
+                          e.preventDefault()
+                          setMenuLevel("effort")
+                        }}
+                        className="px-2.5 py-2 text-[13px]"
+                      >
+                        <span>推理等级</span>
+                        <span className="ml-auto flex min-w-0 items-center gap-0.5 text-fg-caption">
+                          {effort ? effortLabel(effort) : "提供方默认"}
+                          <ChevronRight className="size-3.5 shrink-0" />
+                        </span>
+                      </DropdownMenuItem>
+                    </>
                   )}
-                  <DropdownMenuRadioGroup value={modelId} onValueChange={(v) => void changeModel(v)}>
-                    {modelGroups.map((group) => (
-                      <div key={group.provider}>
-                        <DropdownMenuLabel className="px-2.5 pb-1 pt-1.5 text-xs font-normal text-fg-caption">
-                          {group.provider}
-                        </DropdownMenuLabel>
-                        {group.items.map((m) => (
+                  {menuLevel === "model" && (
+                    <>
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          e.preventDefault()
+                          setMenuLevel("root")
+                        }}
+                        className="px-2.5 py-1.5 text-[13px] text-fg-secondary"
+                      >
+                        <ChevronLeft className="size-3.5" />
+                        模型
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {models.length > 4 && (
+                        <div className="px-1 pb-1">
+                          <Input
+                            autoFocus
+                            value={modelQuery}
+                            onChange={(e) => setModelQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key !== "Escape" && e.key !== "ArrowDown" && e.key !== "ArrowUp") {
+                                e.stopPropagation()
+                              }
+                            }}
+                            placeholder="搜索模型…"
+                            className="h-8 px-2.5 text-xs shadow-none"
+                          />
+                        </div>
+                      )}
+                      <DropdownMenuRadioGroup value={modelId} onValueChange={(v) => void changeModel(v)}>
+                        {modelGroups.map((group) => (
+                          <div key={group.provider}>
+                            <DropdownMenuLabel className="px-2.5 pb-1 pt-1.5 text-xs font-normal text-fg-caption">
+                              {group.provider}
+                            </DropdownMenuLabel>
+                            {group.items.map((m) => (
+                              <DropdownMenuRadioItem
+                                key={m.id}
+                                value={m.id}
+                                className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
+                              >
+                                <span className={cn("truncate", m.id === modelId && "font-semibold")}>
+                                  {m.display_name}
+                                </span>
+                                {m.id === modelId && (
+                                  <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
+                                )}
+                              </DropdownMenuRadioItem>
+                            ))}
+                          </div>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                      {filteredModels.length === 0 && (
+                        <div className="px-2.5 py-2 text-xs text-fg-caption">无匹配模型</div>
+                      )}
+                    </>
+                  )}
+                  {menuLevel === "effort" && (
+                    <>
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          e.preventDefault()
+                          setMenuLevel("root")
+                        }}
+                        className="px-2.5 py-1.5 text-[13px] text-fg-secondary"
+                      >
+                        <ChevronLeft className="size-3.5" />
+                        推理等级
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuRadioGroup value={effort ?? ""} onValueChange={(v) => void changeEffort(v)}>
+                        {!modelEffortDefault && (
                           <DropdownMenuRadioItem
-                            key={m.id}
-                            value={m.id}
+                            value=""
+                            disabled={effortLocked || effort !== null}
+                            title={effortLocked ? "对话开始后不可更改思考强度" : "已显式选档，暂不支持改回提供方默认"}
                             className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
                           >
-                            <span className={cn("truncate", m.id === modelId && "font-semibold")}>
-                              {m.display_name}
-                            </span>
-                            {m.id === modelId && (
+                            <span className={cn("truncate", effort === null && "font-semibold")}>提供方默认</span>
+                            {effort === null && (
+                              <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
+                            )}
+                          </DropdownMenuRadioItem>
+                        )}
+                        {modelEfforts.map((e) => (
+                          <DropdownMenuRadioItem
+                            key={e}
+                            value={e}
+                            disabled={effortLocked}
+                            title={effortLocked ? "对话开始后不可更改思考强度" : undefined}
+                            className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
+                          >
+                            <span className={cn("truncate", e === effort && "font-semibold")}>{effortLabel(e)}</span>
+                            {e === effort && (
                               <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
                             )}
                           </DropdownMenuRadioItem>
                         ))}
-                      </div>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                  {filteredModels.length === 0 && (
-                    <div className="px-2.5 py-2 text-xs text-fg-caption">无匹配模型</div>
+                      </DropdownMenuRadioGroup>
+                    </>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>

@@ -36,12 +36,16 @@ import { Textarea } from "@/components/ui/textarea"
 import { formatNumber } from "@/lib/format"
 import type { Model, ModelCapabilities, Provider } from "@/lib/types"
 
-const CAPABILITY_LABELS: Array<{ key: keyof ModelCapabilities; label: string }> = [
+type CapabilityFlag = "tools" | "reasoning" | "vision" | "streaming"
+
+const CAPABILITY_LABELS: Array<{ key: CapabilityFlag; label: string }> = [
   { key: "tools", label: "工具调用" },
   { key: "reasoning", label: "推理" },
   { key: "vision", label: "视觉" },
   { key: "streaming", label: "流式" },
 ]
+
+const REASONING_EFFORT_OPTIONS = ["minimal", "low", "medium", "high", "max"]
 
 export default function ModelsPage() {
   const [models, setModels] = useState<Model[] | null>(null)
@@ -154,6 +158,14 @@ export default function ModelsPage() {
                               </Badge>
                             ))}
                           </div>
+                          {m.capabilities?.reasoning_efforts && m.capabilities.reasoning_efforts.length > 0 && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              档位 {m.capabilities.reasoning_efforts.join(" / ")}
+                              {m.capabilities.reasoning_effort_default
+                                ? `（默认 ${m.capabilities.reasoning_effort_default}）`
+                                : "（提供方默认）"}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground">
                           {formatNumber(m.context_size)}
@@ -328,12 +340,77 @@ function ModelDialog({
                     type="checkbox"
                     className="size-3.5 accent-primary"
                     checked={capabilities[c.key]}
-                    onChange={(e) => setCapabilities((prev) => ({ ...prev, [c.key]: e.target.checked }))}
+                    onChange={(e) =>
+                      setCapabilities((prev) => ({
+                        ...prev,
+                        [c.key]: e.target.checked,
+                        ...(c.key === "reasoning" && !e.target.checked
+                          ? { reasoning_efforts: undefined, reasoning_effort_default: undefined }
+                          : {}),
+                      }))
+                    }
                   />
                   {c.label}
                 </label>
               ))}
             </div>
+            {capabilities.reasoning && (
+              <div className="space-y-2 rounded-md border px-3 py-2">
+                <div className="flex flex-wrap gap-4">
+                  {REASONING_EFFORT_OPTIONS.map((effort) => (
+                    <label key={effort} className="flex cursor-pointer items-center gap-1.5 text-sm">
+                      <input
+                        type="checkbox"
+                        className="size-3.5 accent-primary"
+                        checked={capabilities.reasoning_efforts?.includes(effort) ?? false}
+                        onChange={(e) =>
+                          setCapabilities((prev) => {
+                            const current = prev.reasoning_efforts ?? []
+                            const efforts = e.target.checked
+                              ? [...current, effort]
+                              : current.filter((v) => v !== effort)
+                            return {
+                              ...prev,
+                              reasoning_efforts: efforts.length > 0 ? efforts : undefined,
+                              reasoning_effort_default:
+                                prev.reasoning_effort_default && efforts.includes(prev.reasoning_effort_default)
+                                  ? prev.reasoning_effort_default
+                                  : undefined,
+                            }
+                          })
+                        }
+                      />
+                      {effort}
+                    </label>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">默认档</span>
+                  <Select
+                    value={capabilities.reasoning_effort_default ?? "__provider__"}
+                    onValueChange={(v) =>
+                      setCapabilities((prev) => ({
+                        ...prev,
+                        reasoning_effort_default: v === "__provider__" ? undefined : v,
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-8 w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__provider__">提供方默认</SelectItem>
+                      {(capabilities.reasoning_efforts ?? []).map((effort) => (
+                        <SelectItem key={effort} value={effort}>
+                          {effort}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-xs text-muted-foreground">不勾选档位 = 不支持选档</span>
+                </div>
+              </div>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="md-ctx">上下文长度（tokens）</Label>
