@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { useState } from "react"
 import { NodeView } from "@/features/chat/NodeList"
+import { ReasoningBlock } from "@/features/chat/AssistantMessage"
 import { formatTurnDuration, type TurnSegment } from "@/lib/turn-grouping"
 import { cn } from "@/lib/utils"
 
@@ -63,6 +64,9 @@ export function TurnProcessGroup({
         <div className="space-y-2 py-1">
           {segment.process.map((node) => (
             <NodeView key={node.id} node={node} sessionId={sessionId} depth={0} latestTurn={latestTurn} />
+          ))}
+          {segment.answerReasoning.map((text, i) => (
+            <ReasoningBlock key={`answer-reasoning-${i}`} text={text} />
           ))}
         </div>
       )}

@@ -47,7 +47,7 @@ function reasoningSummary(text: string): string {
   return last.split("\n")[0] ?? ""
 }
 
-function ReasoningBlock({ text, live }: { text: string; live?: boolean }) {
+export function ReasoningBlock({ text, live }: { text: string; live?: boolean }) {
   const [open, setOpen] = useState(false)
   const summary = reasoningSummary(text)
   return (

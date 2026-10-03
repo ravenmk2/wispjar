@@ -6,6 +6,8 @@ export interface TurnSegment {
   user?: UserNode | QuestionReplyNode
   process: ConversationNode[]
   answer?: AssistantNode
+  // 最终回复剥离出的思考块，随折叠组展开渲染（answer 节点本身只留 text）
+  answerReasoning: string[]
   end?: BoundaryNode
   hasPendingApproval: boolean
   toolCallCount: number
@@ -34,7 +36,7 @@ export function groupByTurn(nodes: ConversationNode[]): { segments: TurnSegment[
   const segmentOf = (turn: number): TurnSegment => {
     let seg = byTurn.get(turn)
     if (!seg) {
-      seg = { turn, process: [], hasPendingApproval: false, toolCallCount: 0, taskCount: 0 }
+      seg = { turn, process: [], answerReasoning: [], hasPendingApproval: false, toolCallCount: 0, taskCount: 0 }
       byTurn.set(turn, seg)
       segments.push(seg)
     }
@@ -66,8 +68,12 @@ export function groupByTurn(nodes: ConversationNode[]): { segments: TurnSegment[
     for (let i = seg.process.length - 1; i >= 0; i--) {
       const n = seg.process[i]
       if (n.kind === "assistant" && n.content.some((b) => b.type === "text")) {
-        seg.answer = n
         seg.process.splice(i, 1)
+        seg.answerReasoning = n.content.filter((b) => b.type === "reasoning").map((b) => b.text)
+        seg.answer =
+          seg.answerReasoning.length > 0
+            ? { ...n, content: n.content.filter((b) => b.type !== "reasoning") }
+            : n
         break
       }
     }

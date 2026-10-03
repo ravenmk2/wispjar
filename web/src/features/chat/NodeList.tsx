@@ -153,7 +153,7 @@ export function NodeList({
       {grouped.segments.map((seg) => (
         <Fragment key={`turn-${seg.turn}`}>
           {seg.user && <NodeView node={seg.user} sessionId={sessionId} depth={depth} latestTurn={latestTurn} />}
-          {seg.process.length > 0 && (
+          {(seg.process.length > 0 || seg.answerReasoning.length > 0) && (
             <TurnProcessGroup segment={seg} sessionId={sessionId} latestTurn={latestTurn} />
           )}
           {seg.answer && (
