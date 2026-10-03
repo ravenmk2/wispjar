@@ -74,6 +74,16 @@ func main() {
 			cfg.OpenSandbox.IdleTTLSeconds,
 			sandbox.NewCachedSettingsSource(sandbox.NewDBSettingsSource(db), 30*time.Second),
 		)
+		sandboxSvc.SetSessionChecker(func(ctx context.Context, sessionID string) bool {
+			var n int64
+			if err := db.WithContext(ctx).Model(&store.Session{}).
+				Where("id = ? AND status <> ?", sessionID, session.StatusDeleted).
+				Count(&n).Error; err != nil {
+				log.Printf("sandbox: session exists check %s: %v", sessionID, err)
+				return false
+			}
+			return n > 0
+		})
 		sandboxSvc.Start(context.Background())
 	}
 

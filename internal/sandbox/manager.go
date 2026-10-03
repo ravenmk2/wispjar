@@ -28,6 +28,8 @@ type Options struct {
 const (
 	EventCreated  = "created"
 	EventRecycled = "recycled"
+	EventPaused   = "paused"
+	EventResumed  = "resumed"
 	EventFailed   = "failed"
 )
 
@@ -52,13 +54,18 @@ type Service struct {
 	handles map[string]*Handle
 	hooks   []func(Event)
 
+	// sessionExists 供 reconcileOrphans 区分 adopt（会话存活）与删除（已删/不存在）。
+	sessionExists func(ctx context.Context, sessionID string) bool
+	// connectFn 按 ID 重连沙箱（adopt 用；测试可注入，nil 走 client）。
+	connectFn func(ctx context.Context, sandboxID string) (*opensandbox.Sandbox, error)
+
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 }
 
 func NewService(client *Client, idleTTLSeconds int, settings SettingsSource) *Service {
 	if idleTTLSeconds <= 0 {
-		idleTTLSeconds = 1800
+		idleTTLSeconds = 28800
 	}
 	return &Service{
 		client:   client,
@@ -66,6 +73,13 @@ func NewService(client *Client, idleTTLSeconds int, settings SettingsSource) *Se
 		settings: settings,
 		handles:  make(map[string]*Handle),
 	}
+}
+
+// SetSessionChecker 注入会话存活判定（本库存在且未软删），须在 Start 前调用。
+func (s *Service) SetSessionChecker(fn func(ctx context.Context, sessionID string) bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessionExists = fn
 }
 
 func (s *Service) OnEvent(fn func(Event)) {
@@ -87,15 +101,19 @@ func (s *Service) Get(ctx context.Context, sessionID string, opts Options) (*Han
 	s.mu.Lock()
 	if h, ok := s.handles[sessionID]; ok && !h.expired() {
 		s.mu.Unlock()
-		h.Touch()
-		return h, nil
-	}
-	if h, ok := s.handles[sessionID]; ok {
-		delete(s.handles, sessionID)
-		s.mu.Unlock()
-		s.killBestEffort(h)
+		if s.ensureResumed(ctx, sessionID, h) {
+			h.Touch()
+			return h, nil
+		}
+		// resume 失败（沙箱已消失）：句柄已移除，落入按需新建。
 	} else {
-		s.mu.Unlock()
+		if h, ok := s.handles[sessionID]; ok {
+			delete(s.handles, sessionID)
+			s.mu.Unlock()
+			s.killBestEffort(h)
+		} else {
+			s.mu.Unlock()
+		}
 	}
 
 	h, err := s.createWithRetry(ctx, sessionID, s.applySettings(ctx, opts))
@@ -115,6 +133,32 @@ func (s *Service) Get(ctx context.Context, sessionID string, opts Options) (*Han
 	s.mu.Unlock()
 	s.emit(Event{SessionID: sessionID, SandboxID: h.SandboxID, Action: EventCreated})
 	return h, nil
+}
+
+// ensureResumed：paused 句柄先 resume 再使用。同会话并发 Get 由句柄级互斥锁串行，
+// 后到者看到已恢复直接复用；resume 失败时移除句柄并尽力销毁，返回 false 让调用方新建。
+func (s *Service) ensureResumed(ctx context.Context, sessionID string, h *Handle) bool {
+	if !h.Paused() {
+		return true
+	}
+	h.resumeMu.Lock()
+	defer h.resumeMu.Unlock()
+	if !h.Paused() {
+		return true
+	}
+	if err := h.resume(ctx, s.client); err != nil {
+		log.Printf("sandbox: resume %s (session %s): %v; recreating", h.SandboxID, sessionID, err)
+		s.mu.Lock()
+		if s.handles[sessionID] == h {
+			delete(s.handles, sessionID)
+		}
+		s.mu.Unlock()
+		s.killBestEffort(h)
+		return false
+	}
+	h.setPaused(false)
+	s.emit(Event{SessionID: sessionID, SandboxID: h.SandboxID, Action: EventResumed})
+	return true
 }
 
 // applySettings 用平台设置补齐 opts 缺省字段（调用方只传会话/Agent 级覆盖），
@@ -204,12 +248,18 @@ func (s *Service) Recycle(sessionID string, reason string) error {
 func (s *Service) kill(h *Handle, reason string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	err := h.sandbox.Kill(ctx)
+	var err error
+	if h.sandbox != nil {
+		err = h.sandbox.Kill(ctx)
+	}
 	s.emit(Event{SessionID: h.sessionID, SandboxID: h.SandboxID, Action: EventRecycled, Reason: reason})
 	return err
 }
 
 func (s *Service) killBestEffort(h *Handle) {
+	if h.sandbox == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	_ = h.sandbox.Kill(ctx)
@@ -239,8 +289,53 @@ type Handle struct {
 
 	lastActive atomic.Int64
 	expiresAt  atomic.Int64
+	paused     atomic.Bool
+
+	// resumeMu 串行化同句柄的并发 resume（ensureResumed 双检 Paused 复用结果）。
+	resumeMu sync.Mutex
 
 	renewFn func(ctx context.Context, d time.Duration) (time.Time, error)
+	// pauseFn/resumeFn 测试注入；nil 时走 SDK（resume 会替换底层连接并刷新 ExecdURL）。
+	pauseFn  func(ctx context.Context) error
+	resumeFn func(ctx context.Context) (*opensandbox.Sandbox, error)
+}
+
+func (h *Handle) Paused() bool { return h.paused.Load() }
+
+func (h *Handle) setPaused(v bool) { h.paused.Store(v) }
+
+// Pause 暂停沙箱（保留文件系统/状态，端点缓存失效）。
+func (h *Handle) Pause(ctx context.Context) error {
+	if h.pauseFn != nil {
+		return h.pauseFn(ctx)
+	}
+	return h.sandbox.Pause(ctx)
+}
+
+// resume 恢复 paused 沙箱；SDK 的 Resume 返回重连后的新 Sandbox（端点可能变化），
+// 替换底层连接并经 client 刷新 ExecdURL。
+func (h *Handle) resume(ctx context.Context, client *Client) error {
+	if h.resumeFn != nil {
+		sb, err := h.resumeFn(ctx)
+		if err != nil {
+			return err
+		}
+		if sb != nil {
+			h.sandbox = sb
+		}
+		return nil
+	}
+	sb, err := h.sandbox.Resume(ctx)
+	if err != nil {
+		return err
+	}
+	h.sandbox = sb
+	u, err := client.execdURL(ctx, sb)
+	if err != nil {
+		return fmt.Errorf("sandbox: resolve execd endpoint after resume: %w", err)
+	}
+	h.ExecdURL = u
+	return nil
 }
 
 func (h *Handle) Touch() {

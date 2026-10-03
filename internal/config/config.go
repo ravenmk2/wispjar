@@ -61,7 +61,7 @@ func Load(path string) (*Config, error) {
 	cfg.Server.Addr = ":8080"
 	cfg.Auth.TokenTTL = Duration(24 * time.Hour)
 	cfg.Storage.DataDir = "./data"
-	cfg.OpenSandbox.IdleTTLSeconds = 1800
+	cfg.OpenSandbox.IdleTTLSeconds = 28800
 	cfg.OpenSandbox.SandboxTTLSeconds = 3600
 
 	data, err := os.ReadFile(path)

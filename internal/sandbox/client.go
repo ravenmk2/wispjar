@@ -3,7 +3,9 @@ package sandbox
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -79,6 +81,24 @@ func (c *Client) execdURL(ctx context.Context, sb *opensandbox.Sandbox) (string,
 
 func (c *Client) deleteSandbox(ctx context.Context, id string) error {
 	return c.lifecycle.DeleteSandbox(ctx, id)
+}
+
+func (c *Client) connectSandbox(ctx context.Context, id string) (*opensandbox.Sandbox, error) {
+	return opensandbox.ConnectSandbox(ctx, c.conn, id)
+}
+
+func (c *Client) pauseSandbox(ctx context.Context, id string) error {
+	return c.lifecycle.PauseSandbox(ctx, id)
+}
+
+func (c *Client) resumeSandbox(ctx context.Context, id string) error {
+	return c.lifecycle.ResumeSandbox(ctx, id)
+}
+
+// isNotFound 判定 lifecycle API 的 404（沙箱已消失）。
+func isNotFound(err error) bool {
+	var apiErr *opensandbox.APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
 }
 
 func (c *Client) listWispJarSandboxes(ctx context.Context) ([]opensandbox.SandboxInfo, error) {

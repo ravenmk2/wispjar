@@ -39,7 +39,7 @@ WispJar 是一个多租户智能体平台：
 | 3 | 密钥归属 | 平台统一配置，加密存储，对机构不可见 |
 | 4 | 模型可见性 | 平台上架模型全局共享，所有机构可用 |
 | 5 | Agent 形态 | 单 Agent ReAct + `task` 工具委派子 Agent（子 Agent 独立上下文执行、返回最终结果） |
-| 6 | 沙箱粒度 | 每会话独占；首次调用沙箱工具时惰性创建，会话内复用，空闲超时自动回收 |
+| 6 | 沙箱粒度 | 每会话独占；首次调用沙箱工具时惰性创建，会话内复用，空闲超时自动暂停（按需恢复），硬 TTL 到期回收 |
 | 7 | 前后端协议 | 所有 API 以 `/api` 开头：CRUD/动作走 REST，实时走单条 WebSocket 多路复用流（`/api/ws`） |
 | 8 | 工具确认 | 会话级三模式，用户自行切换：`strict`（exec/write/edit 全确认）/ `default`（仅 exec 确认）/ `auto`（全免确认，新会话默认） |
 | 9 | 普通用户边界 | 仅对话使用 + 管理自己的会话；会话对机构管理员也不可见（仅本人） |
@@ -116,7 +116,7 @@ internal/
 │   ├── tools/         # 沙箱工具六件套 + activate_skill + task 委派工具
 │   ├── approval/      # 确认模式、interrupt/resume、pending 审批管理
 │   └── checkpoint/    # adk CheckPointStore 的 MySQL 实现
-├── sandbox/           # OpenSandbox 客户端封装、会话沙箱池、空闲回收、egress/镜像应用
+├── sandbox/           # OpenSandbox 客户端封装、会话沙箱池、空闲暂停/恢复、egress/镜像应用
 ├── session/           # 会话事件日志（append/read/derive）、投影器（标题/用量/列表）
 ├── gateway/           # gin 路由：REST handlers + WS mux server + 协议编解码
 ├── usage/             # 用量聚合与报表查询

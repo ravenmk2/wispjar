@@ -132,7 +132,7 @@ CREATE TABLE platform_setting (
 | `sandbox.images` | `string[]`（可选镜像列表，Agent 编辑器下拉源） | `["python:3.12"]` |
 | `sandbox.egress_policy` | `{defaultAction:"allow"|"deny", rules:[{action:"allow"|"deny", target:string}]}` | `{"defaultAction":"allow","rules":[]}` |
 | `sandbox.resource_limits` | `{cpu:string, memory:string}` | `{"cpu":"1","memory":"1Gi"}` |
-| `sandbox.idle_ttl_seconds` | `number`（空闲多久回收） | `1800` |
+| `sandbox.idle_ttl_seconds` | `number`（空闲多久暂停沙箱，见 runtime.md §7.2） | `28800` |
 | `sandbox.ttl_seconds` | `number`（沙箱硬 TTL，随活动续约） | `3600` |
 
 ## 8. agent / skill / agent_skill / agent_subagent（机构级）
@@ -321,7 +321,7 @@ INSERT INTO platform_setting (`key`, value, updated_by) VALUES
   ('sandbox.images',           '["python:3.12"]',              'system'),
   ('sandbox.egress_policy',    '{"defaultAction":"allow","rules":[]}', 'system'),
   ('sandbox.resource_limits',  '{"cpu":"1","memory":"1Gi"}',   'system'),
-  ('sandbox.idle_ttl_seconds', '1800',                         'system'),
+  ('sandbox.idle_ttl_seconds', '28800',                        'system'),
   ('sandbox.ttl_seconds',      '3600',                         'system');
 ```
 

@@ -15,17 +15,20 @@ func TestShouldRenew(t *testing.T) {
 		name       string
 		lastActive time.Time
 		expiresAt  time.Time
+		paused     bool
 		want       bool
 	}{
-		{"临近过期且活跃", now.Add(-time.Minute), now.Add(ttl/2 - time.Minute), true},
-		{"刚过期且活跃", now.Add(-time.Minute), now.Add(-time.Second), true},
-		{"临边界恰好TTL/2", now.Add(-time.Minute), now.Add(ttl / 2), true},
-		{"距离过期尚早", now.Add(-time.Minute), now.Add(ttl/2 + time.Minute), false},
-		{"临近过期但已无活动", now.Add(-idleTTL), now.Add(time.Minute), false},
-		{"无硬TTL", now.Add(-time.Minute), time.Time{}, false},
+		{"临近过期且活跃", now.Add(-time.Minute), now.Add(ttl/2 - time.Minute), false, true},
+		{"刚过期且活跃", now.Add(-time.Minute), now.Add(-time.Second), false, true},
+		{"临边界恰好TTL/2", now.Add(-time.Minute), now.Add(ttl / 2), false, true},
+		{"距离过期尚早", now.Add(-time.Minute), now.Add(ttl/2 + time.Minute), false, false},
+		{"临近过期但已无活动", now.Add(-idleTTL), now.Add(time.Minute), false, false},
+		{"无硬TTL", now.Add(-time.Minute), time.Time{}, false, false},
+		{"paused 不受 idle 限制", now.Add(-2 * idleTTL), now.Add(time.Minute), true, true},
+		{"paused 距离过期尚早", now.Add(-2 * idleTTL), now.Add(ttl/2 + time.Minute), true, false},
 	}
 	for _, c := range cases {
-		if got := shouldRenew(now, c.lastActive, c.expiresAt, ttl, idleTTL); got != c.want {
+		if got := shouldRenew(now, c.lastActive, c.expiresAt, ttl, idleTTL, c.paused); got != c.want {
 			t.Fatalf("%s: want %v got %v", c.name, c.want, got)
 		}
 	}
@@ -72,7 +75,7 @@ func TestRenewActiveTiming(t *testing.T) {
 		"near": newTestHandle("near", ttlSeconds, now.Add(-time.Minute), now.Add(5*time.Minute), nearRec, ttl),
 		// 距离过期 50 分钟（> TTL/2）→ 不续约
 		"far": newTestHandle("far", ttlSeconds, now.Add(-time.Minute), now.Add(50*time.Minute), farRec, ttl),
-		// 距离过期 5 分钟但已空闲超过 idle_ttl → 不续约（留给 idle 回收）
+		// 距离过期 5 分钟但已空闲超过 idle_ttl → 不续约（留给 idle 暂停）
 		"idle": newTestHandle("idle", ttlSeconds, now.Add(-time.Hour), now.Add(5*time.Minute), idleRec, ttl),
 	}
 

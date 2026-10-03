@@ -32,7 +32,7 @@ func DefaultSettings() Settings {
 		Images:         []string{"python:3.12"},
 		EgressPolicy:   json.RawMessage(`{"defaultAction":"allow","rules":[]}`),
 		ResourceLimits: map[string]string{"cpu": "1", "memory": "1Gi"},
-		IdleTTLSeconds: 1800,
+		IdleTTLSeconds: 28800,
 		TTLSeconds:     3600,
 	}
 }

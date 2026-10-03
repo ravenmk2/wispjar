@@ -203,5 +203,5 @@ INSERT INTO platform_setting (`key`, value, updated_by) VALUES
   ('sandbox.images',           '["python:3.12"]',              'system'),
   ('sandbox.egress_policy',    '{"defaultAction":"allow","rules":[]}', 'system'),
   ('sandbox.resource_limits',  '{"cpu":"1","memory":"1Gi"}',   'system'),
-  ('sandbox.idle_ttl_seconds', '1800',                         'system'),
+  ('sandbox.idle_ttl_seconds', '28800',                        'system'),
   ('sandbox.ttl_seconds',      '3600',                         'system');

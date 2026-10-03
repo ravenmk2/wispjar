@@ -348,12 +348,15 @@ type Handle struct {
 2. 上传会话激活 Skills：`/skills/<name>/` 整目录（execd upload）。REST 沙箱面板端点（`GET /sessions/{id}/sandbox/file(s)`）在拿到新建/重建沙箱时同样做一次同步（按 sessionID→sandboxID 去重），保证服务重启句柄丢失后技能目录一致。
 3. 更新 `session.sandbox` 为 `{"id": <沙箱ID>, "status": "running"}` + append `session/sandbox{action:"created"}`。
 
-### 7.2 续约与回收
+### 7.2 续约、暂停与回收
 
-- **续约**：会话活动（每次事件写入）刷新内存 lastActive；后台任务对运行中且 `now-lastActive < ttl/2` 的沙箱调 `renew-expiration`。
-- **空闲回收**：reaper 每分钟扫描，`now-lastActive > idle_ttl_seconds` → DELETE 沙箱 → `session.sandbox.status="recycled"` + append `session/sandbox{action:"recycled"}`。再次调用沙箱工具 → 重新创建（文件不保留，新事件使轨迹自洽）。
-- **兜底**：启动时与每小时对比 lifecycle `GET /sandboxes` 列表与库内记录，孤儿沙箱强制删除。
+- **续约**：会话活动（每次事件写入）刷新内存 lastActive；后台任务每 30s 对距离过期不足 TTL/2 的沙箱调 `renew-expiration`。running 句柄仅在仍有活动（idle < idle_ttl）时续约；paused 句柄不受 idle 限制、持续续约以防被服务端过期清理。续约返回 404（沙箱已消失）→ 直接回收句柄。
+- **空闲暂停（idle → pause）**：reaper 每分钟扫描，`now-lastActive > idle_ttl_seconds`（默认 28800=8h）→ `POST /sandboxes/{id}/pause` 保留文件系统 → `session.sandbox.status="paused"` + append `session/sandbox{action:"paused"}`。pause 404 → 按沙箱已消失回收；其他错误保留下一轮重试。
+- **恢复（resume）**：沙箱获取路径（turn 内 ensure / REST 沙箱面板）遇到 paused 句柄先 `POST /sandboxes/{id}/resume`（同会话并发由句柄级互斥锁串行，只 resume 一次）→ `status="running"` + `action:"resumed"`，文件系统与 /skills 保留；resume 失败（沙箱已消失）→ 落入按需新建（Skills 自动重传逻辑不变）。
+- **硬 TTL 回收**：`expiresAt` 到期（续约也无法延续）的句柄无论 running/paused 都 DELETE 回收（reason `ttl_expired`）→ `status="recycled"` + `action:"recycled"`。删除会话（DeleteSession）的回收不变：直接 recycle，不 pause。
+- **重启 adopt**：启动时与每小时对比 lifecycle `GET /sandboxes` 列表与本进程句柄。wispjar 标签的孤儿沙箱：metadata 会话在本库存在且未软删且沙箱处于可恢复状态 → 重连并暂停，adopt 为 paused 句柄（不 touch 文件系统，之后按需 resume，事件 `action:"paused", reason:"adopted"`）；会话不存在/已删除或沙箱终态 → 强制删除（`action:"recycled", reason:"orphan"`）。
 - **失败**：创建失败置 `session.sandbox.status="failed"` + 事件，工具调用返回"沙箱不可用"错误给模型（可重试一次）。创建路径自带一次退避重试（2s），lifecycle 请求超时 120s（冷启动镜像拉取可能超过 30s）。
+- **配置优先级**：`sandbox.idle_ttl_seconds` 生效顺序为 platform_setting 表（热加载，30s 缓存）→ config 文件 `opensandbox.idle_ttl_seconds` → 代码默认 28800；`sandbox.ttl_seconds`（硬 TTL 步长）经 platform_setting 热加载生效于新建/续约。
 
 ### 7.3 沙箱镜像
 

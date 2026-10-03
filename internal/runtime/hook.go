@@ -17,6 +17,10 @@ func SandboxEventHook(repo SessionRepo, events EventStore, bus *Bus) func(sandbo
 		switch e.Action {
 		case sandbox.EventRecycled:
 			status = "recycled"
+		case sandbox.EventPaused:
+			status = "paused"
+		case sandbox.EventResumed:
+			status = "running"
 		case sandbox.EventFailed:
 			status = "failed"
 			errMsg = e.Reason

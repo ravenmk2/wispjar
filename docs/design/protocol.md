@@ -182,7 +182,7 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 | type | data |
 |---|---|
 | `session/title` | `{title, auto: true\|false}`（latest-wins；用户改名 auto=false 且 pinned） |
-| `session/sandbox` | `{action: "created"\|"recycled"\|"failed", sandbox_id, image, error?}` |
+| `session/sandbox` | `{action: "created"\|"paused"\|"resumed"\|"recycled"\|"failed", sandbox_id, image, error?}`（paused=空闲暂停/重启 adopt，resumed=恢复使用；会话 `sandboxStatus` 对应 `running\|paused\|recycled\|failed`） |
 | `session/approval-mode` | `{mode: "strict"\|"default"\|"auto", changed_by}` |
 | `session/effort` | `{effort: "<档位>", changed_by}` —— 会话思考强度改档（仅 `last_seq = 0` 时可改，见 api.md §3） |
 | `model/selection` | `{model_id, changed_by}` |
