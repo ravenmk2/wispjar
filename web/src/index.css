@@ -85,8 +85,9 @@
   ::selection {
     background: rgba(65, 118, 230, 0.2);
   }
-  /* 弹层毛玻璃（bg-popover 为 0.95 透明底） */
-  [data-radix-popper-content-wrapper] [data-side] {
+  /* 弹层毛玻璃（bg-popover 为 0.95 透明底）：只加在显式标记的弹层上；
+     注意 backdrop-filter 会形成包含块，嵌套子菜单必须走 Portal（见 dropdown-menu.tsx） */
+  .popper-blur {
     backdrop-filter: blur(24px) saturate(1.8);
   }
 }
