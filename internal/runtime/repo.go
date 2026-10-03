@@ -26,6 +26,8 @@ type SessionRepo interface {
 	SetTitleIfUnpinned(ctx context.Context, sessionID, title string) (bool, error)
 	SetSandboxStatus(ctx context.Context, sessionID, sandboxID, status string) error
 	ApprovalDecision(ctx context.Context, sessionID, callID string) (decided bool, auto bool, err error)
+	QuestionAsked(ctx context.Context, sessionID, callID string) (*session.QuestionAskedData, error)
+	QuestionAnswered(ctx context.Context, sessionID, callID string) (bool, error)
 	RunningSessions(ctx context.Context) ([]store.Session, error)
 	UndecidedApprovals(ctx context.Context, sessionID string) ([]session.ApprovalAskedData, error)
 }
@@ -83,6 +85,35 @@ func (r *gormRepo) ApprovalDecision(ctx context.Context, sessionID, callID strin
 	var d session.ApprovalDecidedData
 	_ = json.Unmarshal(ev.Data, &d)
 	return true, d.Auto, nil
+}
+
+// QuestionAsked 取某次提问的 asked 事件（无则 nil）；continued 判定 = asked 存在且无 answered。
+func (r *gormRepo) QuestionAsked(ctx context.Context, sessionID, callID string) (*session.QuestionAskedData, error) {
+	var ev store.SessionEvent
+	err := r.db.WithContext(ctx).
+		Where("session_id = ? AND type = ? AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.call_id')) = ?",
+			sessionID, session.EventQuestionAsked, callID).
+		First(&ev).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var d session.QuestionAskedData
+	if err := json.Unmarshal(ev.Data, &d); err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+func (r *gormRepo) QuestionAnswered(ctx context.Context, sessionID, callID string) (bool, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&store.SessionEvent{}).
+		Where("session_id = ? AND type = ? AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.call_id')) = ?",
+			sessionID, session.EventQuestionAnswered, callID).
+		Count(&n).Error
+	return n > 0, err
 }
 
 func (r *gormRepo) RunningSessions(ctx context.Context) ([]store.Session, error) {

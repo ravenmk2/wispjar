@@ -16,6 +16,7 @@ import (
 
 	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/runtime"
+	"github.com/ravenmk2/wispjar/internal/session"
 )
 
 var errTest = errors.New("boom")
@@ -70,6 +71,10 @@ type fakeOrchestrator struct {
 func (f *fakeOrchestrator) StartTurn(context.Context, string) error       { return nil }
 func (f *fakeOrchestrator) Cancel(string) error                           { return nil }
 func (f *fakeOrchestrator) RecoverPendingApprovals(context.Context) error { return nil }
+
+func (f *fakeOrchestrator) AnswerQuestion(string, string, []session.QuestionAnswer, string) (bool, error) {
+	return false, nil
+}
 
 func (f *fakeOrchestrator) DecideApproval(sessionID, callID string, allow bool, by string) error {
 	f.mu.Lock()

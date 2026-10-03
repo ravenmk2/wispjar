@@ -170,7 +170,7 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 
 | type | data |
 |---|---|
-| `user/message` | `{turn, content, request_id, attachments?}`。`attachments` 为图片附件引用数组（向后兼容，老事件无此字段）：`[{id: "sha256:<64 hex>", mime, bytes, width, height, name}]`——不透明引用，绝无 base64/路径/URL；字节经 `GET /attachments/{id}` 获取（api.md §3） |
+| `user/message` | `{turn, content, request_id, attachments?, source?}`。`attachments` 为图片附件引用数组（向后兼容，老事件无此字段）：`[{id: "sha256:<64 hex>", mime, bytes, width, height, name}]`——不透明引用，绝无 base64/路径/URL；字节经 `GET /attachments/{id}` 获取（api.md §3）。`source` 仅合成消息携带（普通用户消息无此字段）：`{kind:"question-reply", call_id}` 表示迟到提问答复（content 为 JSON `{"kind":"answer_to_pending_question","call_id","questions","answers"}`，见 §10） |
 | `assistant/message` | `{turn, step, message, usage?, interrupted?}`。`message` 为完整 assistant 消息：`{role:"assistant", content:[ContentBlock...]}`，ContentBlock = `{type:"text",text}` / `{type:"reasoning",text}` / `{type:"tool-call",id,name,arguments}`。`usage` 结构同 StreamChunk usage（snake_case） |
 | `assistant/attempt` | `{turn, step, chunks:[StreamChunk...]（压缩存储）, error?}` —— 失败/取消的尝试留痕，**不进模型历史** |
 | `tool/call` | `{turn, step, call_id, name, arguments(原始JSON字符串), parent_call_id?}` |
@@ -188,6 +188,8 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 | `request/header` | `{turn, provider_id, model_id, model_code, params, tools:[string], image_offload?}` —— 本 turn 请求快照（审计/复现用）；`image_offload` 为图片卸载策略版本（本 turn 携带附件时记录，如 `image-offload-v1`，见 runtime.md §8.3） |
 | `approval/asked` | `{turn, step, call_id, name, arguments, risk: "high"\|"medium", parent_call_id?}` |
 | `approval/decided` | `{call_id, decision: "allow"\|"deny", decided_by, auto: false}` —— 超时/重启 fail-closed 的 deny 记 `auto:true, decided_by:"system"` |
+| `question/asked` | `{turn, step, call_id, questions:[{id, question, header?, options?:[{label, description?}], multi_select?}]}` —— ask_user_question 工具提问（问题文本显式落库；等待/continued 语义见 runtime.md §5.3） |
+| `question/answered` | `{call_id, answers:[{id, selected:[label...], custom?}], answered_by}` —— open 作答由等待中的工具落库（恒在 asked 之后）；continued 迟到答复由 REST 落库 |
 | `compaction/summary`（M4 预留） | `{covers: {start_seq, end_seq}, summary}` —— derive 时替换该区间的消息（surface replace 语义） |
 
 ### 6.4 deriveMessages()（事件 → 模型历史的确定性规则）
@@ -249,3 +251,21 @@ Agent 请求 exec → runtime 拦截（runtime.md §5）
 | ctx cancel（用户停止） | 已产出前缀 finalize 为 `assistant/message{interrupted:true}` + `turn/end{interrupted}` |
 
 事件顺序约束：先广播瞬态帧再提交持久事件；持久事件提交（DB 事务成功）后才广播 `event` 帧——保证"模型可见 ⟺ 已落库"不变量（system-design.md §4.3）。
+
+## 10. 提问时序（协议视角）
+
+```txt
+Agent 调用 ask_user_question → append question/asked（持久帧广播，问题文本显式落库）
+  → 工具前台等待（内存 channel，默认 10 分钟；不经过审批 interrupt）
+窗口内用户作答 → REST POST /sessions/{id}/questions/{callId}/answer
+  → 投递内存等待 → 工具 append question/answered → 答案作为 tool/result 正常落库，turn 继续
+超时 → tool/result 内容为 {"pending":true,"call_id","message"}，turn 正常继续；
+  问题无 question/answered，投影上即 continued（open/continued/settled 全集由
+  question/asked、question/answered、tool/result{pending} 折叠推导，重启零成本恢复）
+迟到答复（continued）→ 同一 REST 端点
+  → append question/answered + 合成 user/message{source:{kind:"question-reply",call_id}}
+    （正文 JSON {"kind":"answer_to_pending_question","call_id","questions","answers"}）
+  → 开启新 turn（复用 Prompt 管线；合成 user/message 照常进模型历史）
+```
+
+迟到答复不新增事件类型：settled 判定即"asked 存在且 answered 存在"。turn 取消/中断/重启后未答的提问保持可补答（runtime.md §5.3）。

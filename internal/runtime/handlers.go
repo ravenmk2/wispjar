@@ -20,6 +20,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/attachment"
 	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/gateway/respond"
+	"github.com/ravenmk2/wispjar/internal/id"
 	"github.com/ravenmk2/wispjar/internal/runtime/tools"
 	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/session"
@@ -131,11 +132,6 @@ func (h *Handler) Prompt(c *gin.Context) {
 		return
 	}
 
-	var snap agent.Snapshot
-	if err := json.Unmarshal(sess.AgentSnapshot, &snap); err != nil {
-		fail(c, err)
-		return
-	}
 	var attachments []session.AttachmentRef
 	if len(req.Attachments) > 0 {
 		if h.attachments == nil {
@@ -149,26 +145,44 @@ func (h *Handler) Prompt(c *gin.Context) {
 		}
 		attachments = refs
 	}
-	modelCode, providerID, vision, err := h.model(ctx, sess.ModelID)
+	seq, err := h.beginTurn(c, sess, req.Content, req.RequestID, attachments, nil, nil)
 	if err != nil {
 		fail(c, err)
 		return
 	}
+	if o, ok := h.orch.(*orchestrator); ok {
+		o.maybeGenerateTitle(sess.ID)
+	}
+	go func() { _ = h.orch.StartTurn(context.Background(), sess.ID) }()
+	c.JSON(http.StatusAccepted, gin.H{"accepted": true, "seq": seq})
+}
+
+// beginTurn 追加 user/message + turn/start + request/header 并广播（Prompt 管线与
+// 迟到提问答复共用）。pre 为需要排在这三个事件之前落库的额外事件（如 question/answered）。
+// 返回 user/message 的 seq。调用方负责 sess.Running 前置检查与后续 StartTurn。
+func (h *Handler) beginTurn(c *gin.Context, sess *session.Detail, content, requestID string,
+	attachments []session.AttachmentRef, source *session.MessageSource, pre []session.EventInput) (int64, error) {
+	ctx := c.Request.Context()
+	var snap agent.Snapshot
+	if err := json.Unmarshal(sess.AgentSnapshot, &snap); err != nil {
+		return 0, err
+	}
+	modelCode, providerID, vision, err := h.model(ctx, sess.ModelID)
+	if err != nil {
+		return 0, err
+	}
 	if len(attachments) > 0 && !vision {
-		fail(c, ErrModelNotVision)
-		return
+		return 0, ErrModelNotVision
 	}
 	toolNames := enabledToolNames(&snap)
 	turn, err := h.repo.TurnCount(ctx, sess.ID)
 	if err != nil {
-		fail(c, err)
-		return
+		return 0, err
 	}
 	turn++
 	reqParams, err := json.Marshal(mergeModelParams(snap.ModelParams, sess.ModelParams))
 	if err != nil {
-		fail(c, err)
-		return
+		return 0, err
 	}
 	headerData := session.RequestHeaderData{
 		Turn: turn, ProviderID: providerID, ModelID: sess.ModelID, ModelCode: modelCode,
@@ -178,26 +192,25 @@ func (h *Handler) Prompt(c *gin.Context) {
 		headerData.ImageOffload = imageOffloadVersion
 	}
 
-	events, err := h.events.AppendBatch(ctx, sess.ID, []session.EventInput{
-		{Type: session.EventUserMessage, Data: session.UserMessageData{Turn: turn, Content: req.Content, RequestID: req.RequestID, Attachments: attachments}},
-		{Type: session.EventTurnStart, Data: session.TurnStartData{Turn: turn, RequestID: req.RequestID}},
-		{Type: session.EventRequestHeader, Data: headerData},
-	})
+	inputs := append([]session.EventInput{}, pre...)
+	inputs = append(inputs,
+		session.EventInput{Type: session.EventUserMessage, Data: session.UserMessageData{
+			Turn: turn, Content: content, RequestID: requestID, Attachments: attachments, Source: source,
+		}},
+		session.EventInput{Type: session.EventTurnStart, Data: session.TurnStartData{Turn: turn, RequestID: requestID}},
+		session.EventInput{Type: session.EventRequestHeader, Data: headerData},
+	)
+	events, err := h.events.AppendBatch(ctx, sess.ID, inputs)
 	if err != nil {
-		fail(c, err)
-		return
+		return 0, err
 	}
 	h.publishCommitted(sess.ID, events)
-	if o, ok := h.orch.(*orchestrator); ok {
-		o.maybeGenerateTitle(sess.ID)
-	}
-	go func() { _ = h.orch.StartTurn(context.Background(), sess.ID) }()
-	c.JSON(http.StatusAccepted, gin.H{"accepted": true, "seq": events[0].Seq})
+	return events[len(pre)].Seq, nil
 }
 
 func enabledToolNames(snap *agent.Snapshot) []string {
 	enabled := parseToolsEnabled(snap.ToolsEnabled)
-	names := make([]string, 0, len(enabled)+1)
+	names := make([]string, 0, len(enabled)+2)
 	for name, on := range enabled {
 		if on {
 			names = append(names, name)
@@ -206,6 +219,7 @@ func enabledToolNames(snap *agent.Snapshot) []string {
 	if len(snap.Skills) > 0 {
 		names = append(names, "activate_skill")
 	}
+	names = append(names, "ask_user_question")
 	sort.Strings(names)
 	return names
 }
@@ -244,6 +258,91 @@ func (h *Handler) Approval(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+type answerQuestionRequest struct {
+	Answers []session.QuestionAnswer `json:"answers" binding:"required"`
+}
+
+// AnswerQuestion POST /sessions/:id/questions/:callId/answer（runtime.md §4.9）。
+// open（工具仍在前台等待）→ 投递内存 channel 立即返回；continued（超时/中断/重启后）
+// → 落 question/answered + 合成 user/message（source=question-reply）开启新 turn。
+func (h *Handler) AnswerQuestion(c *gin.Context) {
+	var req answerQuestionRequest
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.Answers) == 0 {
+		respond.Error(c, http.StatusBadRequest, respond.CodeInvalid, "answers 必填且非空", nil)
+		return
+	}
+	ctx := c.Request.Context()
+	sess, err := h.sessions.Get(ctx, auth.UID(c), c.Param("id"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	callID := c.Param("callId")
+	asked, err := h.repo.QuestionAsked(ctx, sess.ID, callID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	if asked == nil {
+		fail(c, ErrQuestionNotFound)
+		return
+	}
+	answered, err := h.repo.QuestionAnswered(ctx, sess.ID, callID)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	if answered {
+		fail(c, ErrQuestionNotPending)
+		return
+	}
+	if err := validateQuestionAnswers(asked.Questions, req.Answers); err != nil {
+		fail(c, &Error{Status: http.StatusBadRequest, Code: "question/bad_answer",
+			Message: "每题必须恰好一条答案", Details: gin.H{"reason": err.Error()}})
+		return
+	}
+
+	uid := auth.UID(c)
+	delivered, err := h.orch.AnswerQuestion(sess.ID, callID, req.Answers, uid)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	if delivered {
+		c.JSON(http.StatusOK, gin.H{"ok": true, "delivered": "open"})
+		return
+	}
+
+	// continued：合成 user/message 开新 turn（问题文本随正文回显，模型可直接续接）。
+	if sess.Running {
+		fail(c, ErrSessionRunning)
+		return
+	}
+	body, err := json.Marshal(map[string]any{
+		"kind":      "answer_to_pending_question",
+		"call_id":   callID,
+		"questions": asked.Questions,
+		"answers":   req.Answers,
+	})
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	pre := []session.EventInput{
+		{Type: session.EventQuestionAnswered, Data: session.QuestionAnsweredData{
+			CallID: callID, Answers: req.Answers, AnsweredBy: uid,
+		}},
+	}
+	seq, err := h.beginTurn(c, sess, string(body), id.New(), nil,
+		&session.MessageSource{Kind: "question-reply", CallID: callID}, pre)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	go func() { _ = h.orch.StartTurn(context.Background(), sess.ID) }()
+	c.JSON(http.StatusAccepted, gin.H{"accepted": true, "delivered": "continued", "seq": seq})
 }
 
 func (h *Handler) sandboxHandle(c *gin.Context, sess *session.Detail) (*sandbox.Handle, bool) {

@@ -163,6 +163,27 @@ func (r *fakeRepo) ApprovalDecision(_ context.Context, sessionID, callID string)
 	return false, false, nil
 }
 
+func (r *fakeRepo) QuestionAsked(_ context.Context, sessionID, callID string) (*session.QuestionAskedData, error) {
+	for _, ev := range r.es.byType(session.EventQuestionAsked) {
+		var d session.QuestionAskedData
+		if json.Unmarshal(ev.Data, &d) == nil && d.CallID == callID {
+			out := d
+			return &out, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r *fakeRepo) QuestionAnswered(_ context.Context, sessionID, callID string) (bool, error) {
+	for _, ev := range r.es.byType(session.EventQuestionAnswered) {
+		var d session.QuestionAnsweredData
+		if json.Unmarshal(ev.Data, &d) == nil && d.CallID == callID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (r *fakeRepo) RunningSessions(_ context.Context) ([]store.Session, error) {
 	return []store.Session{*r.sess}, nil
 }

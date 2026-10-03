@@ -31,6 +31,9 @@
 | 409 | `session/effort_locked` | 对话已开始（`last_seq > 0`），思考强度不可再改（details 含当前值） |
 | 409 | `approval/not_pending` | 审批已决定或已过期 |
 | 410 | `approval/expired` | 审批超时 |
+| 404 | `question/not_found` | 提问不存在（无对应 `question/asked`） |
+| 409 | `question/not_pending` | 提问已作答 |
+| 400 | `question/bad_answer` | 提问答案校验失败（每题恰好一条；details.reason 含原因） |
 | 409 | `session/vision_locked` | 会话历史包含图片，不能切换到非视觉模型（PATCH model_id） |
 | 422 | `model/not_vision` | 带图 prompt 命中不支持视觉的模型，需换模型 |
 | 404 | `attachment/not_found` | 附件不存在或无权访问（不区分，防枚举） |
@@ -168,6 +171,22 @@
 
 审批决定（owner）。请求 `{ "decision": "allow|deny" }` → `{ "ok": true }`。
 - 状态非 pending → 409 `approval/not_pending`；超时 → 410 `approval/expired`（服务端已自动补 deny）。
+
+### POST /api/v1/sessions/{id}/questions/{callId}/answer
+
+提问作答（owner；ask_user_question 工具，runtime.md §5.3）。请求：
+
+```json
+{ "answers": [ { "id": "q1", "selected": ["label"...], "custom": "（可选自由文本）" } ] }
+```
+
+- 校验：`callId` 无对应 `question/asked` → 404 `question/not_found`；已作答 → 409 `question/not_pending`；
+  每题必须恰好一条答案（按 id 对应，不允许未知/重复 id；有 options 的题 `selected` 必须是选项 label，
+  单选至多一个；自由输入题不允许 `selected`；显式跳过 = 空 `selected` 且无 `custom`）→ 400 `question/bad_answer`。
+- open（工具仍在前台等待）→ 投递内存等待，答案作为该工具结果返回，200 `{ "ok": true, "delivered": "open" }`。
+- continued（超时/中断/重启后）→ 落 `question/answered` + 合成 `user/message`（`source:{kind:"question-reply"}`）
+  开启新 turn，202 `{ "accepted": true, "delivered": "continued", "seq": <user/message seq> }`；
+  会话忙 → 409 `session/running`（v1 不支持排队）。
 
 ### GET /api/v1/sessions/{id}/sandbox/files
 

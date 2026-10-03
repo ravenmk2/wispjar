@@ -20,6 +20,8 @@ const (
 	EventRequestHeader       = "request/header"
 	EventApprovalAsked       = "approval/asked"
 	EventApprovalDecided     = "approval/decided"
+	EventQuestionAsked       = "question/asked"
+	EventQuestionAnswered    = "question/answered"
 	EventCompactionSummary   = "compaction/summary"
 )
 
@@ -71,11 +73,18 @@ type AttachmentRef struct {
 	Name   string `json:"name"`
 }
 
+// MessageSource 标记合成 user/message 的来源（迟到提问答复等）；普通用户消息为空。
+type MessageSource struct {
+	Kind   string `json:"kind"`
+	CallID string `json:"call_id"`
+}
+
 type UserMessageData struct {
 	Turn        int             `json:"turn"`
 	Content     string          `json:"content"`
 	RequestID   string          `json:"request_id"`
 	Attachments []AttachmentRef `json:"attachments,omitempty"`
+	Source      *MessageSource  `json:"source,omitempty"`
 }
 
 type AssistantMessage struct {
@@ -179,6 +188,42 @@ type ApprovalDecidedData struct {
 	Decision  string `json:"decision"`
 	DecidedBy string `json:"decided_by"`
 	Auto      bool   `json:"auto"`
+}
+
+// QuestionOption 是提问选项；答案回传 label 而非下标（对齐模型最不易错的形态）。
+type QuestionOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+}
+
+// Question 是 ask_user_question 的一道题：无 options=自由输入；有 options 按 multi_select 分单/多选。
+type Question struct {
+	ID          string           `json:"id"`
+	Question    string           `json:"question"`
+	Header      string           `json:"header,omitempty"`
+	Options     []QuestionOption `json:"options,omitempty"`
+	MultiSelect bool             `json:"multi_select,omitempty"`
+}
+
+// QuestionAnswer 是一道题的答案；selected 为选项 label 列表，custom 为自由文本；
+// 显式跳过 = selected 为空且无 custom（仍算已作答）。
+type QuestionAnswer struct {
+	ID       string   `json:"id"`
+	Selected []string `json:"selected"`
+	Custom   string   `json:"custom,omitempty"`
+}
+
+type QuestionAskedData struct {
+	Turn      int        `json:"turn"`
+	Step      int        `json:"step"`
+	CallID    string     `json:"call_id"`
+	Questions []Question `json:"questions"`
+}
+
+type QuestionAnsweredData struct {
+	CallID     string           `json:"call_id"`
+	Answers    []QuestionAnswer `json:"answers"`
+	AnsweredBy string           `json:"answered_by"`
 }
 
 type SeqRange struct {

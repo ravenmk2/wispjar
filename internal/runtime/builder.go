@@ -139,6 +139,12 @@ func (o *orchestrator) buildAgent(ctx context.Context, sess *store.Session, snap
 	if err != nil {
 		return nil, nil, err
 	}
+	question, err := o.newQuestionTool(sess, rs, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	toolList = append(toolList, question)
+	toolNames = append(toolNames, "ask_user_question")
 	if len(snap.SubAgents) > 0 {
 		task, err := o.newTaskTool(sess, snap, tc, rs)
 		if err != nil {

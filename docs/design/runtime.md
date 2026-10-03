@@ -187,6 +187,26 @@ only its final result. Available subagents:
 Use this when a subtask is focused and independent; include everything the subagent needs in `prompt`.
 ```
 
+### 4.9 ask_user_question（风险 low，render generic）
+
+```jsonc
+// name: ask_user_question —— 向用户提问并等待回答（一卡多题，前台最多等待 10 分钟）。
+// 仅在 genuinely 需要用户决策或缺失信息时使用，不做礼节性确认。
+{ "questions": [ { "id": "string（必填，本次调用内唯一，答案中回显）",
+                   "question": "string（必填，问题文本）",
+                   "header": "string，短标题，如 Confirm / Choose Mode",
+                   "options": [ {"label": "string（必填）", "description": "string"} ],
+                   "multi_select": "bool，默认 false" } ] }
+// 题型由 options 有无 + multi_select 推导：无 options=自由输入；有 options 单选/多选。
+// 窗口内作答返回：{ "answers": [ {"id", "selected": ["label"...], "custom"?} ] }
+//   —— 每题恰好一条；selected 回传选项 label（不是下标，模型最不易错）；
+//      空 selected 且无 custom = 用户显式跳过（仍算已作答）
+// 超时返回：{ "pending": true, "call_id": "...", "message": "..." }
+//   —— 是 pending 不是跳过：用户答复稍后会作为一条新 user message 到来，绝不能当作许可
+```
+
+实现：internal/runtime/question.go（等待语义与子 Agent 规则见 §5.3）。任何 approval_mode 下不被审批中间件拦截（交互工具，豁免方式同 activate_skill）。仅 depth=0 根 Agent 可用；depth=1 注册同 schema 拒绝桩（§5.3）。
+
 ## 5. 审批实现（internal/runtime/approval）
 
 ### 5.1 拦截点与状态机
@@ -209,10 +229,38 @@ pending 审批登记内存表 `map[callID]pendingApproval{sessionID, checkpointI
 |---|---|---|---|
 | exec | 确认 | 确认 | 免 |
 | write / edit | 确认 | 免 | 免 |
-| read / glob / grep / activate_skill / task | 免 | 免 | 免 |
+| read / glob / grep / activate_skill / task / ask_user_question | 免 | 免 | 免 |
 
 - `grep` 虽走 exec 通道，按工具自身 low 风险归类（实现通道不影响风险语义）。
 - 子 Agent 内的工具调用继承同一会话的 approval_mode（嵌套 asked/decided 带 `parent_call_id`）。
+
+### 5.3 提问（ask_user_question）实现（internal/runtime/question）
+
+与审批**刻意不共用管线**（对齐 DSH：两者各自拥有独立的 pending-settlement 生命周期）——审批 resume 依赖 eino checkpoint 且 fail-closed 合理；提问答案是结构化的、等待时间可能远超 10 分钟，且超时不应让 turn 失败。挂起原语同构：工具 execute 内按 callID 登记内存等待（channel，缓冲 1）后 `select` 等待。
+
+状态机（timed + continued 简化版）：
+
+```txt
+execute：登记内存等待 → append question/asked（问题文本显式落库）→ select 等待
+  ├─ 窗口内 REST 投递 → 工具 append question/answered（保证 asked 先于 answered）
+  │    → {"answers":[...]} 作为普通工具结果返回，turn 继续
+  ├─ 超时（默认 10 分钟，Deps.QuestionWaitTimeout 可注入）
+  │    → 工具结果 {"pending":true,"call_id","message"}，turn 正常继续（不是失败）；
+  │      问题无 question/answered，投影上即 continued，保持可答
+  └─ ctx.Done（turn 取消/中断）→ 等待随 ctx 结束，按现有中断语义落库（derive 悬空配对
+       合成 interrupted tool/result）；已投递未消费的答案仍补记 question/answered
+       （不丢用户作答）；未答的问题仍属 continued 可补答
+continued（迟到答复）：REST 校验 → append question/answered + 合成 user/message
+  （source:{kind:"question-reply",call_id}，正文 JSON
+  {"kind":"answer_to_pending_question","call_id","questions","answers"}）开启新 turn
+  ——迟到答复 = 一个新 turn，而不是恢复旧工具调用；会话忙 → 409 session/running
+```
+
+重启语义（零成本恢复）：重启后内存等待清空，未答的 `question/asked` 天然视为 continued（投影规则推导，**无需启动时扫表补偿**）。提问所在 turn 若仍 running，由 `RecoverPendingApprovals` 按现有中断收尾（补 `turn/end{failed}`）；挂起的工具调用按 derive 悬空配对规则合成 interrupted 结果，问题保持可补答。
+
+子 Agent 规则：仅 depth=0 根 Agent 可真正提问。depth=1（task 子 Agent）注册同 schema 的拒绝桩，调用即返回错误文本，提示"把未决问题写进 task 最终结果由父智能体上浮"（对齐 DSH DELEGATED_CALLER）；桩以工具结果文本回喂而非 Go error（工具错误会被 eino 升级为整个子运行失败，见 §4.8）。不做嵌套 pending（审批的 parent_call_id 复杂度不在提问上重演）。
+
+答案校验（REST，400 `question/bad_answer`）：每题恰好一条答案（按 id 对应，不允许未知/重复 id）；有 options 的题 selected 必须是选项 label，单选至多一个；自由输入题不允许 selected。
 
 ## 6. task 委派实现（M3）
 

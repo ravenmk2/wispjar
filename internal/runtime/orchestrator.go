@@ -46,6 +46,8 @@ type Deps struct {
 	ToolContextFactory func(sess *store.Session, snap *agent.Snapshot) *tools.Context
 	// Attachments 附件字节读取（图片组装用；历史含附件时必配）。
 	Attachments AttachmentReader
+	// QuestionWaitTimeout 提问工具前台等待窗口（0 = 默认 10 分钟；测试注入小值）。
+	QuestionWaitTimeout time.Duration
 }
 
 // Orchestrator 是运行时总链路的入口（runtime.md §1）。
@@ -53,6 +55,8 @@ type Orchestrator interface {
 	StartTurn(ctx context.Context, sessionID string) error
 	Cancel(sessionID string) error
 	DecideApproval(sessionID, callID string, allow bool, by string) error
+	// AnswerQuestion 投递提问答案；open 状态返回 true，无内存等待（continued）返回 false。
+	AnswerQuestion(sessionID, callID string, answers []session.QuestionAnswer, by string) (bool, error)
 	Follow(sessionID string, afterSeq int64) (*Snapshot, <-chan FollowFrame, func(), error)
 	RecoverPendingApprovals(ctx context.Context) error
 }
@@ -87,18 +91,27 @@ func (rs *runState) currentStep() int {
 type orchestrator struct {
 	deps Deps
 
-	mu      sync.RWMutex
-	runs    map[string]*runState
-	pending map[string]*pendingApproval
+	mu        sync.RWMutex
+	runs      map[string]*runState
+	pending   map[string]*pendingApproval
+	questions map[string]*pendingQuestion
+
+	questionTimeout time.Duration
 
 	titled sync.Map // sessionID -> struct{}：每进程只尝试一次自动标题
 }
 
 func NewOrchestrator(deps Deps) Orchestrator {
+	questionTimeout := deps.QuestionWaitTimeout
+	if questionTimeout <= 0 {
+		questionTimeout = defaultQuestionWaitTimeout
+	}
 	return &orchestrator{
-		deps:    deps,
-		runs:    map[string]*runState{},
-		pending: map[string]*pendingApproval{},
+		deps:            deps,
+		runs:            map[string]*runState{},
+		pending:         map[string]*pendingApproval{},
+		questions:       map[string]*pendingQuestion{},
+		questionTimeout: questionTimeout,
 	}
 }
 
@@ -521,6 +534,13 @@ func (o *orchestrator) endTurn(sessionID string, rs *runState, reason, errMsg st
 				}
 			}
 			delete(o.pending, id)
+		}
+	}
+	// 提问等待随 turn 收尾防御性清理（正常路径工具在 turn 结束前已返回并自注销）；
+	// 未答的问题无 question/answered，投影上仍属 continued 可补答。
+	for id, w := range o.questions {
+		if w.sessionID == sessionID {
+			delete(o.questions, id)
 		}
 	}
 	o.mu.Unlock()

@@ -172,6 +172,13 @@ func (o *orchestrator) buildSubAgent(ctx context.Context, sess *store.Session, s
 	if err != nil {
 		return nil, err
 	}
+	// depth=1：ask_user_question 注册拒绝桩（子 Agent 不能提问，错误提示把未决问题
+	// 写进最终结果由父 Agent 上浮；runtime.md §4.9）。
+	question, err := o.newQuestionTool(sess, nil, 1)
+	if err != nil {
+		return nil, err
+	}
+	toolList = append(toolList, question)
 	maxIter := sub.MaxIterations
 	if maxIter <= 0 {
 		maxIter = 20

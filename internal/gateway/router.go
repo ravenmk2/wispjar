@@ -72,6 +72,7 @@ func NewRouter(deps Deps) *gin.Engine {
 		authed.POST("/sessions/:id/prompts", deps.Runtime.Prompt)
 		authed.POST("/sessions/:id/cancel", deps.Runtime.Cancel)
 		authed.POST("/sessions/:id/approvals/:callId", deps.Runtime.Approval)
+		authed.POST("/sessions/:id/questions/:callId/answer", deps.Runtime.AnswerQuestion)
 		authed.GET("/sessions/:id/sandbox/files", deps.Runtime.SandboxFiles)
 		authed.GET("/sessions/:id/sandbox/file", deps.Runtime.SandboxFile)
 	} else {

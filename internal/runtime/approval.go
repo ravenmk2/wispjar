@@ -31,6 +31,8 @@ var toolRisk = map[string]string{
 	"grep":           RiskLow,
 	"activate_skill": RiskLow,
 	"task":           RiskLow,
+	// ask_user_question 是交互工具而非危险操作：任何 approval_mode 下都不拦截。
+	"ask_user_question": RiskLow,
 }
 
 func riskOf(toolName string) string {
