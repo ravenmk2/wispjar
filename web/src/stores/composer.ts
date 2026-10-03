@@ -4,6 +4,7 @@ import type { ApprovalMode } from "@/lib/types"
 interface OptimisticMessage {
   requestId: string
   content: string
+  attachments?: Array<{ url: string; name: string }>
 }
 
 interface ComposerState {

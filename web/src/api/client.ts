@@ -35,6 +35,37 @@ async function parseError(res: Response): Promise<ApiError> {
   return new ApiError(res.status, "internal", `请求失败（HTTP ${res.status}）`)
 }
 
+async function ensureOk(res: Response): Promise<Response> {
+  if (res.status === 401) {
+    const err = await parseError(res)
+    if (err.code === "auth/password_change_required") {
+      if (window.location.pathname !== "/change-password") {
+        window.location.href = "/change-password"
+      }
+      throw err
+    }
+    useIdentityStore.getState().clear()
+    if (window.location.pathname !== "/login") {
+      window.location.href = "/login"
+    }
+    throw err
+  }
+  if (!res.ok) {
+    throw await parseError(res)
+  }
+  return res
+}
+
+// 鉴权字节流入口：multipart 上传与 blob 下载不能走 JSON api()
+export async function apiRaw(path: string, init: RequestInit = {}): Promise<Response> {
+  const { token, currentOrgId } = useIdentityStore.getState()
+  const headers = new Headers(init.headers)
+  if (token) headers.set("Authorization", `Bearer ${token}`)
+  if (currentOrgId) headers.set("X-Org-Id", currentOrgId)
+  const res = await fetch(`${BASE_URL}${path}`, { ...init, headers })
+  return ensureOk(res)
+}
+
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, params } = options
   const url = new URL(BASE_URL + path, window.location.origin)
@@ -56,24 +87,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
 
-  if (res.status === 401) {
-    const err = await parseError(res)
-    if (err.code === "auth/password_change_required") {
-      if (window.location.pathname !== "/change-password") {
-        window.location.href = "/change-password"
-      }
-      throw err
-    }
-    useIdentityStore.getState().clear()
-    if (window.location.pathname !== "/login") {
-      window.location.href = "/login"
-    }
-    throw err
-  }
-
-  if (!res.ok) {
-    throw await parseError(res)
-  }
+  await ensureOk(res)
 
   if (res.status === 204) {
     return undefined as T

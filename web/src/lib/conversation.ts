@@ -1,4 +1,4 @@
-import type { ContentBlock, SessionEvent, StreamChunk, ToolResultMeta, TurnEndReason, Usage } from "@/lib/types"
+import type { AttachmentRef, ContentBlock, SessionEvent, StreamChunk, ToolResultMeta, TurnEndReason, Usage } from "@/lib/types"
 
 export interface UserNode {
   kind: "user"
@@ -8,6 +8,7 @@ export interface UserNode {
   turn: number
   content: string
   requestId: string
+  attachments?: AttachmentRef[]
 }
 
 export interface AssistantNode {
@@ -203,6 +204,7 @@ export function deriveConversationNodes(
           turn: e.data.turn,
           content: e.data.content,
           requestId: e.data.request_id,
+          attachments: e.data.attachments,
         })
         break
       case "assistant/message": {

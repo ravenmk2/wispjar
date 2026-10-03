@@ -3,6 +3,7 @@ import { useMemo } from "react"
 import { ApprovalCard } from "@/features/chat/ApprovalCard"
 import { actionBarCls, AssistantMessage } from "@/features/chat/AssistantMessage"
 import { ForkButton } from "@/features/chat/ForkButton"
+import { MessageImages } from "@/features/chat/MessageImages"
 import { ToolCallCard } from "@/features/chat/ToolCallCard"
 import { CopyIconButton } from "@/components/CopyIconButton"
 import { formatMessageTime } from "@/lib/format"
@@ -53,6 +54,9 @@ export function NodeView({
       return (
         <div className={cn("group flex flex-col gap-1", depth === 0 && "items-end")}>
           <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-bubble px-3.5 py-2 text-sm text-foreground">
+            {node.attachments && node.attachments.length > 0 && (
+              <MessageImages attachments={node.attachments} className={cn(node.content && "mb-1.5")} />
+            )}
             {node.content}
           </div>
           <div className={cn("flex items-center gap-0.5", actionBarCls(inLatestTurn))}>
@@ -104,10 +108,32 @@ export function NodeList({
   )
 }
 
-export function OptimisticBubble({ content }: { content: string }) {
+export function OptimisticBubble({
+  content,
+  attachments,
+}: {
+  content: string
+  attachments?: Array<{ url: string; name: string }>
+}) {
   return (
     <div className="flex justify-end">
       <div className="max-w-[85%] rounded-2xl bg-bubble px-3.5 py-2 text-sm text-foreground">
+        {attachments && attachments.length > 0 && (
+          <div className={cn("flex flex-wrap gap-1", content && "mb-1.5")}>
+            {attachments.map((a, i) => (
+              <img
+                key={i}
+                src={a.url}
+                alt={a.name}
+                className={
+                  attachments.length === 1
+                    ? "max-h-60 max-w-60 rounded-lg object-cover"
+                    : "size-16 rounded-md object-cover"
+                }
+              />
+            ))}
+          </div>
+        )}
         <span className="whitespace-pre-wrap">{content}</span>
         <Loader2 className="ml-1.5 inline size-3 animate-spin align-text-bottom text-fg-tertiary" />
       </div>

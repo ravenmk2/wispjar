@@ -1,6 +1,7 @@
-import { ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Shield, ShieldCheck, ShieldOff, Square } from "lucide-react"
+import { ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, ImageOff, Loader2, Paperclip, RotateCw, Shield, ShieldCheck, ShieldOff, Square, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import { attachmentsApi } from "@/api/attachments"
 import { errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
 import { workspaceApi } from "@/api/workspace"
@@ -15,9 +16,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { TokenBadge } from "@/features/chat/AssistantMessage"
 import { cn, uuid } from "@/lib/utils"
-import type { ApprovalMode, OrgModel } from "@/lib/types"
+import type { ApprovalMode, AttachmentRef, OrgModel } from "@/lib/types"
 import { useComposerStore } from "@/stores/composer"
 import { useCurrentOrg } from "@/stores/identity"
 import { useSessionStore } from "@/stores/session"
@@ -35,6 +37,18 @@ const APPROVAL_MODES: Array<{
 
 // 内容自适应长高，约 14 行（leading-6）封顶后内部滚动
 const MAX_TEXTAREA_HEIGHT = 14 * 24
+
+const MAX_IMAGES = 9
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024
+const IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"])
+
+interface PendingImage {
+  key: string
+  file: File
+  previewUrl: string
+  status: "uploading" | "ready" | "error"
+  ref?: AttachmentRef
+}
 
 function effortLabel(effort: string): string {
   return effort.charAt(0).toUpperCase() + effort.slice(1)
@@ -62,6 +76,12 @@ export function Composer({ sessionId }: { sessionId: string }) {
   const [menuLevel, setMenuLevel] = useState<ModelMenuLevel>("root")
   const [effort, setEffort] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [images, setImages] = useState<PendingImage[]>([])
+  const [dragging, setDragging] = useState(false)
+  const uploadsRef = useRef(new Map<string, Promise<AttachmentRef>>())
+  const imagesRef = useRef<PendingImage[]>([])
+  imagesRef.current = images
 
   const running = header?.running ?? false
   const busy = running || liveAttempt !== null
@@ -103,6 +123,16 @@ export function Composer({ sessionId }: { sessionId: string }) {
     el.style.overflowY = el.scrollHeight > MAX_TEXTAREA_HEIGHT ? "auto" : "hidden"
   }, [draft])
 
+  // 切换会话/卸载时丢弃未发送附件并释放本地预览
+  useEffect(() => {
+    return () => {
+      for (const img of imagesRef.current) URL.revokeObjectURL(img.previewUrl)
+      imagesRef.current = []
+      uploadsRef.current.clear()
+      setImages([])
+    }
+  }, [sessionId])
+
   const filteredModels = useMemo(() => {
     const q = modelQuery.trim().toLowerCase()
     if (!q) return models
@@ -124,15 +154,101 @@ export function Composer({ sessionId }: { sessionId: string }) {
     return groups
   }, [filteredModels])
 
+  const currentModel = models.find((m) => m.id === modelId)
+  const visionSupported = currentModel?.capabilities.vision ?? true
+
+  function startUpload(item: PendingImage) {
+    const promise = attachmentsApi.upload(sessionId, item.file)
+    uploadsRef.current.set(item.key, promise)
+    promise.then(
+      (ref) => {
+        setImages((prev) => prev.map((i) => (i.key === item.key ? { ...i, status: "ready", ref } : i)))
+      },
+      () => {
+        setImages((prev) => prev.map((i) => (i.key === item.key ? { ...i, status: "error" } : i)))
+      },
+    )
+  }
+
+  function addFiles(files: File[]) {
+    if (files.length === 0) return
+    if (!visionSupported) {
+      toast.error("当前模型不支持图片")
+      return
+    }
+    const accepted: PendingImage[] = []
+    for (const file of files) {
+      if (!IMAGE_MIMES.has(file.type)) {
+        toast.error(`「${file.name}」格式不支持，仅支持 PNG/JPEG/WebP/GIF`)
+        continue
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        toast.error(`「${file.name}」超过 8MB 大小限制`)
+        continue
+      }
+      accepted.push({ key: uuid(), file, previewUrl: URL.createObjectURL(file), status: "uploading" })
+    }
+    const capacity = MAX_IMAGES - imagesRef.current.length
+    if (accepted.length > capacity) {
+      toast.error(`最多添加 ${MAX_IMAGES} 张图片`)
+      for (const extra of accepted.splice(capacity)) URL.revokeObjectURL(extra.previewUrl)
+    }
+    if (accepted.length === 0) return
+    setImages((prev) => [...prev, ...accepted])
+    for (const item of accepted) startUpload(item)
+  }
+
+  function removeImage(key: string) {
+    uploadsRef.current.delete(key)
+    setImages((prev) => {
+      const target = prev.find((i) => i.key === key)
+      if (target) URL.revokeObjectURL(target.previewUrl)
+      return prev.filter((i) => i.key !== key)
+    })
+  }
+
+  function retryImage(key: string) {
+    const item = imagesRef.current.find((i) => i.key === key)
+    if (!item || item.status !== "error") return
+    setImages((prev) => prev.map((i) => (i.key === key ? { ...i, status: "uploading" } : i)))
+    startUpload(item)
+  }
+
   async function send() {
     const content = draft.trim()
-    if (!content || sending || busy) return
-    const requestId = uuid()
-    setOptimistic({ requestId, content })
+    if (sending || busy) return
+    const pending = imagesRef.current
+    if (!content && pending.length === 0) return
+    if (pending.some((i) => i.status === "error")) {
+      toast.error("有图片上传失败，请重试或移除后再发送")
+      return
+    }
     setSending(true)
     try {
-      await sessionsApi.prompt(sessionId, { content, request_id: requestId })
+      // 等待在途上传全部就绪；任一失败则整条不发送（草稿与附件保留）
+      const refs = await Promise.all(
+        pending.map((i) => {
+          if (i.status === "ready" && i.ref) return Promise.resolve(i.ref)
+          const p = uploadsRef.current.get(i.key)
+          return p ?? Promise.reject(new Error("图片上传未完成"))
+        }),
+      )
+      const requestId = uuid()
+      setOptimistic({
+        requestId,
+        content,
+        attachments: pending.length
+          ? pending.map((i) => ({ url: i.previewUrl, name: i.file.name }))
+          : undefined,
+      })
+      await sessionsApi.prompt(sessionId, {
+        content,
+        request_id: requestId,
+        ...(refs.length ? { attachments: refs.map((r) => r.id) } : {}),
+      })
       setDraft("")
+      setImages([])
+      uploadsRef.current.clear()
     } catch (e) {
       clearOptimistic()
       toast.error(errorMessage(e))
@@ -194,7 +310,6 @@ export function Composer({ sessionId }: { sessionId: string }) {
     }
   }
 
-  const currentModel = models.find((m) => m.id === modelId)
   const modelName = currentModel?.display_name
   const modelEfforts = currentModel?.capabilities.reasoning_efforts ?? []
   const modelEffortDefault = currentModel?.capabilities.reasoning_effort_default ?? ""
@@ -204,11 +319,75 @@ export function Composer({ sessionId }: { sessionId: string }) {
   return (
     <div className="shrink-0">
       <div className="mx-auto max-w-3xl px-4 pb-4 pt-2">
-        <div className="rounded-[28px] border border-black/10 bg-background shadow-[0_4px_24px_rgba(15,17,21,0.08)] focus-within:border-black/20 dark:border-white/10 dark:focus-within:border-white/20">
+        <div
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes("Files")) {
+              e.preventDefault()
+              setDragging(true)
+            }
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false)
+          }}
+          onDrop={(e) => {
+            if (!e.dataTransfer.files.length) return
+            e.preventDefault()
+            setDragging(false)
+            addFiles([...e.dataTransfer.files])
+          }}
+          className={cn(
+            "rounded-[28px] border border-black/10 bg-background shadow-[0_4px_24px_rgba(15,17,21,0.08)] focus-within:border-black/20 dark:border-white/10 dark:focus-within:border-white/20",
+            dragging && "border-primary ring-2 ring-primary/30",
+          )}
+        >
+          {images.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-4 pt-3">
+              {images.map((img) => (
+                <div
+                  key={img.key}
+                  title={img.file.name}
+                  className="group relative size-14 overflow-hidden rounded-lg bg-accent"
+                >
+                  <img src={img.previewUrl} alt={img.file.name} className="size-full object-cover" />
+                  {img.status === "uploading" && (
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <Loader2 className="size-4 animate-spin text-white" />
+                    </span>
+                  )}
+                  {img.status === "error" && (
+                    <button
+                      type="button"
+                      title="上传失败，点击重试"
+                      onClick={() => retryImage(img.key)}
+                      className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-black/50 text-white"
+                    >
+                      <ImageOff className="size-3.5" />
+                      <RotateCw className="size-3" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    title="移除"
+                    onClick={() => removeImage(img.key)}
+                    className="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onPaste={(e) => {
+              const files = [...e.clipboardData.files]
+              if (files.length > 0) {
+                e.preventDefault()
+                addFiles(files)
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault()
@@ -219,7 +398,33 @@ export function Composer({ sessionId }: { sessionId: string }) {
             placeholder={busy ? "会话运行中，可点击右侧按钮停止…" : "输入消息，Enter 发送，Shift+Enter 换行"}
             className="block w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-sm leading-6 outline-none placeholder:text-fg-caption"
           />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              addFiles([...(e.target.files ?? [])])
+              e.target.value = ""
+            }}
+          />
           <div className="flex items-center gap-1 px-3 pb-3 pt-1.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex">
+                  <button
+                    type="button"
+                    disabled={!visionSupported}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex size-7 items-center justify-center rounded-md text-fg-tertiary transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-tertiary"
+                  >
+                    <Paperclip className="size-4" />
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{visionSupported ? "添加图片" : "当前模型不支持图片"}</TooltipContent>
+            </Tooltip>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -420,7 +625,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
                   type="button"
                   title="发送"
                   onClick={() => void send()}
-                  disabled={!draft.trim() || sending || busy}
+                  disabled={(!draft.trim() && images.length === 0) || sending || busy}
                   className="ml-1 flex size-[34px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:bg-primary/90 disabled:opacity-40"
                 >
                   <ArrowUp className="size-4" />

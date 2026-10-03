@@ -240,6 +240,15 @@ export interface AssistantMessagePayload {
   content: ContentBlock[]
 }
 
+export interface AttachmentRef {
+  id: string
+  mime: string
+  bytes: number
+  width: number
+  height: number
+  name: string
+}
+
 export type StreamChunk =
   | { type: "block-start"; index: number; blockType: "text" | "reasoning" | "tool-call" }
   | { type: "text-delta"; index: number; text: string }
@@ -274,7 +283,7 @@ export type SessionEvent = SessionEventBase &
     | { type: "turn/end"; data: { turn: number; reason: TurnEndReason; error?: string } }
     | { type: "step/start"; data: { turn: number; step: number } }
     | { type: "step/end"; data: { turn: number; step: number } }
-    | { type: "user/message"; data: { turn: number; content: string; request_id: string } }
+    | { type: "user/message"; data: { turn: number; content: string; request_id: string; attachments?: AttachmentRef[] } }
     | {
         type: "assistant/message"
         data: { turn: number; step: number; message: AssistantMessagePayload; usage?: Usage; interrupted?: boolean }
@@ -461,6 +470,7 @@ export interface UpdateSessionRequest {
 export interface PromptRequest {
   content: string
   request_id: string
+  attachments?: string[]
 }
 
 export interface PromptResponse {
