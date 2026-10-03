@@ -33,8 +33,10 @@ function computeStats(events: ReturnType<typeof useSessionStore.getState>["event
     }
   }
   add(liveUsage)
-  const tokens = input + output + cacheRead + cacheWrite
-  const billed = input + cacheRead
+  // usage.input_tokens 即 OpenAI prompt_tokens，已含缓存命中部分；
+  // 缓存读是其中的子集，合计时不得重复计入
+  const tokens = input + output + cacheWrite
+  const billed = input
   let cacheHit: number | null = null
   if (billed > 0 && cacheRead > 0) {
     const hit = Math.round((cacheRead / billed) * 100)

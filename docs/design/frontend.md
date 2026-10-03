@@ -119,7 +119,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 - 乐观对账：发送即插入乐观节点（`request_id`），事件帧到达后替换（protocol.md §8.4）。
 - 会话 running 且来自**本会话**时不允许再发送（置灰 + 提示）；429/409 错误 toast。
 - **ApprovalTakeover**：顶层待审批时整个胶囊位被审批卡接管——琥珀描边卡：「等待审批 + 倒计时」头 + 工具参数明细（exec 命令高亮 / write/edit diff）+ 「拒绝」「允许一次」按钮；Enter 允许 / Esc 拒绝。嵌套审批不触发 takeover；仅聊天标签页渲染（轨迹标签页不渲染）。
-- **StatsPills**：胶囊下方居中统计（"N 轮 · M 步"、"X tok · 缓存命中 N%"），由会话事件投影在前端推导，无新增接口。
+- **StatsPills**：胶囊下方居中统计（"N 轮 · M 步"、"X tok · 缓存命中 N%"），由会话事件投影在前端推导，无新增接口。口径：usage.input_tokens 即 OpenAI prompt_tokens（已含缓存命中），命中率 = cache_read ÷ input_tokens；tok 合计 = input + output + cache_write（缓存读为 input 子集，不重复计入）。
 
 ### 6.3 轨迹视图（features/trajectory）
 
