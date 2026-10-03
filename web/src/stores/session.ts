@@ -2,6 +2,7 @@ import { create } from "zustand"
 import type {
   AssistantStreamFrame,
   AssistantStreamSnapshot,
+  Question,
   SessionEvent,
   SessionHeader,
   StreamChunk,
@@ -30,6 +31,14 @@ export interface PendingApproval {
   parentCallId?: string
 }
 
+export interface PendingQuestion {
+  callId: string
+  turn: number
+  step: number
+  questions: Question[]
+  askedAt: number
+}
+
 interface SessionState {
   sessionId: string | null
   header: SessionHeader | null
@@ -37,6 +46,7 @@ interface SessionState {
   hasMore: boolean
   liveAttempt: LiveAttempt | null
   pendingApprovals: Record<string, PendingApproval>
+  pendingQuestions: Record<string, PendingQuestion>
   toolOutputs: Record<string, string>
   followStatus: FollowStatus
   lastSeq: number
@@ -50,6 +60,7 @@ interface SessionState {
   appendEvents: (events: SessionEvent[]) => void
   applyStreamFrame: (frame: AssistantStreamFrame) => void
   appendToolOutput: (callId: string, delta: string) => void
+  settlePendingQuestion: (callId: string) => void
   setFollowStatus: (status: FollowStatus) => void
   reset: () => void
 }
@@ -75,6 +86,25 @@ function derivePendingApprovals(events: SessionEvent[]): Record<string, PendingA
   return pending
 }
 
+// 未决提问 = asked 且无 answered；超时的 continued 提问保持可补答（protocol.md §10）
+function derivePendingQuestions(events: SessionEvent[]): Record<string, PendingQuestion> {
+  const pending: Record<string, PendingQuestion> = {}
+  for (const e of events) {
+    if (e.type === "question/asked") {
+      pending[e.data.call_id] = {
+        callId: e.data.call_id,
+        turn: e.data.turn,
+        step: e.data.step,
+        questions: e.data.questions,
+        askedAt: e.time,
+      }
+    } else if (e.type === "question/answered") {
+      delete pending[e.data.call_id]
+    }
+  }
+  return pending
+}
+
 function reconcileOptimistic(events: SessionEvent[]) {
   const { optimistic, clearOptimistic } = useComposerStore.getState()
   if (!optimistic) return
@@ -93,6 +123,7 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
   hasMore: false,
   liveAttempt: null,
   pendingApprovals: {},
+  pendingQuestions: {},
   toolOutputs: {},
   followStatus: "connecting",
   lastSeq: 0,
@@ -115,6 +146,7 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
           }
         : null,
       pendingApprovals: derivePendingApprovals(records),
+      pendingQuestions: derivePendingQuestions(records),
       toolOutputs: {},
       followStatus: "live",
       lastSeq: records.length > 0 ? records[records.length - 1].seq : header.lastSeq,
@@ -126,6 +158,7 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
     const state = get()
     const events = [...state.events]
     const pendingApprovals = { ...state.pendingApprovals }
+    const pendingQuestions = { ...state.pendingQuestions }
     let header = state.header
     let lastSeq = state.lastSeq
     const applied: SessionEvent[] = []
@@ -147,6 +180,16 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
         }
       } else if (e.type === "approval/decided") {
         delete pendingApprovals[e.data.call_id]
+      } else if (e.type === "question/asked") {
+        pendingQuestions[e.data.call_id] = {
+          callId: e.data.call_id,
+          turn: e.data.turn,
+          step: e.data.step,
+          questions: e.data.questions,
+          askedAt: e.time,
+        }
+      } else if (e.type === "question/answered") {
+        delete pendingQuestions[e.data.call_id]
       } else if (e.type === "session/title" && header) {
         header = { ...header, title: e.data.title, titlePinned: !e.data.auto }
       } else if (e.type === "session/approval-mode" && header) {
@@ -166,7 +209,7 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
     }
     if (applied.length === 0) return
     reconcileOptimistic(applied)
-    set({ events, pendingApprovals, header, lastSeq })
+    set({ events, pendingApprovals, pendingQuestions, header, lastSeq })
   },
 
   applyStreamFrame: (frame) => {
@@ -202,6 +245,15 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
       toolOutputs: { ...state.toolOutputs, [callId]: (state.toolOutputs[callId] ?? "") + delta },
     })),
 
+  // 服务端判定已作答（如 question/not_pending）时本地撤卡；事件流随后会对账
+  settlePendingQuestion: (callId) =>
+    set((state) => {
+      if (!(callId in state.pendingQuestions)) return state
+      const pendingQuestions = { ...state.pendingQuestions }
+      delete pendingQuestions[callId]
+      return { pendingQuestions }
+    }),
+
   setFollowStatus: (followStatus) => set({ followStatus }),
 
   reset: () =>
@@ -212,6 +264,7 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
       hasMore: false,
       liveAttempt: null,
       pendingApprovals: {},
+      pendingQuestions: {},
       toolOutputs: {},
       followStatus: "connecting",
       lastSeq: 0,

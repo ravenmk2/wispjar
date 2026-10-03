@@ -1,9 +1,10 @@
-import { ChevronDown, ChevronRight, Clock, GitBranch, ListTree, User } from "lucide-react"
+import { ChevronDown, ChevronRight, Clock, GitBranch, ListTree, MessageCircleQuestion, User } from "lucide-react"
 import { useMemo, useState, type ReactNode } from "react"
 import { EmptyState } from "@/components/common"
 import { Badge } from "@/components/ui/badge"
 import { ApprovalCard } from "@/features/chat/ApprovalCard"
 import { AssistantMessage, TokenBadge } from "@/features/chat/AssistantMessage"
+import { QuestionAnswerList } from "@/features/chat/QuestionCard"
 import { ToolCallCard } from "@/features/chat/ToolCallCard"
 import { deriveConversationNodes, type AssistantNode, type ConversationNode } from "@/lib/conversation"
 import { cn } from "@/lib/utils"
@@ -81,7 +82,7 @@ function buildTurns(events: SessionEvent[], nodes: ConversationNode[]): TurnBuck
       if (turns.length > 0) turns[turns.length - 1].liveItems.push(node)
       continue
     }
-    if (node.kind === "user") {
+    if (node.kind === "user" || node.kind === "question-reply") {
       findTurn(node.turn).preItems.push(node)
       continue
     }
@@ -178,10 +179,34 @@ function UserItem({ node }: { node: Extract<ConversationNode, { kind: "user" }> 
   )
 }
 
+function QuestionReplyItem({ node }: { node: Extract<ConversationNode, { kind: "question-reply" }> }) {
+  return (
+    <CollapsibleBody
+      summary={
+        <>
+          <MessageCircleQuestion className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="text-xs font-medium">提问答复</span>
+          <Meta>#{node.seq}</Meta>
+          <Meta>
+            <Clock className="size-3" />
+            {formatClock(node.time)}
+          </Meta>
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            {node.questions[0]?.question ?? ""}
+          </span>
+        </>
+      }
+    >
+      <QuestionAnswerList questions={node.questions} answers={node.answers} />
+    </CollapsibleBody>
+  )
+}
+
 function TrajectoryItem({ node, sessionId }: { node: ConversationNode; sessionId: string }) {
   const liveOutput = useSessionStore((s) => (node.kind === "tool-call" ? s.toolOutputs[node.callId] : undefined))
   if (node.kind === "assistant") return <ModelItem node={node} />
   if (node.kind === "user") return <UserItem node={node} />
+  if (node.kind === "question-reply") return <QuestionReplyItem node={node} />
   if (node.kind === "tool-call") {
     return (
       <div>

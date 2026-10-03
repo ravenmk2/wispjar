@@ -8,6 +8,7 @@ import { EmptyState, TableSkeleton } from "@/components/common"
 import { ApprovalTakeover } from "@/features/chat/ApprovalCard"
 import { Composer } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
+import { QuestionTakeover } from "@/features/chat/QuestionCard"
 import { StatsPills } from "@/features/chat/StatsPills"
 import { SandboxPanel } from "@/features/sandbox/SandboxPanel"
 import { TrajectoryView } from "@/features/trajectory/TrajectoryView"
@@ -35,6 +36,7 @@ export default function ChatView() {
   const header = useSessionStore((s) => s.header)
   const followStatus = useSessionStore((s) => s.followStatus)
   const pendingApprovals = useSessionStore((s) => s.pendingApprovals)
+  const pendingQuestions = useSessionStore((s) => s.pendingQuestions)
   const composerReset = useComposerStore((s) => s.reset)
   const [loadError, setLoadError] = useState<LoadError | null>(null)
   const [tab, setTab] = useState<"chat" | "trajectory">("chat")
@@ -47,6 +49,12 @@ export default function ChatView() {
         .filter((a) => !a.parentCallId)
         .sort((a, b) => a.askedAt - b.askedAt)[0] ?? null,
     [pendingApprovals],
+  )
+
+  // 未决提问按 askedAt 排队；与审批同时 pending 时审批优先，答完审批提问卡接上
+  const pendingQuestion = useMemo(
+    () => Object.values(pendingQuestions).sort((a, b) => a.askedAt - b.askedAt)[0] ?? null,
+    [pendingQuestions],
   )
 
   useEffect(() => {
@@ -144,6 +152,8 @@ export default function ChatView() {
         {tab === "chat" &&
           (pendingApproval ? (
             <ApprovalTakeover approval={pendingApproval} sessionId={sessionId} />
+          ) : pendingQuestion ? (
+            <QuestionTakeover question={pendingQuestion} sessionId={sessionId} />
           ) : (
             <Composer sessionId={sessionId} />
           ))}

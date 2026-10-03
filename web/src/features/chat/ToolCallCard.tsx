@@ -5,6 +5,7 @@ import {
   FilePen,
   FileText,
   Loader2,
+  MessageCircleQuestion,
   Puzzle,
   Search,
   SquareTerminal,
@@ -16,6 +17,7 @@ import { Badge } from "@/components/ui/badge"
 import { CopyIconButton } from "@/components/CopyIconButton"
 import { DiffBlock } from "@/components/Markdown"
 import { NodeList } from "@/features/chat/NodeList"
+import { QuestionAnswerList } from "@/features/chat/QuestionCard"
 import { safeParseJson } from "@/lib/format"
 import { hasPendingApproval } from "@/lib/turn-grouping"
 import { cn } from "@/lib/utils"
@@ -31,6 +33,7 @@ const TOOL_ICONS: Record<string, ReactNode> = {
   grep: <Search className="size-3.5" />,
   task: <Bot className="size-3.5" />,
   activate_skill: <Puzzle className="size-3.5" />,
+  ask_user_question: <MessageCircleQuestion className="size-3.5" />,
 }
 
 function defaultRender(name: string): ToolRender {
@@ -226,6 +229,20 @@ function GenericBody({ node }: { node: ToolCallNode }) {
   )
 }
 
+// ask_user_question：settled 展开为只读问答卡；超时转 continued 提示可补答
+function QuestionBody({ node }: { node: ToolCallNode }) {
+  const q = node.question!
+  const continued = !q.answers && !!node.result && safeParseJson(node.result.content)?.pending === true
+  return (
+    <div className="rounded-lg bg-muted/50 p-3">
+      <QuestionAnswerList questions={q.questions} answers={q.answers} />
+      {continued && (
+        <div className="mt-2 text-xs text-fg-caption">等待超时，问题保持可补答，可在下方提问卡继续作答</div>
+      )}
+    </div>
+  )
+}
+
 export function ToolCallCard({
   node,
   sessionId,
@@ -238,10 +255,12 @@ export function ToolCallCard({
   depth?: number
 }) {
   const isTask = node.name === "task"
+  const isQuestion = node.name === "ask_user_question" && !!node.question
   const render = node.result?.meta?.render ?? defaultRender(node.name)
   const [open, setOpen] = useState(false)
   const pendingApproval = hasPendingApproval(node.children)
-  const expanded = open || pendingApproval
+  const pendingQuestion = !!node.question && !node.question.answers
+  const expanded = open || pendingApproval || pendingQuestion
   const running = !node.result
   const error = node.result?.error
   const args = safeParseJson(node.arguments)
@@ -256,6 +275,7 @@ export function ToolCallCard({
       return taskTarget ? `委派给 ${taskTarget}${task ? `：${task}` : ""}` : task
     }
     if (node.name === "exec") return (args?.command as string) ?? ""
+    if (isQuestion) return node.question?.questions[0]?.question ?? ""
     return (args?.path ?? args?.pattern ?? "") as string
   })()
 
@@ -299,6 +319,11 @@ export function ToolCallCard({
             待审批
           </Badge>
         )}
+        {pendingQuestion && (
+          <Badge variant="outline" className="shrink-0 gap-1 border-amber-500/50 text-[11px] font-normal text-amber-600 dark:text-amber-400">
+            待回答
+          </Badge>
+        )}
         <StatusBadge node={node} />
         {expanded ? (
           <ChevronDown className="size-3.5 shrink-0 text-fg-tertiary" />
@@ -308,11 +333,12 @@ export function ToolCallCard({
       </button>
       {expanded && (
         <div className="py-1 pl-1">
-          {render === "terminal" && <TerminalBody node={node} liveOutput={liveOutput} />}
-          {render === "diff" && <DiffBody node={node} />}
-          {render === "search" && <SearchBody node={node} />}
-          {render === "read" && <ReadBody node={node} />}
-          {render === "generic" && <GenericBody node={node} />}
+          {isQuestion && <QuestionBody node={node} />}
+          {!isQuestion && render === "terminal" && <TerminalBody node={node} liveOutput={liveOutput} />}
+          {!isQuestion && render === "diff" && <DiffBody node={node} />}
+          {!isQuestion && render === "search" && <SearchBody node={node} />}
+          {!isQuestion && render === "read" && <ReadBody node={node} />}
+          {!isQuestion && render === "generic" && <GenericBody node={node} />}
           {node.children.length > 0 && (
             <div className={cn("mt-2 border-l-2 pl-3", depth > 3 && "border-l")}>
               <NodeList nodes={node.children} sessionId={sessionId} depth={depth + 1} />

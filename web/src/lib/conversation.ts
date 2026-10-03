@@ -1,4 +1,5 @@
-import type { AttachmentRef, ContentBlock, SessionEvent, StreamChunk, ToolResultMeta, TurnEndReason, Usage } from "@/lib/types"
+import { safeParseJson } from "@/lib/format"
+import type { AttachmentRef, ContentBlock, Question, QuestionAnswer, SessionEvent, StreamChunk, ToolResultMeta, TurnEndReason, Usage } from "@/lib/types"
 
 export interface UserNode {
   kind: "user"
@@ -30,6 +31,13 @@ export interface ToolResultData {
   meta?: ToolResultMeta
 }
 
+// ask_user_question 工具挂接的提问状态：answers 缺省 = 未决（open 或 continued 均可补答）
+export interface QuestionState {
+  questions: Question[]
+  answers?: QuestionAnswer[]
+  answeredBy?: string
+}
+
 export interface ToolCallNode {
   kind: "tool-call"
   id: string
@@ -41,6 +49,7 @@ export interface ToolCallNode {
   name: string
   arguments: string
   result?: ToolResultData
+  question?: QuestionState
   live?: boolean
   children: ConversationNode[]
 }
@@ -72,7 +81,19 @@ export interface BoundaryNode {
   error?: string
 }
 
-export type ConversationNode = UserNode | AssistantNode | ToolCallNode | ApprovalNode | BoundaryNode
+// 迟到提问答复合成的 user/message（source.kind==="question-reply"），按问答对渲染
+export interface QuestionReplyNode {
+  kind: "question-reply"
+  id: string
+  seq: number
+  time: number
+  turn: number
+  callId: string
+  questions: Question[]
+  answers: QuestionAnswer[]
+}
+
+export type ConversationNode = UserNode | AssistantNode | ToolCallNode | ApprovalNode | BoundaryNode | QuestionReplyNode
 
 interface PendingBlock {
   blockType: "text" | "reasoning" | "tool-call"
@@ -195,7 +216,28 @@ export function deriveConversationNodes(
           error: e.data.error,
         })
         break
-      case "user/message":
+      case "user/message": {
+        const source = e.data.source
+        if (source?.kind === "question-reply") {
+          const body = safeParseJson(e.data.content)
+          if (
+            body?.kind === "answer_to_pending_question" &&
+            Array.isArray(body.questions) &&
+            Array.isArray(body.answers)
+          ) {
+            nodes.push({
+              kind: "question-reply",
+              id: `qreply-${e.seq}`,
+              seq: e.seq,
+              time: e.time,
+              turn: e.data.turn,
+              callId: typeof body.call_id === "string" ? body.call_id : source.call_id,
+              questions: body.questions as Question[],
+              answers: body.answers as QuestionAnswer[],
+            })
+            break
+          }
+        }
         nodes.push({
           kind: "user",
           id: `user-${e.seq}`,
@@ -207,6 +249,7 @@ export function deriveConversationNodes(
           attachments: e.data.attachments,
         })
         break
+      }
       case "assistant/message": {
         const textBlocks = e.data.message.content.filter((b) => b.type !== "tool-call")
         if (textBlocks.length > 0) {
@@ -277,6 +320,24 @@ export function deriveConversationNodes(
           node.status = e.data.decision
           node.auto = e.data.auto
           node.decidedBy = e.data.decided_by
+        }
+        break
+      }
+      case "question/asked": {
+        const node = ensureToolNode(
+          e.data.call_id,
+          { seq: e.seq, time: e.time, turn: e.data.turn, step: e.data.step, name: "ask_user_question", arguments: "", live: false },
+          parentOf(e.data),
+        )
+        // asked 恒先于 answered（runtime.md §5.3），直接覆盖
+        node.question = { questions: e.data.questions }
+        break
+      }
+      case "question/answered": {
+        const node = toolNodes.get(e.data.call_id)
+        if (node?.question) {
+          node.question.answers = e.data.answers
+          node.question.answeredBy = e.data.answered_by
         }
         break
       }

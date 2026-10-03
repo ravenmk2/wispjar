@@ -1,9 +1,9 @@
-import type { AssistantNode, BoundaryNode, ConversationNode, UserNode } from "@/lib/conversation"
+import type { AssistantNode, BoundaryNode, ConversationNode, QuestionReplyNode, UserNode } from "@/lib/conversation"
 
 export interface TurnSegment {
   turn: number
   start?: BoundaryNode
-  user?: UserNode
+  user?: UserNode | QuestionReplyNode
   process: ConversationNode[]
   answer?: AssistantNode
   end?: BoundaryNode
@@ -13,10 +13,16 @@ export interface TurnSegment {
   durationMs?: number
 }
 
+// 含未决审批或未决提问（asked 且无 answered）的子树强制展开，复用同一 forceOpen 通道
 export function hasPendingApproval(nodes: ConversationNode[]): boolean {
-  return nodes.some((n) =>
-    n.kind === "approval" ? n.status === "pending" : n.kind === "tool-call" ? hasPendingApproval(n.children) : false,
-  )
+  return nodes.some((n) => {
+    if (n.kind === "approval") return n.status === "pending"
+    if (n.kind === "tool-call") {
+      if (n.question && !n.question.answers) return true
+      return hasPendingApproval(n.children)
+    }
+    return false
+  })
 }
 
 // 按 turn 把顶层节点流切段；turn===0 的 live 节点不进组，保持逐条可见
@@ -43,6 +49,7 @@ export function groupByTurn(nodes: ConversationNode[]): { segments: TurnSegment[
     const seg = segmentOf(node.turn)
     switch (node.kind) {
       case "user":
+      case "question-reply":
         seg.user = node
         break
       case "boundary":

@@ -264,6 +264,27 @@ export type TurnEndReason = "completed" | "interrupted" | "failed"
 
 export type ToolRender = "terminal" | "diff" | "search" | "read" | "generic"
 
+// runtime.md §4.9：ask_user_question 提问；无 options=自由输入，有 options 按 multi_select 分单/多选
+export interface QuestionOption {
+  label: string
+  description?: string
+}
+
+export interface Question {
+  id: string
+  question: string
+  header?: string
+  options?: QuestionOption[]
+  multi_select?: boolean
+}
+
+// 显式跳过 = selected 为空且无 custom（仍算已作答）
+export interface QuestionAnswer {
+  id: string
+  selected: string[]
+  custom?: string
+}
+
 export interface ToolResultMeta {
   duration_ms?: number
   render?: ToolRender
@@ -283,7 +304,16 @@ export type SessionEvent = SessionEventBase &
     | { type: "turn/end"; data: { turn: number; reason: TurnEndReason; error?: string } }
     | { type: "step/start"; data: { turn: number; step: number } }
     | { type: "step/end"; data: { turn: number; step: number } }
-    | { type: "user/message"; data: { turn: number; content: string; request_id: string; attachments?: AttachmentRef[] } }
+    | {
+        type: "user/message"
+        data: {
+          turn: number
+          content: string
+          request_id: string
+          attachments?: AttachmentRef[]
+          source?: { kind: string; call_id: string }
+        }
+      }
     | {
         type: "assistant/message"
         data: { turn: number; step: number; message: AssistantMessagePayload; usage?: Usage; interrupted?: boolean }
@@ -334,6 +364,8 @@ export type SessionEvent = SessionEventBase &
         type: "approval/decided"
         data: { call_id: string; decision: "allow" | "deny"; decided_by: string; auto: boolean }
       }
+    | { type: "question/asked"; data: { turn: number; step: number; call_id: string; questions: Question[] } }
+    | { type: "question/answered"; data: { call_id: string; answers: QuestionAnswer[]; answered_by: string } }
     | { type: "compaction/summary"; data: { covers: { start_seq: number; end_seq: number }; summary: string } }
   )
 
@@ -490,6 +522,15 @@ export interface SessionEventsResponse {
 export interface ApprovalDecisionRequest {
   decision: "allow" | "deny"
 }
+
+export interface AnswerQuestionRequest {
+  answers: QuestionAnswer[]
+}
+
+// open=前台等待中的工具直接投递；continued=迟到答复，合成 user/message 开新 turn
+export type AnswerQuestionResponse =
+  | { ok: true; delivered: "open" }
+  | { accepted: true; delivered: "continued"; seq: number }
 
 export interface SandboxFileItem {
   name: string

@@ -1,5 +1,7 @@
 import { api } from "./client"
 import type {
+  AnswerQuestionRequest,
+  AnswerQuestionResponse,
   ApprovalDecisionRequest,
   CreateSessionRequest,
   ForkResponse,
@@ -56,6 +58,12 @@ export const sessionsApi = {
     return api<{ ok: boolean }>(`/sessions/${id}/approvals/${callId}`, {
       method: "POST",
       body: { decision },
+    })
+  },
+  answerQuestion(id: string, callId: string, answers: AnswerQuestionRequest["answers"]) {
+    return api<AnswerQuestionResponse>(`/sessions/${id}/questions/${callId}/answer`, {
+      method: "POST",
+      body: { answers },
     })
   },
   sandboxFiles(id: string, path?: string) {

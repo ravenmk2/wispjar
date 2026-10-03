@@ -25,6 +25,7 @@ import { formatCompactTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { SessionStatus } from "@/lib/types"
 import { useCurrentOrg } from "@/stores/identity"
+import { useSessionStore } from "@/stores/session"
 import { useSessionListStore } from "@/stores/sessionList"
 
 interface ListItem {
@@ -220,6 +221,13 @@ function SessionRow({
   onDelete: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  // 待审批/待回答只能由 follow 中的会话事件推导（control 投影不含 pending 字段），故仅活动会话可见
+  const pending = useSessionStore((s) => {
+    if (!active) return null
+    if (Object.values(s.pendingApprovals).some((a) => !a.parentCallId)) return "approval" as const
+    if (Object.keys(s.pendingQuestions).length > 0) return "question" as const
+    return null
+  })
 
   return (
     <div className="group relative">
@@ -235,7 +243,11 @@ function SessionRow({
             <span
               className={cn(
                 "size-1.5 shrink-0 rounded-full",
-                item.running ? "animate-pulse bg-primary" : "bg-transparent",
+                pending
+                  ? "animate-pulse bg-amber-500"
+                  : item.running
+                    ? "animate-pulse bg-primary"
+                    : "bg-transparent",
               )}
             />
             <span className="min-w-0 flex-1 truncate">{item.title || "新会话"}</span>
@@ -248,8 +260,13 @@ function SessionRow({
           <div className="text-[13px] font-medium leading-5">{item.title || "新会话"}</div>
           <div className="mt-1 text-white/60">{formatCompactTime(item.lastActiveAt)}</div>
           <div className="mt-1.5 flex items-center gap-1.5 text-white/80">
-            <span className={cn("size-1.5 rounded-full", item.running ? "bg-primary" : "bg-white/40")} />
-            {item.running ? "运行中" : "空闲"}
+            <span
+              className={cn(
+                "size-1.5 rounded-full",
+                pending ? "bg-amber-500" : item.running ? "bg-primary" : "bg-white/40",
+              )}
+            />
+            {pending === "approval" ? "待审批" : pending === "question" ? "待回答" : item.running ? "运行中" : "空闲"}
           </div>
         </HoverCardContent>
       </HoverCard>

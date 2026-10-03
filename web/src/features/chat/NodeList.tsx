@@ -1,9 +1,10 @@
-import { CircleAlert, CircleStop, Loader2 } from "lucide-react"
+import { CircleAlert, CircleStop, Loader2, MessageCircleQuestion } from "lucide-react"
 import { Fragment, useMemo } from "react"
 import { ApprovalCard } from "@/features/chat/ApprovalCard"
 import { actionBarCls, AssistantMessage } from "@/features/chat/AssistantMessage"
 import { ForkButton } from "@/features/chat/ForkButton"
 import { MessageImages } from "@/features/chat/MessageImages"
+import { QuestionAnswerList } from "@/features/chat/QuestionCard"
 import { ToolCallCard } from "@/features/chat/ToolCallCard"
 import { TurnProcessGroup } from "@/features/chat/TurnProcessGroup"
 import { CopyIconButton } from "@/components/CopyIconButton"
@@ -81,6 +82,22 @@ export function NodeView({
       )
     case "tool-call":
       return <ToolCallCard node={node} sessionId={sessionId} liveOutput={liveOutput} depth={depth} />
+    case "question-reply":
+      // 迟到提问答复：按问答对渲染（不是普通气泡）
+      return (
+        <div className={cn("group flex flex-col gap-1", depth === 0 && "items-end")}>
+          <div className="w-full max-w-[85%] rounded-2xl border bg-card px-3.5 py-2.5">
+            <div className="mb-1.5 flex items-center gap-1.5 text-xs text-fg-caption">
+              <MessageCircleQuestion className="size-3.5" />
+              已补答提问
+            </div>
+            <QuestionAnswerList questions={node.questions} answers={node.answers} />
+          </div>
+          <div className={cn("flex items-center gap-0.5", actionBarCls(inLatestTurn))}>
+            <span className="px-1 text-[13px] text-fg-caption">{formatMessageTime(node.time)}</span>
+          </div>
+        </div>
+      )
     case "approval":
       return <ApprovalCard node={node} sessionId={sessionId} />
     case "boundary":
