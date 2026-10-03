@@ -336,7 +336,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
             addFiles([...e.dataTransfer.files])
           }}
           className={cn(
-            "rounded-[28px] border border-black/10 bg-card shadow-[0_4px_24px_rgba(15,17,21,0.08)] focus-within:border-black/20 dark:border-white/10 dark:focus-within:border-white/20",
+            "rounded-[28px] border bg-card shadow-input focus-within:border-black/25 dark:focus-within:border-white/25",
             dragging && "border-primary ring-2 ring-primary/30",
           )}
         >

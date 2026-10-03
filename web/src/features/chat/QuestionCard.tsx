@@ -185,7 +185,7 @@ export function QuestionTakeover({
       <div className="mx-auto max-w-3xl px-4 pb-4 pt-2">
         <div
           aria-busy={submitting}
-          className="overflow-hidden rounded-[28px] border border-primary/50 bg-card shadow-[0_4px_24px_rgba(15,17,21,0.08)]"
+          className="overflow-hidden rounded-[28px] border border-primary/50 bg-card shadow-input"
         >
           <div className="flex items-center gap-2 bg-primary/10 px-4 py-2.5 text-[13px] font-medium text-primary">
             <span className="size-2 rounded-full bg-primary" />

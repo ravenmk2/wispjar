@@ -237,7 +237,7 @@ function SessionRow({
             to={`/c/${item.id}`}
             className={cn(
               "flex h-8 items-center gap-2 rounded-lg px-2 pr-7 text-sm text-fg-secondary hover:bg-accent hover:text-foreground",
-              active && "bg-accent font-medium text-foreground",
+              active && "bg-selected font-medium text-foreground",
             )}
           >
             <span

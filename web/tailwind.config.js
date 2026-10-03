@@ -12,18 +12,19 @@ export default {
     },
     extend: {
       colors: {
-        border: "hsl(var(--border))",
+        border: "var(--border)",
+        divider: "var(--divider)",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+        foreground: "var(--foreground)",
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
+          foreground: "var(--foreground)",
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
@@ -31,19 +32,20 @@ export default {
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          foreground: "var(--text-secondary)",
         },
         accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
+          DEFAULT: "var(--accent)",
+          foreground: "var(--foreground)",
         },
+        selected: "var(--selected)",
         popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
+          DEFAULT: "var(--popover)",
+          foreground: "var(--foreground)",
         },
         card: {
           DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+          foreground: "var(--foreground)",
         },
         sidebar: "var(--sidebar)",
         bubble: "var(--bubble)",
@@ -54,6 +56,10 @@ export default {
         "fg-caption": "var(--text-caption)",
         tooltip: "var(--tooltip-bg)",
         toast: "var(--toast-bg)",
+      },
+      boxShadow: {
+        input: "var(--shadow-input)",
+        menu: "var(--shadow-menu)",
       },
       borderRadius: {
         lg: "var(--radius)",
