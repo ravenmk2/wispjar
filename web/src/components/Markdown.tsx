@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { CopyIconButton } from "@/components/CopyIconButton"
 import { highlightCode } from "@/lib/highlight"
 import { cn } from "@/lib/utils"
 
@@ -19,9 +20,10 @@ export function CodeBlock({ lang, code, className }: { lang?: string; code: stri
 
   return (
     <div className={cn("codeblock group relative my-2 overflow-hidden rounded-md border bg-muted/40", className)}>
-      {lang && (
-        <div className="border-b bg-muted/60 px-3 py-1 text-[11px] text-muted-foreground">{lang}</div>
-      )}
+      <div className="flex items-center border-b bg-muted/60 py-0.5 pl-3 pr-1">
+        <span className="text-[11px] text-muted-foreground">{lang || "text"}</span>
+        <CopyIconButton text={code} className="ml-auto size-6" />
+      </div>
       {html ? (
         <div
           className="overflow-x-auto p-3 text-[13px] leading-relaxed [&_pre]:!bg-transparent [&_code]:!bg-transparent"

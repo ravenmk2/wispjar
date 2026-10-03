@@ -43,7 +43,7 @@ export function ForkButton({
           disabled={busy}
           onClick={() => void fork()}
           className={cn(
-            "size-6 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100",
+            "size-7 shrink-0 text-fg-tertiary hover:text-foreground",
             className,
           )}
         >

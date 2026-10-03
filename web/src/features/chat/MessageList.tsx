@@ -1,28 +1,87 @@
-import { useEffect, useMemo, useRef } from "react"
+import { ChevronDown } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { NodeList, OptimisticBubble } from "@/features/chat/NodeList"
 import { deriveConversationNodes } from "@/lib/conversation"
 import { useComposerStore } from "@/stores/composer"
 import { useSessionStore } from "@/stores/session"
 
+const STICK_THRESHOLD = 80
+
+function RunningStatus({ since }: { since: number }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  const seconds = Math.max(0, Math.floor((now - since) / 1000))
+  return (
+    <div className="flex items-center py-1 text-[13px]">
+      <span className="text-shimmer-blue font-medium">工作中，用时 {seconds}s</span>
+    </div>
+  )
+}
+
 export function MessageList({ sessionId }: { sessionId: string }) {
   const events = useSessionStore((s) => s.events)
   const liveAttempt = useSessionStore((s) => s.liveAttempt)
+  const header = useSessionStore((s) => s.header)
   const optimistic = useComposerStore((s) => s.optimistic)
   const containerRef = useRef<HTMLDivElement>(null)
+  const atBottomRef = useRef(true)
+  const [atBottom, setAtBottom] = useState(true)
 
   const nodes = useMemo(() => deriveConversationNodes(events, liveAttempt), [events, liveAttempt])
 
+  const running = (header?.running ?? false) || liveAttempt !== null
+  const runningSince = useMemo(() => {
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i]
+      if (e.type === "turn/end") break
+      if (e.type === "turn/start") return e.time
+    }
+    return Date.now()
+  }, [events])
+
+  // 吸底跟随：已在底部或自己刚发消息时跟随新内容；上翻阅读时不拉底
   useEffect(() => {
     const el = containerRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [nodes, optimistic])
+    if (!el) return
+    if (optimistic || atBottomRef.current) el.scrollTop = el.scrollHeight
+  }, [nodes, optimistic, running])
+
+  function handleScroll() {
+    const el = containerRef.current
+    if (!el) return
+    const at = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD
+    atBottomRef.current = at
+    setAtBottom(at)
+  }
+
+  function scrollToBottom() {
+    const el = containerRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" })
+  }
 
   return (
-    <div ref={containerRef} className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-3 px-4 py-6">
-        <NodeList nodes={nodes} sessionId={sessionId} />
-        {optimistic && <OptimisticBubble content={optimistic.content} />}
+    <div className="relative min-h-0 flex-1">
+      <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-y-auto">
+        <div className="mx-auto max-w-3xl space-y-3 px-4 py-6">
+          <NodeList nodes={nodes} sessionId={sessionId} />
+          {optimistic && <OptimisticBubble content={optimistic.content} />}
+          {running && <RunningStatus since={runningSince} />}
+        </div>
       </div>
+      {!atBottom && (
+        <button
+          type="button"
+          title="回到底部"
+          onClick={scrollToBottom}
+          className="absolute bottom-4 right-5 flex size-8 items-center justify-center rounded-full border bg-background text-fg-secondary shadow-md transition-colors hover:text-foreground"
+        >
+          <ChevronDown className="size-4" />
+        </button>
+      )}
     </div>
   )
 }

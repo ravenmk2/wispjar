@@ -76,6 +76,42 @@
   }
 }
 
+@keyframes shimmer-slide {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@layer utilities {
+  .text-shimmer,
+  .text-shimmer-blue {
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: shimmer-slide 1.6s linear infinite;
+  }
+  .text-shimmer {
+    background-image: linear-gradient(
+      90deg,
+      var(--text-tertiary) 35%,
+      var(--foreground) 50%,
+      var(--text-tertiary) 65%
+    );
+  }
+  .text-shimmer-blue {
+    background-image: linear-gradient(
+      90deg,
+      hsl(var(--primary) / 0.5) 35%,
+      hsl(var(--primary)) 50%,
+      hsl(var(--primary) / 0.5) 65%
+    );
+  }
+}
+
 @layer components {
   .markdown-body > *:first-child {
     margin-top: 0;

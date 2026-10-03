@@ -9,6 +9,22 @@ export function formatNumber(n: number): string {
   return n.toLocaleString("zh-CN")
 }
 
+export function formatCompactNumber(n: number): string {
+  const trim = (v: number) => v.toFixed(1).replace(/\.0$/, "")
+  if (n < 1000) return `${n}`
+  if (n < 1_000_000) return `${trim(n / 1000)}k`
+  return `${trim(n / 1_000_000)}M`
+}
+
+export function formatMessageTime(t?: number | null): string {
+  if (!t) return ""
+  const d = new Date(t)
+  if (Number.isNaN(d.getTime())) return ""
+  const hh = String(d.getHours()).padStart(2, "0")
+  const mm = String(d.getMinutes()).padStart(2, "0")
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`
+}
+
 export function passwordValid(pw: string): boolean {
   return pw.length >= 8 && /[A-Za-z]/.test(pw) && /\d/.test(pw)
 }
