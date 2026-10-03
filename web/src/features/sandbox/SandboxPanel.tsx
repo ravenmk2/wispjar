@@ -2,40 +2,32 @@ import {
   Box,
   ChevronDown,
   ChevronRight,
-  Download,
   FileCode2,
   FileText,
   Folder,
   Image as ImageIcon,
   Loader2,
+  RotateCw,
   X,
 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatBytes } from "@/lib/format"
-import { highlightCode } from "@/lib/highlight"
 import { cn } from "@/lib/utils"
 import type { SandboxFileItem, SandboxStatus } from "@/lib/types"
 import { useSessionStore } from "@/stores/session"
-import { downloadBlob, fetchSandboxFileData, FilePreviewDialog, previewKind } from "./FilePreviewDialog"
+import { FilePreview } from "./FilePreview"
+import { previewKind } from "./previewUtils"
 
 const STATUS_LABEL: Record<SandboxStatus, string> = {
   none: "无沙箱",
   creating: "创建中",
   running: "运行中",
   recycled: "已回收",
-}
-
-interface PreviewState {
-  path: string
-  loading: boolean
-  content?: string
-  truncated?: boolean
-  binary?: boolean
 }
 
 interface TreeNodeState {
@@ -52,16 +44,29 @@ function sortItems(items: SandboxFileItem[]): SandboxFileItem[] {
   })
 }
 
+function collectExpanded(nodes: TreeNodeState[] | null, out = new Set<string>()): Set<string> {
+  if (!nodes) return out
+  for (const n of nodes) {
+    if (n.item.type === "dir" && n.expanded) {
+      out.add(n.item.path)
+      if (n.children) collectExpanded(n.children, out)
+    }
+  }
+  return out
+}
+
 export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
   const header = useSessionStore((s) => s.header)
   const events = useSessionStore((s) => s.events)
   const [root, setRoot] = useState<TreeNodeState[] | null>(null)
   const [treeError, setTreeError] = useState<string | null>(null)
-  const [preview, setPreview] = useState<PreviewState | null>(null)
-  const [highlighted, setHighlighted] = useState<string | null>(null)
-  const [dialogItem, setDialogItem] = useState<SandboxFileItem | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [tab, setTab] = useState<"files" | "preview">("files")
+  const [previewItem, setPreviewItem] = useState<SandboxFileItem | null>(null)
+  const [previewReload, setPreviewReload] = useState(0)
 
   const status: SandboxStatus = header?.sandboxStatus ?? "none"
+  const running = header?.running ?? false
   const image = useMemo(() => {
     for (let i = events.length - 1; i >= 0; i--) {
       const e = events[i]
@@ -78,29 +83,60 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
     [sessionId],
   )
 
+  // 初始加载：沙箱进入 running（或切换会话）时重置并拉取根目录
   useEffect(() => {
     setRoot(null)
     setTreeError(null)
-    setPreview(null)
-    setDialogItem(null)
+    setPreviewItem(null)
+    setTab("files")
     if (status !== "running") return
+    setRefreshing(true)
     loadDir()
       .then(setRoot)
       .catch((e) => setTreeError(errorMessage(e)))
+      .finally(() => setRefreshing(false))
   }, [status, loadDir, sessionId])
 
-  useEffect(() => {
-    setHighlighted(null)
-    if (!preview?.content) return
-    const lang = preview.path.includes(".") ? preview.path.split(".").pop() : undefined
-    let cancelled = false
-    highlightCode(preview.content, lang).then((html) => {
-      if (!cancelled) setHighlighted(html)
-    })
-    return () => {
-      cancelled = true
+  // 刷新：保留展开状态（按目录路径集合逐层重拉，已消失的目录丢弃），失败保留旧树
+  const refreshTree = useCallback(async (): Promise<boolean> => {
+    if (status !== "running") return false
+    setRefreshing(true)
+    try {
+      const expanded = collectExpanded(root)
+      const restore = async (nodes: TreeNodeState[]): Promise<TreeNodeState[]> =>
+        Promise.all(
+          nodes.map(async (n) => {
+            if (n.item.type !== "dir" || !expanded.has(n.item.path)) return n
+            try {
+              const children = await loadDir(n.item.path)
+              return { ...n, children: await restore(children), expanded: true }
+            } catch {
+              return { ...n, children: null, expanded: false }
+            }
+          }),
+        )
+      const fresh = await restore(await loadDir())
+      setRoot(fresh)
+      setTreeError(null)
+      return true
+    } catch (e) {
+      toast.error(errorMessage(e))
+      return false
+    } finally {
+      setRefreshing(false)
     }
-  }, [preview])
+  }, [status, loadDir, root])
+
+  // 自动刷新：agent 工作完成（running true→false）时刷新文件树，并静默重载当前预览文件
+  const prevRunningRef = useRef(running)
+  useEffect(() => {
+    const prev = prevRunningRef.current
+    prevRunningRef.current = running
+    if (!prev || running || status !== "running") return
+    void refreshTree().then((ok) => {
+      if (ok) setPreviewReload((n) => n + 1)
+    })
+  }, [running, status, refreshTree])
 
   function updateNode(nodes: TreeNodeState[], path: string, update: (n: TreeNodeState) => TreeNodeState): TreeNodeState[] {
     return nodes.map((n) => {
@@ -130,27 +166,9 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
     }
   }
 
-  async function openFile(item: SandboxFileItem) {
-    if (previewKind(item.name) !== "other") {
-      setPreview(null)
-      setDialogItem(item)
-      return
-    }
-    if (preview?.loading) return
-    setPreview({ path: item.path, loading: true })
-    try {
-      const data = await fetchSandboxFileData(sessionId, item.path)
-      if (data.type === "blob") {
-        downloadBlob(data.blob, item.name)
-        toast.info("二进制文件已开始下载")
-        setPreview({ path: item.path, loading: false, binary: true })
-      } else {
-        setPreview({ path: item.path, loading: false, content: data.content, truncated: data.truncated })
-      }
-    } catch (e) {
-      toast.error(errorMessage(e))
-      setPreview(null)
-    }
+  function openFile(item: SandboxFileItem) {
+    setPreviewItem(item)
+    setTab("preview")
   }
 
   function renderNodes(nodes: TreeNodeState[], depth: number) {
@@ -158,10 +176,10 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
       <div key={node.item.path}>
         <button
           type="button"
-          onClick={() => (node.item.type === "dir" ? void toggleDir(node) : void openFile(node.item))}
+          onClick={() => (node.item.type === "dir" ? void toggleDir(node) : openFile(node.item))}
           className={cn(
             "flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1 text-left text-xs hover:bg-accent/60",
-            (preview?.path === node.item.path || dialogItem?.path === node.item.path) && "bg-accent",
+            previewItem?.path === node.item.path && "bg-accent",
           )}
           style={{ paddingLeft: `${depth * 14 + 6}px` }}
         >
@@ -234,74 +252,70 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
         </div>
       )}
       {status === "running" && (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto py-1">
-            {treeError ? (
-              <div className="px-3 py-2 text-xs text-destructive">{treeError}</div>
-            ) : root === null ? (
-              <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" />
-                加载文件…
-              </div>
-            ) : root.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-muted-foreground">/workspace 为空</div>
+        <>
+          <div className="flex shrink-0 items-center gap-3 border-b px-3">
+            <button
+              type="button"
+              onClick={() => setTab("files")}
+              className={cn(
+                "-mb-px border-b-2 border-transparent py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground",
+                tab === "files" && "border-primary text-primary",
+              )}
+            >
+              文件
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("preview")}
+              className={cn(
+                "-mb-px border-b-2 border-transparent py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground",
+                tab === "preview" && "border-primary text-primary",
+              )}
+            >
+              预览
+            </button>
+          </div>
+
+          <div className={cn("flex min-h-0 flex-1 flex-col", tab !== "files" && "hidden")}>
+            <div className="flex h-8 shrink-0 items-center border-b px-2">
+              <span className="font-mono text-[11px] text-muted-foreground">/workspace</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="ml-auto size-6"
+                title="刷新文件树"
+                disabled={refreshing}
+                onClick={() => void refreshTree()}
+              >
+                <RotateCw className={cn("size-3.5", refreshing && "animate-spin")} />
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto py-1">
+              {treeError ? (
+                <div className="px-3 py-2 text-xs text-destructive">{treeError}</div>
+              ) : root === null ? (
+                <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  加载文件…
+                </div>
+              ) : root.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">/workspace 为空</div>
+              ) : (
+                renderNodes(root, 0)
+              )}
+            </div>
+          </div>
+
+          <div className={cn("flex min-h-0 flex-1 flex-col", tab !== "preview" && "hidden")}>
+            {previewItem ? (
+              <FilePreview sessionId={sessionId} item={previewItem} reloadToken={previewReload} />
             ) : (
-              renderNodes(root, 0)
+              <div className="flex flex-1 items-center justify-center p-4 text-center text-xs text-muted-foreground">
+                在文件 tab 选择文件预览
+              </div>
             )}
           </div>
-          {preview && (
-            <div className="flex max-h-[45%] shrink-0 flex-col border-t">
-              <div className="flex shrink-0 items-center gap-2 border-b px-2.5 py-1.5">
-                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground" title={preview.path}>
-                  {preview.path}
-                </span>
-                {preview.truncated && (
-                  <Badge variant="secondary" className="text-[10px] font-normal">
-                    已截断
-                  </Badge>
-                )}
-                {!preview.loading && !preview.binary && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-6"
-                    title="下载文件"
-                    onClick={() =>
-                      downloadBlob(new Blob([preview.content ?? ""], { type: "text/plain;charset=utf-8" }), preview.path.split("/").pop() ?? "download")
-                    }
-                  >
-                    <Download className="size-3.5" />
-                  </Button>
-                )}
-                <Button variant="ghost" size="icon" className="size-6" onClick={() => setPreview(null)}>
-                  <X className="size-3.5" />
-                </Button>
-              </div>
-              <div className="min-h-0 flex-1 overflow-auto">
-                {preview.loading ? (
-                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
-                    <Loader2 className="size-3.5 animate-spin" />
-                    加载中…
-                  </div>
-                ) : preview.binary ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">二进制文件，已通过下载获取</div>
-                ) : highlighted ? (
-                  <div
-                    className="markdown-body px-3 py-2 font-mono text-[11px] leading-relaxed [&_pre]:!bg-transparent"
-                    dangerouslySetInnerHTML={{ __html: highlighted }}
-                  />
-                ) : (
-                  <pre className="whitespace-pre-wrap px-3 py-2 font-mono text-[11px] leading-relaxed">
-                    {preview.content}
-                  </pre>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      {dialogItem && (
-        <FilePreviewDialog sessionId={sessionId} item={dialogItem} onClose={() => setDialogItem(null)} />
+        </>
       )}
     </aside>
   )

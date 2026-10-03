@@ -37,7 +37,7 @@ web/src/
 │   ├── trajectory/            # TrajectoryView（turn/step 时间线）
 │   ├── sessions/              # SessionList（搜索 + 行 hover "…" 菜单：重命名/分叉/归档/删除）
 │   ├── agents/                # AgentPicker（侧栏智能体列表）
-│   ├── sandbox/               # SandboxPanel（文件树/预览/状态）、FilePreviewDialog（图片/HTML/Markdown 大预览）
+│   ├── sandbox/               # SandboxPanel（文件/预览双 tab + 刷新）、FilePreview（面板内文件预览）、previewUtils（取数/下载帮助函数）
 │   └── admin/                 # 机构管理：AgentEditor（§8）、SkillManager、MemberManager、OrgUsage
 ├── platform/                  # 平台管理：Orgs、Users、Providers、Models、Settings、Usage、Audit
 ├── layouts/                   # WorkspaceLayout（三栏）、AdminLayout、PlatformLayout
@@ -128,9 +128,14 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 ### 6.4 沙箱面板（右侧，可折叠）
 
 - 状态头：沙箱状态（无/创建中/运行中/已回收）+ 镜像名。
-- 文件树：`GET /sessions/{id}/sandbox/files?path=` 懒加载目录；图标按格式区分（图片 Image / HTML FileCode2 / 其余 FileText）。点击文件按扩展名分流：
-  - 图片（png/jpg/jpeg/webp/gif/svg）、HTML（html/htm）、Markdown（md/markdown）→ 打开居中预览对话框（约 85vw×85vh，Esc/遮罩关闭），头部为文件路径 + 格式徽标 + 下载按钮 +（HTML/MD）预览/源码切换；图片经 `sandbox/file?max_bytes=4194304` 取 blob 渲染 `<img object-contain>`，blob 大小小于树节点 size 视为截断，提示"图片过大仅支持下载"；HTML 经 `<iframe sandbox="allow-scripts">` srcdoc 白底渲染；Markdown 用 `Markdown` 组件渲染；两者 truncated 时顶部提示"文件过大已截断，预览可能不完整"，源码视图为高亮代码。打开对话框时关闭面板底部小预览。
-  - 其余文件维持面板底部小预览：文本带高亮（truncated 显示"已截断"徽标，可下载）、非 UTF-8 直接触发下载。
+- 运行中时分 **文件 / 预览** 两个 tab（13px/500，选中蓝字 + 2px 下划线），两个 tab 常驻挂载、切换不丢状态。
+- 文件 tab：工具行（/workspace + 刷新按钮）+ 文件树。文件树经 `GET /sessions/{id}/sandbox/files?path=` 懒加载目录；图标按格式区分（图片 Image / HTML FileCode2 / 其余 FileText）；当前预览的文件在树里保持选中高亮。
+  - 手动刷新：工具行 RotateCw 图标钮（加载中转圈），重新拉取根目录并**保留展开态**——记录展开的目录路径集合，刷新后逐层重拉恢复（目录已消失或重拉失败的丢弃、折叠）；失败 toast 并保留旧树，刷新期间不清空旧树。
+  - 自动刷新：`header.running` 由 true→false（agent 工作完成）时按同逻辑自动刷新一次，并静默重载预览 tab 当前打开的文件（保持预览/源码视图状态，二进制文件不重复触发下载）；沙箱状态变为 running 时做初始加载。
+- 预览 tab：所有文件类型的查看统一在此（FilePreview 组件，原模态 FilePreviewDialog 已移除）。头部条为文件路径（等宽截断）+ 格式徽标 + 下载按钮 +（HTML/MD）预览/源码切换 + truncated「已截断」徽标；未选中文件时显示空态。点击文件树的文件自动切到预览 tab 并加载：
+  - 图片（png/jpg/jpeg/webp/gif/svg）经 `sandbox/file?max_bytes=4194304` 取 blob 渲染 `<img object-contain>` 大图滚动区，blob 大小小于树节点 size 视为截断，提示"图片过大仅支持下载"。
+  - HTML（html/htm）经 `<iframe sandbox="allow-scripts">` srcdoc 白底渲染；Markdown（md/markdown）用 `Markdown` 组件渲染；两者支持预览/源码切换，源码视图为高亮代码。
+  - 其余文本/代码文件直接以 highlightCode 高亮展示；非 UTF-8 二进制文件直接触发下载并提示。
 - 沙箱回收后提示"沙箱已回收，文件已清空"。
 
 ## 7. 侧栏（sessions + agents）
