@@ -49,13 +49,7 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 		return nil, err
 	}
 
-	merged := map[string]any{}
-	if len(row.DefaultParams) > 0 {
-		_ = json.Unmarshal(row.DefaultParams, &merged)
-	}
-	for k, v := range params {
-		merged[k] = v
-	}
+	merged := mergeParams(row.DefaultParams, params)
 	key := modelID + "|" + paramsHash(merged)
 	if v, ok := f.cache.Load(key); ok {
 		return v.(model.ToolCallingChatModel), nil
@@ -88,6 +82,21 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 	}
 	actual, _ := f.cache.LoadOrStore(key, model.ToolCallingChatModel(cm))
 	return actual.(model.ToolCallingChatModel), nil
+}
+
+// mergeParams 合并模型默认参数与会话级覆盖参数。
+// defaultParams 可能是 JSON 字面量 null（会解出 nil map），也可能为空或非法，一律回退为空表。
+func mergeParams(defaultParams json.RawMessage, params map[string]any) map[string]any {
+	merged := map[string]any{}
+	if len(defaultParams) > 0 {
+		if err := json.Unmarshal(defaultParams, &merged); err != nil || merged == nil {
+			merged = map[string]any{}
+		}
+	}
+	for k, v := range params {
+		merged[k] = v
+	}
+	return merged
 }
 
 func numberParam(params map[string]any, name string) (float64, bool) {
