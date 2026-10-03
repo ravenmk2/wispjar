@@ -25,6 +25,9 @@ export default function WorkspaceLayout() {
       <aside className="flex w-[280px] shrink-0 flex-col border-r bg-sidebar">
         <div className="flex h-12 shrink-0 items-center px-4 text-sm font-semibold">WispJar</div>
         <Separator />
+        <div className="shrink-0 p-2">
+          <OrgSwitcher variant="sidebar" />
+        </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-4">
           <div className="px-3">
             <div className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
@@ -44,7 +47,7 @@ export default function WorkspaceLayout() {
         {(isAdmin || isPlatformAdmin) && (
           <>
             <Separator />
-            <div className="space-y-0.5 p-2">
+            <div className="shrink-0 space-y-0.5 p-2">
               {isAdmin && (
                 <Link
                   to="/admin/members"
@@ -66,26 +69,14 @@ export default function WorkspaceLayout() {
             </div>
           </>
         )}
+        <Separator />
+        <div className="shrink-0 p-2">
+          <UserMenu variant="sidebar" />
+        </div>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-          <OrgSwitcher />
-          {isPlatformAdmin && (
-            <Link
-              to="/platform/orgs"
-              className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-            >
-              进入平台后台
-            </Link>
-          )}
-          <div className="ml-auto">
-            <UserMenu />
-          </div>
-        </header>
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          <Outlet />
-        </main>
-      </div>
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <Outlet />
+      </main>
     </div>
   )
 }

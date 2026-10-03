@@ -23,7 +23,7 @@ import { setThemeMode, useThemeMode, type ThemeMode } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 
-export function OrgSwitcher() {
+export function OrgSwitcher({ variant = "header" }: { variant?: "header" | "sidebar" }) {
   const orgs = useIdentityStore((s) => s.orgs)
   const setOrg = useIdentityStore((s) => s.setOrg)
   const setIdentity = useIdentityStore((s) => s.setIdentity)
@@ -49,12 +49,24 @@ export function OrgSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="max-w-56 gap-1.5">
-          <Building2 className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate">{currentOrg.name}</span>
-          {currentOrg.is_platform && <Badge variant="secondary">平台</Badge>}
-          <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-        </Button>
+        {variant === "sidebar" ? (
+          <button
+            type="button"
+            className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm hover:bg-accent"
+          >
+            <Building2 className="size-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate text-left font-medium">{currentOrg.name}</span>
+            {currentOrg.is_platform && <Badge variant="secondary">平台</Badge>}
+            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+          </button>
+        ) : (
+          <Button variant="outline" size="sm" className="max-w-56 gap-1.5">
+            <Building2 className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="truncate">{currentOrg.name}</span>
+            {currentOrg.is_platform && <Badge variant="secondary">平台</Badge>}
+            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+          </Button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuLabel>切换机构</DropdownMenuLabel>
@@ -100,7 +112,7 @@ function ThemeSubMenu() {
   )
 }
 
-export function UserMenu() {
+export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar" }) {
   const user = useIdentityStore((s) => s.user)
   const clear = useIdentityStore((s) => s.clear)
   const navigate = useNavigate()
@@ -111,14 +123,31 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2 px-2">
-          <Avatar className="size-6">
-            <AvatarFallback className="text-xs">{initial}</AvatarFallback>
-          </Avatar>
-          <span className="max-w-32 truncate">{user.display_name || user.username}</span>
-        </Button>
+        {variant === "sidebar" ? (
+          <button
+            type="button"
+            className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm hover:bg-accent"
+          >
+            <Avatar className="size-6 shrink-0">
+              <AvatarFallback className="text-xs">{initial}</AvatarFallback>
+            </Avatar>
+            <span className="min-w-0 flex-1 truncate text-left">{user.display_name || user.username}</span>
+            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+          </button>
+        ) : (
+          <Button variant="ghost" size="sm" className="gap-2 px-2">
+            <Avatar className="size-6">
+              <AvatarFallback className="text-xs">{initial}</AvatarFallback>
+            </Avatar>
+            <span className="max-w-32 truncate">{user.display_name || user.username}</span>
+          </Button>
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent
+        side={variant === "sidebar" ? "top" : "bottom"}
+        align={variant === "sidebar" ? "start" : "end"}
+        className="w-48"
+      >
         <DropdownMenuLabel>
           <div className="flex flex-col">
             <span>{user.display_name || user.username}</span>
@@ -183,7 +212,7 @@ export function SecondaryLayout({
               className={({ isActive }) =>
                 cn(
                   "block rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground",
-                  isActive && "bg-accent font-medium text-foreground",
+                  isActive && "bg-selected font-medium text-foreground",
                 )
               }
             >
