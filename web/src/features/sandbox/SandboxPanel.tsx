@@ -3,23 +3,25 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  FileCode2,
   FileText,
   Folder,
+  Image as ImageIcon,
   Loader2,
   X,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
-import { ApiError, errorMessage } from "@/api/client"
+import { errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatBytes } from "@/lib/format"
 import { highlightCode } from "@/lib/highlight"
 import { cn } from "@/lib/utils"
-import type { SandboxFileItem, SandboxFileResponse, SandboxStatus } from "@/lib/types"
-import { useIdentityStore } from "@/stores/identity"
+import type { SandboxFileItem, SandboxStatus } from "@/lib/types"
 import { useSessionStore } from "@/stores/session"
+import { downloadBlob, fetchSandboxFileData, FilePreviewDialog, previewKind } from "./FilePreviewDialog"
 
 const STATUS_LABEL: Record<SandboxStatus, string> = {
   none: "无沙箱",
@@ -34,38 +36,6 @@ interface PreviewState {
   content?: string
   truncated?: boolean
   binary?: boolean
-}
-
-async function fetchSandboxFile(sessionId: string, path: string): Promise<PreviewState> {
-  const { token, currentOrgId } = useIdentityStore.getState()
-  const url = new URL(`/api/v1/sessions/${sessionId}/sandbox/file`, window.location.origin)
-  url.searchParams.set("path", path)
-  const headers: Record<string, string> = {}
-  if (token) headers["Authorization"] = `Bearer ${token}`
-  if (currentOrgId) headers["X-Org-Id"] = currentOrgId
-  const res = await fetch(url.toString(), { headers })
-  if (!res.ok) {
-    let message = `请求失败（HTTP ${res.status}）`
-    try {
-      const data = await res.json()
-      if (data?.error?.message) message = data.error.message
-    } catch {
-      // ignore
-    }
-    throw new ApiError(res.status, "sandbox/file", message)
-  }
-  const contentType = res.headers.get("Content-Type") ?? ""
-  if (contentType.includes("application/json")) {
-    const data = (await res.json()) as SandboxFileResponse
-    return { path, loading: false, content: data.content, truncated: data.truncated }
-  }
-  const blob = await res.blob()
-  const a = document.createElement("a")
-  a.href = URL.createObjectURL(blob)
-  a.download = path.split("/").pop() ?? "download"
-  a.click()
-  URL.revokeObjectURL(a.href)
-  return { path, loading: false, binary: true }
 }
 
 interface TreeNodeState {
@@ -89,6 +59,7 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
   const [treeError, setTreeError] = useState<string | null>(null)
   const [preview, setPreview] = useState<PreviewState | null>(null)
   const [highlighted, setHighlighted] = useState<string | null>(null)
+  const [dialogItem, setDialogItem] = useState<SandboxFileItem | null>(null)
 
   const status: SandboxStatus = header?.sandboxStatus ?? "none"
   const image = useMemo(() => {
@@ -111,6 +82,7 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
     setRoot(null)
     setTreeError(null)
     setPreview(null)
+    setDialogItem(null)
     if (status !== "running") return
     loadDir()
       .then(setRoot)
@@ -158,13 +130,23 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
     }
   }
 
-  async function openFile(path: string) {
+  async function openFile(item: SandboxFileItem) {
+    if (previewKind(item.name) !== "other") {
+      setPreview(null)
+      setDialogItem(item)
+      return
+    }
     if (preview?.loading) return
-    setPreview({ path, loading: true })
+    setPreview({ path: item.path, loading: true })
     try {
-      const result = await fetchSandboxFile(sessionId, path)
-      if (result.binary) toast.info("二进制文件已开始下载")
-      setPreview(result)
+      const data = await fetchSandboxFileData(sessionId, item.path)
+      if (data.type === "blob") {
+        downloadBlob(data.blob, item.name)
+        toast.info("二进制文件已开始下载")
+        setPreview({ path: item.path, loading: false, binary: true })
+      } else {
+        setPreview({ path: item.path, loading: false, content: data.content, truncated: data.truncated })
+      }
     } catch (e) {
       toast.error(errorMessage(e))
       setPreview(null)
@@ -176,10 +158,10 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
       <div key={node.item.path}>
         <button
           type="button"
-          onClick={() => (node.item.type === "dir" ? void toggleDir(node) : void openFile(node.item.path))}
+          onClick={() => (node.item.type === "dir" ? void toggleDir(node) : void openFile(node.item))}
           className={cn(
             "flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1 text-left text-xs hover:bg-accent/60",
-            preview?.path === node.item.path && "bg-accent",
+            (preview?.path === node.item.path || dialogItem?.path === node.item.path) && "bg-accent",
           )}
           style={{ paddingLeft: `${depth * 14 + 6}px` }}
         >
@@ -197,7 +179,12 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
           ) : (
             <>
               <span className="w-3 shrink-0" />
-              <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+              {(() => {
+                const kind = previewKind(node.item.name)
+                if (kind === "image") return <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                if (kind === "html") return <FileCode2 className="size-3.5 shrink-0 text-muted-foreground" />
+                return <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+              })()}
             </>
           )}
           <span className="min-w-0 flex-1 truncate font-mono">{node.item.name}</span>
@@ -279,14 +266,9 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
                     size="icon"
                     className="size-6"
                     title="下载文件"
-                    onClick={() => {
-                      const blob = new Blob([preview.content ?? ""], { type: "text/plain;charset=utf-8" })
-                      const a = document.createElement("a")
-                      a.href = URL.createObjectURL(blob)
-                      a.download = preview.path.split("/").pop() ?? "download"
-                      a.click()
-                      URL.revokeObjectURL(a.href)
-                    }}
+                    onClick={() =>
+                      downloadBlob(new Blob([preview.content ?? ""], { type: "text/plain;charset=utf-8" }), preview.path.split("/").pop() ?? "download")
+                    }
                   >
                     <Download className="size-3.5" />
                   </Button>
@@ -317,6 +299,9 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
             </div>
           )}
         </div>
+      )}
+      {dialogItem && (
+        <FilePreviewDialog sessionId={sessionId} item={dialogItem} onClose={() => setDialogItem(null)} />
       )}
     </aside>
   )

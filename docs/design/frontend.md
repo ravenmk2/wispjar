@@ -37,7 +37,7 @@ web/src/
 │   ├── trajectory/            # TrajectoryView（turn/step 时间线）
 │   ├── sessions/              # SessionList（搜索 + 行 hover "…" 菜单：重命名/分叉/归档/删除）
 │   ├── agents/                # AgentPicker（侧栏智能体列表）
-│   ├── sandbox/               # SandboxPanel（文件树/预览/状态）
+│   ├── sandbox/               # SandboxPanel（文件树/预览/状态）、FilePreviewDialog（图片/HTML/Markdown 大预览）
 │   └── admin/                 # 机构管理：AgentEditor（§8）、SkillManager、MemberManager、OrgUsage
 ├── platform/                  # 平台管理：Orgs、Users、Providers、Models、Settings、Usage、Audit
 ├── layouts/                   # WorkspaceLayout（三栏）、AdminLayout、PlatformLayout
@@ -128,7 +128,9 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 ### 6.4 沙箱面板（右侧，可折叠）
 
 - 状态头：沙箱状态（无/创建中/运行中/已回收）+ 镜像名。
-- 文件树：`GET /sessions/{id}/sandbox/files?path=` 懒加载目录；点击文件 → `sandbox/file` 预览（文本带高亮、二进制提供下载）。
+- 文件树：`GET /sessions/{id}/sandbox/files?path=` 懒加载目录；图标按格式区分（图片 Image / HTML FileCode2 / 其余 FileText）。点击文件按扩展名分流：
+  - 图片（png/jpg/jpeg/webp/gif/svg）、HTML（html/htm）、Markdown（md/markdown）→ 打开居中预览对话框（约 85vw×85vh，Esc/遮罩关闭），头部为文件路径 + 格式徽标 + 下载按钮 +（HTML/MD）预览/源码切换；图片经 `sandbox/file?max_bytes=4194304` 取 blob 渲染 `<img object-contain>`，blob 大小小于树节点 size 视为截断，提示"图片过大仅支持下载"；HTML 经 `<iframe sandbox="allow-scripts">` srcdoc 白底渲染；Markdown 用 `Markdown` 组件渲染；两者 truncated 时顶部提示"文件过大已截断，预览可能不完整"，源码视图为高亮代码。打开对话框时关闭面板底部小预览。
+  - 其余文件维持面板底部小预览：文本带高亮（truncated 显示"已截断"徽标，可下载）、非 UTF-8 直接触发下载。
 - 沙箱回收后提示"沙箱已回收，文件已清空"。
 
 ## 7. 侧栏（sessions + agents）
