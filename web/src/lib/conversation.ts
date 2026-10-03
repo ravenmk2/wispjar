@@ -29,6 +29,7 @@ export interface ToolResultData {
   content: string
   error?: string
   meta?: ToolResultMeta
+  attachments?: AttachmentRef[]
 }
 
 // ask_user_question 工具挂接的提问状态：answers 缺省 = 未决（open 或 continued 均可补答）
@@ -292,7 +293,7 @@ export function deriveConversationNodes(
           { seq: e.seq, time: e.time, turn: e.data.turn, step: e.data.step, name: e.data.name, arguments: "", live: false },
           parentOf(e.data),
         )
-        node.result = { content: e.data.content, error: e.data.error, meta: e.data.meta }
+        node.result = { content: e.data.content, error: e.data.error, meta: e.data.meta, attachments: e.data.attachments }
         node.live = false
         break
       }

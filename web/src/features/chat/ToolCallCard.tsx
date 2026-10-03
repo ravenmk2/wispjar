@@ -4,6 +4,7 @@ import {
   ChevronRight,
   FilePen,
   FileText,
+  Image,
   Loader2,
   MessageCircleQuestion,
   Puzzle,
@@ -17,6 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { CopyIconButton } from "@/components/CopyIconButton"
 import { DiffBlock } from "@/components/Markdown"
 import { NodeList } from "@/features/chat/NodeList"
+import { MessageImages } from "@/features/chat/MessageImages"
 import { QuestionAnswerList } from "@/features/chat/QuestionCard"
 import { safeParseJson } from "@/lib/format"
 import { hasPendingApproval } from "@/lib/turn-grouping"
@@ -34,6 +36,7 @@ const TOOL_ICONS: Record<string, ReactNode> = {
   task: <Bot className="size-3.5" />,
   activate_skill: <Puzzle className="size-3.5" />,
   ask_user_question: <MessageCircleQuestion className="size-3.5" />,
+  read_media: <Image className="size-3.5" />,
 }
 
 function defaultRender(name: string): ToolRender {
@@ -205,6 +208,9 @@ function ReadBody({ node }: { node: ToolCallNode }) {
   return (
     <div className="rounded-lg bg-muted/50 p-3">
       {path && <div className="mb-1 font-mono text-xs text-fg-secondary">{path}</div>}
+      {node.result?.attachments && node.result.attachments.length > 0 && (
+        <MessageImages attachments={node.result.attachments} className="mb-2" />
+      )}
       {node.result && (
         <pre className="max-h-80 overflow-auto whitespace-pre font-mono text-xs leading-relaxed">
           {node.result.error ?? node.result.content}

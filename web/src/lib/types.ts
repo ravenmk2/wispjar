@@ -333,6 +333,7 @@ export type SessionEvent = SessionEventBase &
           content: string
           error?: string
           meta?: ToolResultMeta
+          attachments?: AttachmentRef[]
           parent_call_id?: string
         }
       }
