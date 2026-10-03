@@ -64,18 +64,17 @@ export function groupByTurn(nodes: ConversationNode[]): { segments: TurnSegment[
   }
 
   for (const seg of segments) {
-    // 最终回答：该轮最后一个含 text block 的 assistant 节点，其前的 assistant 节点留在过程段
-    for (let i = seg.process.length - 1; i >= 0; i--) {
-      const n = seg.process[i]
-      if (n.kind === "assistant" && n.content.some((b) => b.type === "text")) {
-        seg.process.splice(i, 1)
-        seg.answerReasoning = n.content.filter((b) => b.type === "reasoning").map((b) => b.text)
-        seg.answer =
-          seg.answerReasoning.length > 0
-            ? { ...n, content: n.content.filter((b) => b.type !== "reasoning") }
-            : n
-        break
-      }
+    // 最终回答：仅当该轮最后一个节点是含 text block 的 assistant 时才算；
+    // 否则（轮次以工具调用收尾：中断/达到迭代上限/被停止）所有内容留在过程段穿插展示，
+    // 不把中间回复误当最终回复
+    const n = seg.process[seg.process.length - 1]
+    if (n && n.kind === "assistant" && n.content.some((b) => b.type === "text")) {
+      seg.process.splice(seg.process.length - 1, 1)
+      seg.answerReasoning = n.content.filter((b) => b.type === "reasoning").map((b) => b.text)
+      seg.answer =
+        seg.answerReasoning.length > 0
+          ? { ...n, content: n.content.filter((b) => b.type !== "reasoning") }
+          : n
     }
     seg.toolCallCount = seg.process.filter((n) => n.kind === "tool-call" && n.name !== "task").length
     seg.taskCount = seg.process.filter((n) => n.kind === "tool-call" && n.name === "task").length

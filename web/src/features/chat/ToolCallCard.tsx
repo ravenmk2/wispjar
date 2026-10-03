@@ -80,6 +80,18 @@ function StatusBadge({ node }: { node: ToolCallNode }) {
   if (!node.result) {
     return <Loader2 className="size-3.5 shrink-0 animate-spin text-fg-tertiary" />
   }
+  // exec：退出码非 0 时折叠行直接显示红色 exit N，成功/失败一眼可区分
+  if (node.name === "exec") {
+    const parsed = safeParseJson(node.result.content)
+    const code = typeof parsed?.exit_code === "number" ? parsed.exit_code : null
+    if (code !== null && code !== 0) {
+      return (
+        <Badge variant="destructive" className="shrink-0 font-mono text-[11px] font-normal">
+          exit {code}
+        </Badge>
+      )
+    }
+  }
   const duration = node.result.meta?.duration_ms
   if (duration !== undefined) {
     return <span className="shrink-0 text-[11px] text-fg-caption">{(duration / 1000).toFixed(1)}s</span>
@@ -110,17 +122,23 @@ function TerminalBody({ node, liveOutput }: { node: ToolCallNode; liveOutput?: s
   }
   const truncated = !showAll && stdout.length > TRUNCATE_AT
   const visibleStdout = truncated ? stdout.slice(0, TRUNCATE_AT) : stdout
+  const failed = !!node.result?.error || (exitCode !== null && exitCode !== 0)
   return (
     <div className="overflow-hidden rounded-lg bg-muted/50">
       <div className="flex items-center gap-2 px-3 py-2">
         <span
           className={cn(
             "size-1.5 shrink-0 rounded-full",
-            exitCode === null ? "bg-fg-caption" : exitCode === 0 ? "bg-success" : "bg-destructive",
+            failed ? "bg-destructive" : exitCode === null ? "bg-fg-caption" : "bg-success",
           )}
         />
         <span className="shrink-0 font-mono text-[13px] text-fg-caption">$</span>
         <code className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-[13px]">{command}</code>
+        {node.result?.error && (
+          <Badge variant="destructive" className="shrink-0 font-mono text-[11px] font-normal">
+            失败
+          </Badge>
+        )}
         {exitCode !== null && (
           <Badge
             variant={exitCode === 0 ? "secondary" : "destructive"}
