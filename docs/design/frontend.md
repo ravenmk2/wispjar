@@ -59,7 +59,7 @@ web/src/
 | `/admin/usage` | 机构用量 | 机构 admin |
 | `/platform/orgs` `/platform/users` `/platform/providers` `/platform/models` `/platform/settings` `/platform/usage` `/platform/audit` | 平台后台 | 平台超管 |
 
-机构上下文：URL 不含机构；当前机构存 localStorage + `identity` store，API 客户端统一注入 `X-Org-Id`。顶栏机构切换器（下拉展示 `auth/me` 的 orgs；平台管理机构在列表中标注"平台"，选中且角色 admin 时导航进 `/platform/*`）。
+机构上下文：URL 不含机构；当前机构存 localStorage + `identity` store，API 客户端统一注入 `X-Org-Id`。侧栏机构切换器（下拉展示 `auth/me` 的 orgs；平台管理机构在列表中标注"平台"，选中且角色 admin 时导航进 `/platform/*`）。
 
 ## 4. mux 客户端（src/mux/）
 
@@ -133,11 +133,11 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 
 ## 7. 侧栏（sessions + agents）
 
-- 宽度 280px，背景 `bg-sidebar`（#FAFAFB）。
-- 顶部：机构切换器 + 用户菜单（改密、退出）。
+- 宽度 280px，背景 `bg-sidebar`（亮 #f9fbfc 冷白 / 暗 #1B1B1C）。工作台无全局顶栏——机构切换与用户菜单均收进侧栏，主内容区全高。
+- 顶部：品牌行（WispJar）→ 机构切换器行（variant=sidebar：全宽行，建筑图标 + 机构名 + ChevronsUpDown；下拉展示 `auth/me` 的 orgs，平台机构标注"平台"，选中且角色 admin 时可导航进 `/platform/*`）。
 - 智能体列表（AgentPicker）：本机构 published 智能体；点击 → POST 创建会话并跳转。
-- 会话列表：搜索框（防抖调 REST）+ 行项：标题（自动生成中显示"新会话"）、running 呼吸点、紧凑相对时间（刚刚/N分/N时/N天/M月D日）；hover 浮现 "…" 菜单：重命名 / 分叉会话 / 归档 / 删除（删除需确认对话框）；悬停出深色 HoverCard（标题 / 时间 / 运行状态）。数据源 `control` 流投影。
-- 底部入口：机构管理（admin 可见）、平台管理（超管可见）。
+- 会话列表：搜索框（防抖调 REST）+ 行项：标题（自动生成中显示"新会话"）、running 呼吸点、紧凑相对时间（刚刚/N分/N时/N天/M月D日）；hover 浮现 "…" 菜单：重命名 / 分叉会话 / 归档 / 删除（删除需确认对话框）；悬停出深色 HoverCard（标题 / 时间 / 运行状态）。数据源 `control` 流投影。当前会话选中态 `bg-selected`。
+- 底部：机构管理（admin 可见）、平台管理（超管可见）链接 + 用户菜单行（variant=sidebar：avatar + 显示名 + ChevronsUpDown，dropdown 向上弹出；外观（浅色/深色/跟随系统）/修改密码/退出登录）。机构/平台管理页（SecondaryLayout）保留自身页头（返回工作区 + 标题 + header 变体的机构切换与用户菜单）。
 
 ## 8. 智能体编辑器（features/admin/AgentEditor）
 
@@ -164,10 +164,12 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 
 ## 10. 视觉与体验基线
 
-- 主题：浅色默认 + 深色跟随系统（Tailwind `class` 策略）。语义色经 CSS 变量 + Tailwind 扩展：`primary` 蓝 #4176E6、`sidebar` #FAFAFB、用户气泡 `bubble` #EDF3FE、`success`/`warning`、三级文字 `fg-secondary/tertiary/caption`、`tooltip`/`toast` 深色底。
+- 主题：浅色默认 + 深色/跟随系统（Tailwind `class` 策略，localStorage `wispjar-theme`）。语义色经 CSS 变量 + Tailwind 扩展：`primary` 蓝 #4176E6、`sidebar` 冷白 #f9fbfc、用户气泡 `bubble` #EDF3FE、`success`/`warning`、`tooltip`/`toast` 深色底。
+- 文字与边框走透明度（借鉴 Kimi Code Desktop）：前景 rgba(0,0,0,.9)（暗 rgba(255,255,255,.84)），三级文字 fg-secondary/tertiary/caption = 黑 .6/.45/.38（暗 白 .56/.42/.34）；边框 黑 .13（暗 白 .12）、发丝线 `divider` 黑 .05；hover 黑 .03、选中 `selected` 黑 .05（暗 .05/.1）。
+- 阴影蓝灰基：输入卡 `shadow-input`（0 5px 16px -4px rgba(0,0,0,.07)）、弹层 `shadow-menu`（rgba(16,24,40,.04/.06)）；radix 弹层 backdrop 毛玻璃 blur(24px) saturate(1.8)。focus-visible 全局 3px 软蓝 ring（rgba(65,118,230,.18)）；文本选区 rgba(65,118,230,.2)。
 - 字体：系统栈（-apple-system / Segoe UI / PingFang SC 等）；等宽 SF Mono / JetBrains Mono / Consolas。
 - 密度：harness 式紧凑信息密度（消息间距小、卡片边框细、弱化阴影）。
 - 代码块：头部语言标签 + 复制钮；shiki 高亮按需加载语言。
 - 反馈：toast 用 sonner，深色横幅、顶部居中、3s；tooltip 深色底。
 - 空态：工作区首页 hero（"开始新的对话"标题 + 智能体卡片网格 + 最近会话列表）；无智能体时引导去管理页创建（admin）或联系管理员（member）。
-- 加载：会话切换骨架屏；followStatus=stalled 时顶栏提示"连接已断开，重连中…"。
+- 加载：会话切换骨架屏；followStatus=stalled 时界面提示"连接已断开，重连中…"。
