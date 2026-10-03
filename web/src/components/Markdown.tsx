@@ -60,6 +60,11 @@ export const Markdown = memo(function Markdown({ content, className }: { content
               {children}
             </a>
           ),
+          table: ({ children }) => (
+            <div className="my-2 overflow-x-auto rounded-lg border">
+              <table>{children}</table>
+            </div>
+          ),
         }}
       >
         {content}

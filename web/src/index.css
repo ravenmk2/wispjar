@@ -169,14 +169,20 @@
     @apply my-4;
   }
   .markdown-body table {
-    @apply my-2 w-full border-collapse text-[13px];
+    @apply w-full border-collapse text-[13px];
   }
   .markdown-body th,
   .markdown-body td {
-    @apply border px-2 py-1 text-left;
+    @apply px-2.5 py-1.5 text-left;
   }
   .markdown-body th {
-    @apply bg-muted font-medium;
+    @apply bg-muted/50 font-medium;
+  }
+  .markdown-body thead tr {
+    @apply border-b;
+  }
+  .markdown-body tbody tr:not(:last-child) {
+    @apply border-b border-divider;
   }
   .dark .markdown-body .shiki,
   .dark .markdown-body .shiki span {
