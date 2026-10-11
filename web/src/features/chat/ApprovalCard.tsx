@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DiffBlock } from "@/components/Markdown"
 import { safeParseJson } from "@/lib/format"
+import { toolDisplayName } from "@/lib/tool-names"
 import type { ApprovalNode } from "@/lib/conversation"
 import { useSessionStore, type PendingApproval } from "@/stores/session"
 
@@ -99,7 +100,9 @@ export function ApprovalCard({ node, sessionId }: { node: ApprovalNode; sessionI
         ) : (
           <XCircle className="size-3.5 text-red-500" />
         )}
-        <span className="font-medium">{node.name}</span>
+        <span className="font-medium" title={node.name}>
+          {toolDisplayName(node.name)}
+        </span>
         <span>
           {node.status === "allow" ? "已允许" : node.auto ? "已自动拒绝（超时或系统关闭）" : "已拒绝"}
         </span>
@@ -113,7 +116,9 @@ export function ApprovalCard({ node, sessionId }: { node: ApprovalNode; sessionI
       <div className="flex items-center gap-2 border-b border-amber-500/30 px-3 py-2">
         <ShieldQuestion className="size-4 text-amber-600 dark:text-amber-400" />
         <span className="text-sm font-medium">审批请求</span>
-        <span className="text-xs text-muted-foreground">{node.name}</span>
+        <span className="text-xs text-muted-foreground" title={node.name}>
+          {toolDisplayName(node.name)}
+        </span>
         <Badge
           variant={node.risk === "high" ? "destructive" : "secondary"}
           className="text-[11px] font-normal"
@@ -209,7 +214,9 @@ export function ApprovalTakeover({
             aria-label="审批详情"
             className="max-h-[336px] overflow-y-auto px-4 pt-3 outline-none"
           >
-            <div className="text-[15px] font-medium leading-6">工具 {approval.name} 请求执行</div>
+            <div className="text-[15px] font-medium leading-6" title={approval.name}>
+              工具 {toolDisplayName(approval.name)} 请求执行
+            </div>
             <div className="pb-1 pt-1.5">
               <ApprovalParams name={approval.name} args={approval.arguments} />
             </div>

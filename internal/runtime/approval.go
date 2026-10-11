@@ -24,17 +24,17 @@ const (
 )
 
 var toolRisk = map[string]string{
-	"exec":           RiskHigh,
-	"read":           RiskLow,
-	"read_media":     RiskLow,
-	"write":          RiskMedium,
-	"edit":           RiskMedium,
-	"glob":           RiskLow,
-	"grep":           RiskLow,
-	"activate_skill": RiskLow,
-	"task":           RiskLow,
-	// ask_user_question 是交互工具而非危险操作：任何 approval_mode 下都不拦截。
-	"ask_user_question": RiskLow,
+	"exec":       RiskHigh,
+	"read":       RiskLow,
+	"read_media": RiskLow,
+	"write":      RiskMedium,
+	"edit":       RiskMedium,
+	"glob":       RiskLow,
+	"grep":       RiskLow,
+	"skill":      RiskLow,
+	"task":       RiskLow,
+	// question 是交互工具而非危险操作：任何 approval_mode 下都不拦截。
+	"question": RiskLow,
 }
 
 func riskOf(toolName string) string {

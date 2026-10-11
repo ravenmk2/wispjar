@@ -112,7 +112,7 @@
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;
-    animation: shimmer-slide 1.6s linear infinite;
+    animation: shimmer-slide 3s linear infinite;
   }
   .text-shimmer {
     background-image: linear-gradient(

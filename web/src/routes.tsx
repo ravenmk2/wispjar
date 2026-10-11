@@ -5,6 +5,7 @@ import ChangePasswordPage from "@/pages/ChangePassword"
 import LoginPage from "@/pages/Login"
 import WorkspaceHome from "@/pages/WorkspaceHome"
 import ChatView from "@/features/chat/ChatView"
+import DraftChatView from "@/features/chat/DraftChatView"
 import MembersPage from "@/features/admin/MembersPage"
 import AgentsPage from "@/features/admin/AgentsPage"
 import AgentEditorPage from "@/features/admin/AgentEditor"
@@ -53,6 +54,7 @@ export const router = createBrowserRouter([
         element: <WorkspaceLayout />,
         children: [
           { index: true, element: <WorkspaceHome /> },
+          { path: "c/new", element: <DraftChatView /> },
           { path: "c/:sessionId", element: <ChatView /> },
         ],
       },

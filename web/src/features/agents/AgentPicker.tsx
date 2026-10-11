@@ -1,9 +1,8 @@
-import { Bot, Loader2 } from "lucide-react"
+import { Bot } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router"
 import { toast } from "sonner"
 import { errorMessage } from "@/api/client"
-import { sessionsApi } from "@/api/sessions"
 import { workspaceApi } from "@/api/workspace"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { AgentAvatar, AVATAR_ICONS } from "@/features/agents/AgentAvatar"
@@ -35,30 +34,9 @@ export function useOrgAgents() {
   return agents
 }
 
-export function useCreateSession() {
-  const currentOrg = useCurrentOrg()
-  const navigate = useNavigate()
-  const [creatingId, setCreatingId] = useState<string | null>(null)
-
-  async function createSession(agentId: string) {
-    if (!currentOrg || creatingId) return
-    setCreatingId(agentId)
-    try {
-      const session = await sessionsApi.create(currentOrg.id, { agent_id: agentId })
-      navigate(`/c/${session.id}`)
-    } catch (e) {
-      toast.error(errorMessage(e))
-    } finally {
-      setCreatingId(null)
-    }
-  }
-
-  return { createSession, creatingId }
-}
-
 export function AgentPicker() {
   const agents = useOrgAgents()
-  const { createSession, creatingId } = useCreateSession()
+  const navigate = useNavigate()
 
   if (!agents) {
     return (
@@ -78,9 +56,8 @@ export function AgentPicker() {
         <button
           key={agent.id}
           type="button"
-          onClick={() => void createSession(agent.id)}
-          disabled={creatingId !== null}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-60"
+          onClick={() => navigate(`/c/new?agent=${agent.id}`)}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
         >
           <Avatar className="size-6 shrink-0">
             <AvatarFallback className="text-xs">
@@ -92,7 +69,6 @@ export function AgentPicker() {
             </AvatarFallback>
           </Avatar>
           <span className="min-w-0 flex-1 truncate">{agent.name}</span>
-          {creatingId === agent.id && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
         </button>
       ))}
     </div>

@@ -55,7 +55,7 @@ func buildAgent(ctx context.Context, sess Session, snap AgentSnapshot, deps Deps
 }
 ```
 
-- `renderInstruction`：`agent.system_prompt` + 拼接"## 可用 Skills"索引段（每条 `- {name}: {description}`，提示"用 activate_skill 工具加载完整说明"）+ 末尾注入运行事实（**会话创建日期**（`sess.CreatedAt`，非 `time.Now`——system 是 messages[0]，逐天变化会让其后全部历史的缓存前缀失配，见《缓存命中优先设计原则》§12）、沙箱工作目录 `/workspace`、确认模式说明——strict 模式下提示模型"危险操作会被用户审查"）。
+- `renderInstruction`：`agent.system_prompt` + 拼接"## 可用 Skills"索引段（每条 `- {name}: {description}`，提示"用 skill 工具加载完整说明"）+ 末尾注入运行事实（**会话创建日期**（`sess.CreatedAt`，非 `time.Now`——system 是 messages[0]，逐天变化会让其后全部历史的缓存前缀失配，见《缓存命中优先设计原则》§12）、沙箱工作目录 `/workspace`、确认模式说明——strict 模式下提示模型"危险操作会被用户审查"）。
 - 会话级 `model_id`（用户切换过）覆盖快照中的 model。
 - 模型参数三级优先级：**会话 `session.model_params` > Agent 快照 `model_params` > 模型 `default_params`**。会话级承载用户选档（如 `{"reasoning_effort":"high"}`），创建时缺省 = 模型 `capabilities.reasoning_effort_default`；`last_seq > 0` 后锁定（锁档理由：DeepSeek 思考模式带 tools 时要求完整回放历史 `reasoning_content`，中途换档会改变每轮输出形态与回放义务；且同会话内推理深度/时延/成本跳变体验断裂。effort 是请求级参数、不进消息前缀，与前缀缓存无关）。
 
@@ -177,10 +177,10 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 
 实现：execd `POST /command` 执行 `rg --line-number --no-heading [--ignore-case] [-g glob] -- pattern path`（`files_with_matches` 加 `-l`）；沙箱镜像保证预装 `rg`。沙箱缺 `rg`（exit 127 / "command not found"）时自动降级 `grep -rInE --color=never`（参数映射见 §4.11），输出同为 `path:line:text`。
 
-### 4.7 activate_skill（风险 low，render generic）
+### 4.7 skill（风险 low，render generic）
 
 ```jsonc
-// name: activate_skill —— 加载指定 Skill 的完整使用说明（SKILL.md 全文 + 包内文件清单）
+// name: skill —— 加载指定 Skill 的完整使用说明（SKILL.md 全文 + 包内文件清单）
 { "name": "string（必填，Skills 索引段中的 name）" }
 // 返回：{ "name", "instructions": "<SKILL.md markdown 全文>",
 //         "files": ["scripts/a.py", ...], "sandbox_dir": "/skills/<name>/" }
@@ -210,10 +210,10 @@ only its final result. Available subagents:
 Use this when a subtask is focused and independent; include everything the subagent needs in `prompt`.
 ```
 
-### 4.9 ask_user_question（风险 low，render generic）
+### 4.9 question（风险 low，render generic）
 
 ```jsonc
-// name: ask_user_question —— 向用户提问并等待回答（一卡多题，前台最多等待 10 分钟）。
+// name: question —— 向用户提问并等待回答（一卡多题，前台最多等待 10 分钟）。
 // 仅在 genuinely 需要用户决策或缺失信息时使用，不做礼节性确认。
 { "questions": [ { "id": "string（必填，本次调用内唯一，答案中回显）",
                    "question": "string（必填，问题文本）",
@@ -228,7 +228,7 @@ Use this when a subtask is focused and independent; include everything the subag
 //   —— 是 pending 不是跳过：用户答复稍后会作为一条新 user message 到来，绝不能当作许可
 ```
 
-实现：internal/runtime/question.go（等待语义与子 Agent 规则见 §5.3）。任何 approval_mode 下不被审批中间件拦截（交互工具，豁免方式同 activate_skill）。仅 depth=0 根 Agent 可用；depth=1 注册同 schema 拒绝桩（§5.3）。
+实现：internal/runtime/question.go（等待语义与子 Agent 规则见 §5.3）。任何 approval_mode 下不被审批中间件拦截（交互工具，豁免方式同 skill）。仅 depth=0 根 Agent 可用；depth=1 注册同 schema 拒绝桩（§5.3）。
 
 ### 4.10 read_media（风险 low，render read）
 
@@ -283,12 +283,12 @@ pending 审批登记内存表 `map[callID]pendingApproval{sessionID, checkpointI
 |---|---|---|---|
 | exec | 确认 | 确认 | 免 |
 | write / edit | 确认 | 免 | 免 |
-| read / read_media / glob / grep / activate_skill / task / ask_user_question | 免 | 免 | 免 |
+| read / read_media / glob / grep / skill / task / question | 免 | 免 | 免 |
 
 - `grep` 虽走 exec 通道，按工具自身 low 风险归类（实现通道不影响风险语义）。
 - 子 Agent 内的工具调用继承同一会话的 approval_mode（嵌套 asked/decided 带 `parent_call_id`）。
 
-### 5.3 提问（ask_user_question）实现（internal/runtime/question）
+### 5.3 提问（question）实现（internal/runtime/question）
 
 与审批**刻意不共用管线**（对齐 DSH：两者各自拥有独立的 pending-settlement 生命周期）——审批 resume 依赖 eino checkpoint 且 fail-closed 合理；提问答案是结构化的、等待时间可能远超 10 分钟，且超时不应让 turn 失败。挂起原语同构：工具 execute 内按 callID 登记内存等待（channel，缓冲 1）后 `select` 等待。
 

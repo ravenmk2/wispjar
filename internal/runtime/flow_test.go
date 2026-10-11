@@ -318,7 +318,7 @@ func TestNeedsApproval(t *testing.T) {
 		{session.ApprovalStrict, "read", false},
 		{session.ApprovalStrict, "glob", false},
 		{session.ApprovalStrict, "grep", false},
-		{session.ApprovalStrict, "activate_skill", false},
+		{session.ApprovalStrict, "skill", false},
 		{session.ApprovalDefault, "exec", true},
 		{session.ApprovalDefault, "write", false},
 		{session.ApprovalDefault, "edit", false},

@@ -1,4 +1,7 @@
 import type { AssistantNode, BoundaryNode, ConversationNode, QuestionReplyNode, UserNode } from "@/lib/conversation"
+import type { ContentBlock } from "@/lib/types"
+
+type ReasoningBlockData = Extract<ContentBlock, { type: "reasoning" }>
 
 export interface TurnSegment {
   turn: number
@@ -7,11 +10,9 @@ export interface TurnSegment {
   process: ConversationNode[]
   answer?: AssistantNode
   // 最终回复剥离出的思考块，随折叠组展开渲染（answer 节点本身只留 text）
-  answerReasoning: string[]
+  answerReasoning: ReasoningBlockData[]
   end?: BoundaryNode
   hasPendingApproval: boolean
-  toolCallCount: number
-  taskCount: number
   durationMs?: number
 }
 
@@ -36,7 +37,7 @@ export function groupByTurn(nodes: ConversationNode[]): { segments: TurnSegment[
   const segmentOf = (turn: number): TurnSegment => {
     let seg = byTurn.get(turn)
     if (!seg) {
-      seg = { turn, process: [], answerReasoning: [], hasPendingApproval: false, toolCallCount: 0, taskCount: 0 }
+      seg = { turn, process: [], answerReasoning: [], hasPendingApproval: false }
       byTurn.set(turn, seg)
       segments.push(seg)
     }
@@ -70,14 +71,12 @@ export function groupByTurn(nodes: ConversationNode[]): { segments: TurnSegment[
     const n = seg.process[seg.process.length - 1]
     if (n && n.kind === "assistant" && n.content.some((b) => b.type === "text")) {
       seg.process.splice(seg.process.length - 1, 1)
-      seg.answerReasoning = n.content.filter((b) => b.type === "reasoning").map((b) => b.text)
+      seg.answerReasoning = n.content.filter((b): b is ReasoningBlockData => b.type === "reasoning")
       seg.answer =
         seg.answerReasoning.length > 0
           ? { ...n, content: n.content.filter((b) => b.type !== "reasoning") }
           : n
     }
-    seg.toolCallCount = seg.process.filter((n) => n.kind === "tool-call" && n.name !== "task").length
-    seg.taskCount = seg.process.filter((n) => n.kind === "tool-call" && n.name === "task").length
     seg.hasPendingApproval = hasPendingApproval(seg.process)
     if (seg.start && seg.end) seg.durationMs = Math.max(1000, seg.end.time - seg.start.time)
   }

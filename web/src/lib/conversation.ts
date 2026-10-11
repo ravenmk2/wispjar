@@ -32,7 +32,7 @@ export interface ToolResultData {
   attachments?: AttachmentRef[]
 }
 
-// ask_user_question 工具挂接的提问状态：answers 缺省 = 未决（open 或 continued 均可补答）
+// question（旧名 ask_user_question）工具挂接的提问状态：answers 缺省 = 未决（open 或 continued 均可补答）
 export interface QuestionState {
   questions: Question[]
   answers?: QuestionAnswer[]
@@ -109,18 +109,20 @@ export function foldChunks(chunks: StreamChunk[]): { blocks: ContentBlock[]; usa
   const pending = new Map<number, PendingBlock>()
   let usage: Usage | undefined
   for (const chunk of chunks) {
+    // 后端 index 是 omitempty：第 0 块的帧 JSON 没有 index 字段，统一归一化为 0
+    const idx = "index" in chunk ? (chunk.index ?? 0) : 0
     switch (chunk.type) {
       case "block-start":
-        pending.set(chunk.index, { blockType: chunk.blockType, text: "", arguments: "" })
+        pending.set(idx, { blockType: chunk.blockType, text: "", arguments: "" })
         break
       case "text-delta":
       case "reasoning-delta": {
-        const b = pending.get(chunk.index)
+        const b = pending.get(idx)
         if (b) b.text += chunk.text
         break
       }
       case "tool-call-delta": {
-        const b = pending.get(chunk.index)
+        const b = pending.get(idx)
         if (b) {
           if (chunk.id) b.id = chunk.id
           if (chunk.name) b.name = chunk.name
@@ -129,8 +131,8 @@ export function foldChunks(chunks: StreamChunk[]): { blocks: ContentBlock[]; usa
         break
       }
       case "block-end":
-        finalized.set(chunk.index, chunk.block)
-        pending.delete(chunk.index)
+        finalized.set(idx, chunk.block)
+        pending.delete(idx)
         break
       case "usage":
         usage = {
@@ -146,11 +148,13 @@ export function foldChunks(chunks: StreamChunk[]): { blocks: ContentBlock[]; usa
         break
     }
   }
-  const indices = new Set([...finalized.keys(), ...pending.keys()])
+  const indices = [...new Set([...finalized.keys(), ...pending.keys()])].sort((a, b) => a - b)
+  const lastIndex = indices[indices.length - 1]
   const blocks: ContentBlock[] = []
-  for (const index of [...indices].sort((a, b) => a - b)) {
+  for (const index of indices) {
     const done = finalized.get(index)
     if (done) {
+      // reasoning 块的 durationMs 由服务端在 block-end 的 block 里下发，原样保留
       blocks.push(done)
       continue
     }
@@ -158,6 +162,9 @@ export function foldChunks(chunks: StreamChunk[]): { blocks: ContentBlock[]; usa
     if (!p) continue
     if (p.blockType === "tool-call") {
       blocks.push({ type: "tool-call", id: p.id ?? "", name: p.name ?? "", arguments: p.arguments })
+    } else if (p.blockType === "reasoning") {
+      // 只有最后一个 block 仍在 pending 才算思考中；其后出现正文/工具块即视为思考结束
+      blocks.push({ type: "reasoning", text: p.text, streaming: index === lastIndex })
     } else {
       blocks.push({ type: p.blockType, text: p.text })
     }
@@ -326,9 +333,11 @@ export function deriveConversationNodes(
         break
       }
       case "question/asked": {
+        // 工具新名为 question（旧名 ask_user_question）；已存在的节点保留 tool/call 下发的原名
+        const existing = toolNodes.get(e.data.call_id)
         const node = ensureToolNode(
           e.data.call_id,
-          { seq: e.seq, time: e.time, turn: e.data.turn, step: e.data.step, name: "ask_user_question", arguments: "", live: false },
+          { seq: e.seq, time: e.time, turn: e.data.turn, step: e.data.step, name: existing?.name ?? "question", arguments: "", live: false },
           parentOf(e.data),
         )
         // asked 恒先于 answered（runtime.md §5.3），直接覆盖

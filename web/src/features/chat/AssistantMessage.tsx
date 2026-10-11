@@ -6,6 +6,7 @@ import { CopyIconButton } from "@/components/CopyIconButton"
 import { Markdown } from "@/components/Markdown"
 import { ForkButton } from "@/features/chat/ForkButton"
 import { formatMessageTime, formatNumber } from "@/lib/format"
+import { formatTurnDuration } from "@/lib/turn-grouping"
 import { cn } from "@/lib/utils"
 import type { AssistantNode } from "@/lib/conversation"
 import type { Usage } from "@/lib/types"
@@ -38,18 +39,16 @@ export function TokenBadge({ usage, className }: { usage: Usage; className?: str
   )
 }
 
-function reasoningSummary(text: string): string {
-  const paras = text
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-  const last = paras[paras.length - 1] ?? ""
-  return last.split("\n")[0] ?? ""
-}
-
-export function ReasoningBlock({ text, live }: { text: string; live?: boolean }) {
+export function ReasoningBlock({
+  text,
+  streaming,
+  durationMs,
+}: {
+  text: string
+  streaming?: boolean
+  durationMs?: number
+}) {
   const [open, setOpen] = useState(false)
-  const summary = reasoningSummary(text)
   return (
     <div className="my-0.5">
       <button
@@ -58,14 +57,9 @@ export function ReasoningBlock({ text, live }: { text: string; live?: boolean })
         className="flex h-8 w-full items-center gap-1.5 rounded-md px-1 text-left text-[13px] hover:bg-accent/50"
       >
         <Sparkles className="size-3.5 shrink-0 text-fg-tertiary" />
-        <span className="shrink-0 font-medium text-fg-secondary">思考</span>
-        <span
-          className={cn(
-            "min-w-0 flex-1 truncate text-fg-tertiary",
-            live && "text-shimmer",
-          )}
-        >
-          {summary ? `· ${summary}` : live ? "· 思考中…" : ""}
+        <span className={cn("shrink-0 font-medium text-fg-secondary", streaming && "text-shimmer")}>思考</span>
+        <span className="min-w-0 flex-1 truncate text-fg-tertiary">
+          {durationMs !== undefined ? `· 用时 ${formatTurnDuration(durationMs)}` : streaming ? "· 思考中…" : ""}
         </span>
         {open ? (
           <ChevronDown className="size-3.5 shrink-0 text-fg-tertiary" />
@@ -106,7 +100,14 @@ export function AssistantMessage({
         ? null
         : node.content.map((block, i) => {
             if (block.type === "reasoning") {
-              return <ReasoningBlock key={i} text={block.text} live={node.live} />
+              return (
+                <ReasoningBlock
+                  key={i}
+                  text={block.text}
+                  streaming={node.live === true && block.streaming === true}
+                  durationMs={block.durationMs}
+                />
+              )
             }
             if (block.type === "text") {
               return (

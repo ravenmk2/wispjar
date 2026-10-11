@@ -16,7 +16,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/store"
 )
 
-// ask_user_question 提问工具（runtime.md §4.9）：根 Agent 向用户提问。
+// question 提问工具（runtime.md §4.9）：根 Agent 向用户提问。
 // 等待语义 = DSH timed + continued 简化版：execute 内按 callID 登记内存等待，
 // 窗口内作答 → 答案作为工具结果返回；超时 → {"pending":true,...} 工具结果，turn 正常
 // 继续，问题转 continued（无 question/answered 即未决，投影天然推导，重启零成本）；
@@ -31,7 +31,7 @@ const questionPendingNotice = "The user has not answered within the wait window.
 	"continue with work that does not depend on these answers, or stop and wait for the user's reply."
 
 // delegatedCallerNotice 子 Agent 调用拒绝文案（对齐 DSH DELEGATED_CALLER）。
-const delegatedCallerNotice = "error: ask_user_question is only available to the root agent; a delegated subagent cannot ask the user directly. " +
+const delegatedCallerNotice = "error: question is only available to the root agent; a delegated subagent cannot ask the user directly. " +
 	"Write the unresolved questions into your final result so the parent agent can surface them to the user."
 
 var (
@@ -121,7 +121,7 @@ type questionTool struct {
 
 func (o *orchestrator) newQuestionTool(sess *store.Session, rs *runState, depth int) (tool.BaseTool, error) {
 	qt := &questionTool{o: o, sess: sess, rs: rs, depth: depth}
-	return utils.InferTool("ask_user_question", askUserQuestionDescription, qt.invoke)
+	return utils.InferTool("question", askUserQuestionDescription, qt.invoke)
 }
 
 func (t *questionTool) invoke(ctx context.Context, in askUserQuestionArgs) (string, error) {

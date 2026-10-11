@@ -24,14 +24,10 @@ export function TurnProcessGroup({
   const text = (() => {
     if (reason === "interrupted") return "已停止"
     if (failed) return "失败"
-    const parts: string[] = []
-    if (segment.toolCallCount > 0) parts.push(`${segment.toolCallCount} 次工具调用`)
-    if (segment.taskCount > 0) parts.push(`${segment.taskCount} 次任务委派`)
-    const base = parts.length > 0 ? parts.join(" · ") : "已思考"
-    if (segment.durationMs !== undefined && reason === "completed") {
-      return `${base} · 用时 ${formatTurnDuration(segment.durationMs)}`
+    if (reason === "completed") {
+      return segment.durationMs !== undefined ? `已工作 ${formatTurnDuration(segment.durationMs)}` : "已工作"
     }
-    return base
+    return "进行中"
   })()
 
   return (
@@ -65,8 +61,8 @@ export function TurnProcessGroup({
           {segment.process.map((node) => (
             <NodeView key={node.id} node={node} sessionId={sessionId} depth={0} latestTurn={latestTurn} />
           ))}
-          {segment.answerReasoning.map((text, i) => (
-            <ReasoningBlock key={`answer-reasoning-${i}`} text={text} />
+          {segment.answerReasoning.map((block, i) => (
+            <ReasoningBlock key={`answer-reasoning-${i}`} text={block.text} durationMs={block.durationMs} />
           ))}
         </div>
       )}

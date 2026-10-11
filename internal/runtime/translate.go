@@ -43,6 +43,9 @@ type blockState struct {
 	name    string
 	args    string
 	started bool
+	// startMs/lastDeltaMs 仅 reasoning 块使用：首帧与末帧 delta 时间，用于推算思考耗时
+	startMs     int64
+	lastDeltaMs int64
 }
 
 func newAttempt(turn, step int) *attemptState {
@@ -102,6 +105,10 @@ func (a *attemptState) feed(msg *schema.Message) []framedChunk {
 		if !a.reason.started {
 			out = append(out, a.blockStart(a.reason))
 		}
+		if a.reason.startMs == 0 {
+			a.reason.startMs = nowMs()
+		}
+		a.reason.lastDeltaMs = nowMs()
 		a.reason.text += msg.ReasoningContent
 		out = append(out, a.emit(StreamChunk{Type: ChunkReasoningDelta, Index: a.reason.index, Text: msg.ReasoningContent}))
 	}
@@ -175,7 +182,11 @@ func (a *attemptState) endChunks(aborted bool) []framedChunk {
 func (bs *blockState) contentBlock() session.ContentBlock {
 	switch bs.kind {
 	case BlockReasoning:
-		return session.ContentBlock{Type: "reasoning", Text: bs.text}
+		block := session.ContentBlock{Type: "reasoning", Text: bs.text}
+		if bs.startMs > 0 && bs.lastDeltaMs > bs.startMs {
+			block.DurationMs = bs.lastDeltaMs - bs.startMs
+		}
+		return block
 	case BlockToolCall:
 		return session.ContentBlock{Type: "tool-call", ID: bs.id, Name: bs.name, Arguments: bs.args}
 	default:

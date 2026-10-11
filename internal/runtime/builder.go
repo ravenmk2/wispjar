@@ -165,7 +165,7 @@ func (o *orchestrator) buildAgent(ctx context.Context, sess *store.Session, snap
 		return nil, nil, err
 	}
 	toolList = append(toolList, question)
-	toolNames = append(toolNames, "ask_user_question")
+	toolNames = append(toolNames, "question")
 	if len(snap.SubAgents) > 0 {
 		task, err := o.newTaskTool(sess, snap, tc, rs)
 		if err != nil {
@@ -213,7 +213,7 @@ func renderInstruction(snap *agent.Snapshot, sess *store.Session) string {
 		for _, sk := range snap.Skills {
 			fmt.Fprintf(&b, "- %s: %s\n", sk.Name, sk.Description)
 		}
-		b.WriteString("使用 activate_skill 工具加载某个 Skill 的完整使用说明。\n")
+		b.WriteString("使用 skill 工具加载某个 Skill 的完整使用说明。\n")
 	}
 	if len(snap.SubAgents) > 0 {
 		b.WriteString("\n## 子智能体\n")

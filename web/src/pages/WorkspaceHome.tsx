@@ -1,9 +1,9 @@
-import { Bot, Clock, Loader2, PlusCircle } from "lucide-react"
-import { Link } from "react-router"
+import { Bot, Clock, PlusCircle } from "lucide-react"
+import { Link, useNavigate } from "react-router"
 import { EmptyState } from "@/components/common"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { useCreateSession, useOrgAgents } from "@/features/agents/AgentPicker"
+import { useOrgAgents } from "@/features/agents/AgentPicker"
 import { formatRelativeTime } from "@/lib/format"
 import { useCurrentOrg } from "@/stores/identity"
 import { useSessionListStore } from "@/stores/sessionList"
@@ -11,7 +11,7 @@ import { useSessionListStore } from "@/stores/sessionList"
 export default function WorkspaceHome() {
   const currentOrg = useCurrentOrg()
   const agents = useOrgAgents()
-  const { createSession, creatingId } = useCreateSession()
+  const navigate = useNavigate()
   const sessions = useSessionListStore((s) => s.sessions)
   const order = useSessionListStore((s) => s.order)
   const recent = order.slice(0, 5).map((id) => sessions[id]).filter(Boolean)
@@ -59,9 +59,8 @@ export default function WorkspaceHome() {
           <button
             key={agent.id}
             type="button"
-            onClick={() => void createSession(agent.id)}
-            disabled={creatingId !== null}
-            className="flex items-start gap-3 rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary/30 hover:bg-accent/50 disabled:opacity-60"
+            onClick={() => navigate(`/c/new?agent=${agent.id}`)}
+            className="flex items-start gap-3 rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary/30 hover:bg-accent/50"
           >
             <Avatar className="size-9 shrink-0">
               <AvatarFallback>{agent.avatar || <Bot className="size-4" />}</AvatarFallback>
@@ -69,7 +68,6 @@ export default function WorkspaceHome() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-medium">{agent.name}</span>
-                {creatingId === agent.id && <Loader2 className="size-3.5 animate-spin text-fg-tertiary" />}
               </div>
               {agent.description && (
                 <p className="mt-0.5 line-clamp-2 text-xs text-fg-secondary">{agent.description}</p>

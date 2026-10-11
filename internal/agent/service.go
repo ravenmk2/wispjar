@@ -201,8 +201,8 @@ func (s *Service) validateInput(orgID, agentID string, in AgentInput) (*validate
 	if v.maxIterations == 0 {
 		v.maxIterations = 20
 	}
-	if v.maxIterations < 1 || v.maxIterations > 200 {
-		return nil, errInvalid("max_iterations 必须是 1..200", map[string]any{"field": "max_iterations"})
+	if v.maxIterations < 1 || v.maxIterations > 10000 {
+		return nil, errInvalid("max_iterations 必须是 1..10000", map[string]any{"field": "max_iterations"})
 	}
 	var err error
 	if v.modelParams, err = parseModelParams(in.ModelParams); err != nil {

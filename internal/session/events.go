@@ -48,6 +48,8 @@ type ContentBlock struct {
 	ID        string `json:"id,omitempty"`
 	Name      string `json:"name,omitempty"`
 	Arguments string `json:"arguments,omitempty"`
+	// DurationMs 仅 reasoning 块使用：思考首帧到末帧的耗时（流式窗口埋点）。
+	DurationMs int64 `json:"durationMs,omitempty"`
 }
 
 type TurnStartData struct {
@@ -202,7 +204,7 @@ type QuestionOption struct {
 	Description string `json:"description,omitempty"`
 }
 
-// Question 是 ask_user_question 的一道题：无 options=自由输入；有 options 按 multi_select 分单/多选。
+// Question 是 question 工具的一道题：无 options=自由输入；有 options 按 multi_select 分单/多选。
 type Question struct {
 	ID          string           `json:"id"`
 	Question    string           `json:"question"`

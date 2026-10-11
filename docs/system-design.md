@@ -113,7 +113,7 @@ internal/
 ├── skill/             # skill zip 上传/校验/解析/存储（agentskills.io 规范）
 ├── agent/             # 智能体 CRUD 与发布、子 Agent DAG 校验
 ├── runtime/           # eino 集成核心：Agent 构建、ReAct 循环、事件翻译、中断/恢复
-│   ├── tools/         # 沙箱工具六件套 + activate_skill + task 委派工具
+│   ├── tools/         # 沙箱工具六件套 + skill + task 委派工具
 │   ├── approval/      # 确认模式、interrupt/resume、pending 审批管理
 │   └── checkpoint/    # adk CheckPointStore 的 MySQL 实现
 ├── sandbox/           # OpenSandbox 客户端封装、会话沙箱池、空闲暂停/恢复、egress/镜像应用

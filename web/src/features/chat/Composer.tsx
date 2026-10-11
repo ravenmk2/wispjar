@@ -1,5 +1,6 @@
 import { ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, ImageOff, Loader2, Paperclip, RotateCw, Shield, ShieldCheck, ShieldOff, Square, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useNavigate } from "react-router"
 import { toast } from "sonner"
 import { attachmentsApi } from "@/api/attachments"
 import { errorMessage } from "@/api/client"
@@ -19,7 +20,7 @@ import { Input } from "@/components/ui/input"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { TokenBadge } from "@/features/chat/AssistantMessage"
 import { cn, uuid } from "@/lib/utils"
-import type { ApprovalMode, AttachmentRef, OrgModel } from "@/lib/types"
+import type { AgentSummary, ApprovalMode, AttachmentRef, OrgModel } from "@/lib/types"
 import { useComposerStore } from "@/stores/composer"
 import { useCurrentOrg } from "@/stores/identity"
 import { useSessionStore } from "@/stores/session"
@@ -56,8 +57,9 @@ function effortLabel(effort: string): string {
 
 type ModelMenuLevel = "root" | "model" | "effort"
 
-export function Composer({ sessionId }: { sessionId: string }) {
+export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAgent?: AgentSummary }) {
   const currentOrg = useCurrentOrg()
+  const navigate = useNavigate()
   const header = useSessionStore((s) => s.header)
   const liveAttempt = useSessionStore((s) => s.liveAttempt)
   const lastSeq = useSessionStore((s) => s.lastSeq)
@@ -85,7 +87,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
 
   const running = header?.running ?? false
   const busy = running || liveAttempt !== null
-  const modelId = modelOverride ?? header?.modelId ?? ""
+  const modelId = modelOverride ?? header?.modelId ?? draftAgent?.model_id ?? ""
   const effortLocked = lastSeq > 0
 
   useEffect(() => {
@@ -98,6 +100,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
 
   useEffect(() => {
     setEffort(null)
+    if (draftAgent) return
     sessionsApi
       .detail(sessionId)
       .then((d) => {
@@ -105,7 +108,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
         setEffort(typeof v === "string" && v ? v : null)
       })
       .catch(() => {})
-  }, [sessionId])
+  }, [sessionId, draftAgent])
 
   useEffect(() => {
     if (!currentOrg) return
@@ -158,6 +161,11 @@ export function Composer({ sessionId }: { sessionId: string }) {
   const visionSupported = currentModel?.capabilities.vision ?? true
 
   function startUpload(item: PendingImage) {
+    // 草稿态会话尚未创建，附件延迟到首条消息发送时（建会话后）再上传
+    if (draftAgent) {
+      setImages((prev) => prev.map((i) => (i.key === item.key ? { ...i, status: "ready" } : i)))
+      return
+    }
     const promise = attachmentsApi.upload(sessionId, item.file)
     uploadsRef.current.set(item.key, promise)
     promise.then(
@@ -225,14 +233,27 @@ export function Composer({ sessionId }: { sessionId: string }) {
     }
     setSending(true)
     try {
-      // 等待在途上传全部就绪；任一失败则整条不发送（草稿与附件保留）
-      const refs = await Promise.all(
-        pending.map((i) => {
-          if (i.status === "ready" && i.ref) return Promise.resolve(i.ref)
-          const p = uploadsRef.current.get(i.key)
-          return p ?? Promise.reject(new Error("图片上传未完成"))
-        }),
-      )
+      let targetSessionId = sessionId
+      let refs: AttachmentRef[]
+      if (draftAgent) {
+        // 惰性建会话：首条消息先创建会话，再补传附件、发 prompt，最后切换到正式会话页；
+        // 任一步失败都停留在草稿页，输入内容与附件保留
+        if (!currentOrg) throw new Error("当前机构不可用")
+        const session = await sessionsApi.create(currentOrg.id, { agent_id: draftAgent.id })
+        targetSessionId = session.id
+        refs = await Promise.all(
+          pending.map((i) => i.ref ?? attachmentsApi.upload(targetSessionId, i.file)),
+        )
+      } else {
+        // 等待在途上传全部就绪；任一失败则整条不发送（草稿与附件保留）
+        refs = await Promise.all(
+          pending.map((i) => {
+            if (i.status === "ready" && i.ref) return Promise.resolve(i.ref)
+            const p = uploadsRef.current.get(i.key)
+            return p ?? Promise.reject(new Error("图片上传未完成"))
+          }),
+        )
+      }
       const requestId = uuid()
       setOptimistic({
         requestId,
@@ -241,7 +262,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
           ? pending.map((i) => ({ url: i.previewUrl, name: i.file.name }))
           : undefined,
       })
-      await sessionsApi.prompt(sessionId, {
+      await sessionsApi.prompt(targetSessionId, {
         content,
         request_id: requestId,
         ...(refs.length ? { attachments: refs.map((r) => r.id) } : {}),
@@ -249,6 +270,7 @@ export function Composer({ sessionId }: { sessionId: string }) {
       setDraft("")
       setImages([])
       uploadsRef.current.clear()
+      if (draftAgent) navigate(`/c/${targetSessionId}`, { replace: true })
     } catch (e) {
       clearOptimistic()
       toast.error(errorMessage(e))
@@ -429,7 +451,9 @@ export function Composer({ sessionId }: { sessionId: string }) {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="group flex h-7 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground"
+                  disabled={!!draftAgent}
+                  title={draftAgent ? "发送首条消息后可调整审批模式" : undefined}
+                  className="group flex h-7 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
                 >
                   {currentMode.label}
                   <ChevronDown className="size-3 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
@@ -467,7 +491,9 @@ export function Composer({ sessionId }: { sessionId: string }) {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="group flex h-7 max-w-48 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground"
+                    disabled={!!draftAgent}
+                    title={draftAgent ? "发送首条消息后可切换模型" : undefined}
+                    className="group flex h-7 max-w-48 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
                   >
                     <span className="truncate">{(modelName ?? modelId) || "选择模型"}</span>
                     {supportsEffort && effort && (

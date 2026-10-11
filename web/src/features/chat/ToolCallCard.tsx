@@ -21,6 +21,7 @@ import { NodeList } from "@/features/chat/NodeList"
 import { MessageImages } from "@/features/chat/MessageImages"
 import { QuestionAnswerList } from "@/features/chat/QuestionCard"
 import { safeParseJson } from "@/lib/format"
+import { isQuestionTool, toolDisplayName } from "@/lib/tool-names"
 import { hasPendingApproval } from "@/lib/turn-grouping"
 import { cn } from "@/lib/utils"
 import type { ToolCallNode } from "@/lib/conversation"
@@ -34,7 +35,9 @@ const TOOL_ICONS: Record<string, ReactNode> = {
   glob: <Search className="size-3.5" />,
   grep: <Search className="size-3.5" />,
   task: <Bot className="size-3.5" />,
+  skill: <Puzzle className="size-3.5" />,
   activate_skill: <Puzzle className="size-3.5" />,
+  question: <MessageCircleQuestion className="size-3.5" />,
   ask_user_question: <MessageCircleQuestion className="size-3.5" />,
   read_media: <Image className="size-3.5" />,
 }
@@ -70,26 +73,17 @@ function diffStats(diff?: string): { added: number; removed: number } | null {
 
 function StatusBadge({ node }: { node: ToolCallNode }) {
   if (node.result?.error) {
-    return (
-      <Badge variant="destructive" className="gap-1 text-[11px] font-normal">
-        <XCircle className="size-3" />
-        失败
-      </Badge>
-    )
+    return <XCircle className="size-3.5 shrink-0 text-destructive" aria-label="失败" />
   }
   if (!node.result) {
     return <Loader2 className="size-3.5 shrink-0 animate-spin text-fg-tertiary" />
   }
-  // exec：退出码非 0 时折叠行直接显示红色 exit N，成功/失败一眼可区分
+  // exec：退出码非 0 时折叠行只标红色小叉，具体 exit code 看展开详情
   if (node.name === "exec") {
     const parsed = safeParseJson(node.result.content)
     const code = typeof parsed?.exit_code === "number" ? parsed.exit_code : null
     if (code !== null && code !== 0) {
-      return (
-        <Badge variant="destructive" className="shrink-0 font-mono text-[11px] font-normal">
-          exit {code}
-        </Badge>
-      )
+      return <XCircle className="size-3.5 shrink-0 text-destructive" aria-label={`exit ${code}`} />
     }
   }
   const duration = node.result.meta?.duration_ms
@@ -253,7 +247,7 @@ function GenericBody({ node }: { node: ToolCallNode }) {
   )
 }
 
-// ask_user_question：settled 展开为只读问答卡；超时转 continued 提示可补答
+// question（旧名 ask_user_question）：settled 展开为只读问答卡；超时转 continued 提示可补答
 function QuestionBody({ node }: { node: ToolCallNode }) {
   const q = node.question!
   const continued = !q.answers && !!node.result && safeParseJson(node.result.content)?.pending === true
@@ -279,7 +273,7 @@ export function ToolCallCard({
   depth?: number
 }) {
   const isTask = node.name === "task"
-  const isQuestion = node.name === "ask_user_question" && !!node.question
+  const isQuestion = isQuestionTool(node.name) && !!node.question
   const render = node.result?.meta?.render ?? defaultRender(node.name)
   const [open, setOpen] = useState(false)
   const pendingApproval = hasPendingApproval(node.children)
@@ -313,7 +307,9 @@ export function ToolCallCard({
         className="flex h-8 w-full items-center gap-1.5 rounded-md px-1 text-left hover:bg-accent/50"
       >
         <span className="shrink-0 text-fg-tertiary">{TOOL_ICONS[node.name] ?? <Wrench className="size-3.5" />}</span>
-        <span className="shrink-0 text-[13px] font-medium text-fg-secondary">{node.name}</span>
+        <span className="shrink-0 text-[13px] font-medium text-fg-secondary" title={node.name}>
+          {toolDisplayName(node.name)}
+        </span>
         {error ? (
           <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-destructive">
             · {error.split("\n")[0]}

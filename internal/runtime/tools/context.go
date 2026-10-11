@@ -1,4 +1,4 @@
-// Package tools 定义模型可见的沙箱工具与 activate_skill（runtime.md §4）。
+// Package tools 定义模型可见的沙箱工具与 skill（runtime.md §4）。
 package tools
 
 import (
@@ -258,7 +258,7 @@ func (c *Context) publish(ctx context.Context, stream, delta string) {
 
 func sinceMS(start time.Time) int64 { return time.Since(start).Milliseconds() }
 
-// All 返回按 tools_enabled 过滤后的工具清单；skills 非空时附带 activate_skill。
+// All 返回按 tools_enabled 过滤后的工具清单；skills 非空时附带 skill。
 func All(enabled map[string]bool) ([]tool.BaseTool, error) {
 	defs := []struct {
 		name string
@@ -285,5 +285,5 @@ func All(enabled map[string]bool) ([]tool.BaseTool, error) {
 	return out, nil
 }
 
-// ActivateSkill 单独构建 activate_skill（快照含 skills 时注册）。
+// ActivateSkill 单独构建 skill（快照含 skills 时注册）。
 func ActivateSkill() (tool.BaseTool, error) { return newActivateSkillTool() }

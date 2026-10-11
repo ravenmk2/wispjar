@@ -217,9 +217,9 @@ func enabledToolNames(snap *agent.Snapshot) []string {
 		}
 	}
 	if len(snap.Skills) > 0 {
-		names = append(names, "activate_skill")
+		names = append(names, "skill")
 	}
-	names = append(names, "ask_user_question")
+	names = append(names, "question")
 	sort.Strings(names)
 	return names
 }

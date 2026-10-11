@@ -481,13 +481,15 @@ function ModelSection({
             id="agent-max-iterations"
             type="number"
             min={1}
+            max={10000}
             value={form.max_iterations}
             onChange={(e) => {
               const v = Number(e.target.value)
-              if (!Number.isNaN(v) && v > 0) patch({ max_iterations: v })
+              if (!Number.isNaN(v) && v >= 1 && v <= 10000) patch({ max_iterations: v })
             }}
             className="w-48"
           />
+          <p className="text-xs text-muted-foreground">取值 1-10000，默认 20</p>
         </div>
       </div>
     </div>

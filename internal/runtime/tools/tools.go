@@ -338,7 +338,7 @@ type activateSkillArgs struct {
 }
 
 func newActivateSkillTool() (tool.BaseTool, error) {
-	return utils.InferTool("activate_skill",
+	return utils.InferTool("skill",
 		"Load the full instructions of a skill by name (SKILL.md content plus the file manifest of its package).",
 		func(ctx context.Context, in activateSkillArgs) (string, error) {
 			tc := FromContext(ctx)

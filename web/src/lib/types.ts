@@ -235,7 +235,9 @@ export interface ChunkUsage {
 
 export type ContentBlock =
   | { type: "text"; text: string }
-  | { type: "reasoning"; text: string }
+  // durationMs 由服务端在 reasoning 块上下发（流式窗口埋点，block-end/快照/历史事件均携带）；
+  // streaming 为前端折叠流式 chunk 时补充的展示标记（仅 live 中的末位 pending 思考块为 true）
+  | { type: "reasoning"; text: string; durationMs?: number; streaming?: boolean }
   | { type: "tool-call"; id: string; name: string; arguments: string }
 
 export interface AssistantMessagePayload {

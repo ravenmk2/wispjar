@@ -97,15 +97,15 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 ### 6.1 消息流
 
 - **user**：右置浅蓝气泡（`bg-bubble` #EDF3FE，max-w 85%）；下方操作条：时间戳 + 复制。操作条最新一轮常驻，更早轮次 hover/focus-within 浮现（无 hover 设备常显）。
-- **assistant**：Markdown 流式渲染（结尾光标闪烁）；`reasoning` 块折叠单行（"✦ 思考 · 摘要"，默认收起，流式时摘要 shimmer，点开展开）；操作条：复制 / 分叉 / token pill / 时间戳，显隐规则同用户气泡；usage 徽标（`↑in ↓out`，hover 展开 cached/reasoning 明细）；`interrupted` 标记"已停止"。
-- **ToolCallCard**：默认折叠单行（工具图标 + 名称 + 参数摘要；运行中摘要 shimmer、失败红字；write/edit 有 diff 数据显示 +N -M），点击展开灰底卡，内容按 `tool/result.meta.render` 或 live 工具名映射：
+- **assistant**：Markdown 流式渲染（结尾光标闪烁）；`reasoning` 块折叠单行（"✦ 思考 · 用时 Ns"，时长取服务端埋点的 `durationMs`，缺省时仅显示"思考"；思考中流式 shimmer 并显示"思考中…"，正文/工具块出现后 shimmer 停止；默认收起，点开展开）；操作条：复制 / 分叉 / token pill / 时间戳，显隐规则同用户气泡；usage 徽标（`↑in ↓out`，hover 展开 cached/reasoning 明细）；`interrupted` 标记"已停止"。
+- **ToolCallCard**：默认折叠单行（工具图标 + 中文显示名（exec→执行 / read→读取 / write→写入 / edit→编辑 / glob→查找 / grep→搜索 / read_media→查看 / skill→技能 / task→任务 / question→提问，英文原名入 tooltip）+ 参数摘要；运行中摘要 shimmer、失败显示红色小叉图标（exit code 等细节留在展开态）；write/edit 有 diff 数据显示 +N -M），点击展开灰底卡，内容按 `tool/result.meta.render` 或 live 工具名映射：
   | render | 工具 | 展开内容 |
   |---|---|---|
   | terminal | exec | 灰卡：`$命令` 头（状态点按退出码绿/红）+ exit 码徽标 + 复制；stdout/stderr 滚动（live 期间接 tool-output 帧），超 2000 字截断"查看全部" |
   | diff | write/edit | 文件路径头 + unified diff 着色（新增绿/删除红） |
   | search | glob/grep | 查询词头 + 结果列表（path:line） |
   | read | read/read_media | 路径头 + 内容代码块（read_media 附带 `attachments` 引用时渲染图片缩略图，经附件 objectURL 通道加载） |
-  | generic | activate_skill/task | 参数 + 结果等宽文本 |
+  | generic | skill/task | 参数 + 结果等宽文本 |
 - **task 子轨迹**：task 卡折叠行显示"委派给 {subagent}：任务摘要"，收起时附"N 条嵌套轨迹"；展开后渲染 `parent_call_id` 相同的嵌套事件序列（递归用同一套节点渲染，层级缩进 + 左侧竖线）。
 - **审批**：顶层待审批不在消息流渲染小卡，由 composer 位的 ApprovalTakeover 接管（见 §6.2）；嵌套子智能体审批（task 卡内）保持消息流内嵌小卡：工具名 + 参数展示（exec 命令高亮 / write/edit 显示 diff）+ 「允许」「拒绝」按钮 + 10 分钟倒计时。已 decided 或 auto-deny 的审批显示结果态一行。点击调 REST 或 uplink（实现任选，协议等价）。
 - **消息分叉**（M4）：助手消息操作条与嵌套用户消息操作条内有分叉按钮（GitFork 图标，tooltip "从这条消息分叉出新会话"）；点击调 `POST /sessions/{id}/fork {at_seq}`，成功后跳转新会话（标题自动带"（分叉）"）。侧栏会话行菜单另有"分叉会话"（从末尾分叉）。
@@ -142,7 +142,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 
 - 宽度 280px，背景 `bg-sidebar`（亮 #f9fbfc 冷白 / 暗 #1B1B1C）。工作台无全局顶栏——机构切换与用户菜单均收进侧栏，主内容区全高。
 - 顶部：品牌行（Wispjar）→ 机构切换器行（variant=sidebar：全宽行，建筑图标 + 机构名 + ChevronsUpDown；下拉展示 `auth/me` 的 orgs，平台机构标注"平台"，选中且角色 admin 时可导航进 `/platform/*`）。
-- 智能体列表（AgentPicker）：本机构 published 智能体；点击 → POST 创建会话并跳转。
+- 智能体列表（AgentPicker）：本机构 published 智能体；点击 → 跳转 `/c/new?agent=<id>` 草稿页（不立即创建会话），首条消息发送时才 POST 创建会话并紧接发 prompt，成功后 replace 跳 `/c/<id>`；创建失败停留在草稿页且输入内容不丢。工作区首页智能体卡片行为相同。
 - 会话列表：搜索框（防抖调 REST）+ 行项：标题（自动生成中显示"新会话"）、running 呼吸点、紧凑相对时间（刚刚/N分/N时/N天/M月D日）；hover 浮现 "…" 菜单：重命名 / 分叉会话 / 归档 / 删除（删除需确认对话框）；悬停出深色 HoverCard（标题 / 时间 / 运行状态）。数据源 `control` 流投影。当前会话选中态 `bg-selected`。
 - 底部：机构管理（admin 可见）、平台管理（超管可见）链接 + 用户菜单行（variant=sidebar：avatar + 显示名 + ChevronsUpDown，dropdown 向上弹出；外观（浅色/深色/跟随系统）/修改密码/退出登录）。机构/平台管理页（SecondaryLayout）保留自身页头（返回工作区 + 标题 + header 变体的机构切换与用户菜单）。
 

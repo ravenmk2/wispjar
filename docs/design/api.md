@@ -175,7 +175,7 @@
 
 ### POST /api/v1/sessions/{id}/questions/{callId}/answer
 
-提问作答（owner；ask_user_question 工具，runtime.md §5.3）。请求：
+提问作答（owner；question 工具，runtime.md §5.3）。请求：
 
 ```json
 { "answers": [ { "id": "q1", "selected": ["label"...], "custom": "（可选自由文本）" } ] }

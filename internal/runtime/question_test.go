@@ -36,7 +36,7 @@ func invokeQuestionTool(t *testing.T, tt tool.BaseTool, ctx context.Context, arg
 	return it.InvokableRun(ctx, args)
 }
 
-// 工具 schema 与注册：名称/描述/参数结构；request/header 工具清单包含 ask_user_question；
+// 工具 schema 与注册：名称/描述/参数结构；request/header 工具清单包含 question；
 // 任何 approval_mode 下不被审批拦截。
 func TestQuestionToolSchema(t *testing.T) {
 	qt, err := (&orchestrator{}).newQuestionTool(nil, nil, 0)
@@ -47,7 +47,7 @@ func TestQuestionToolSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Name != "ask_user_question" {
+	if info.Name != "question" {
 		t.Fatalf("tool name = %q", info.Name)
 	}
 	raw, err := json.Marshal(info)
@@ -62,16 +62,16 @@ func TestQuestionToolSchema(t *testing.T) {
 	names := enabledToolNames(&agent.Snapshot{ToolsEnabled: json.RawMessage(`{"exec":true}`)})
 	found := false
 	for _, n := range names {
-		if n == "ask_user_question" {
+		if n == "question" {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("enabledToolNames missing ask_user_question: %v", names)
+		t.Fatalf("enabledToolNames missing question: %v", names)
 	}
 	for _, mode := range []string{session.ApprovalStrict, session.ApprovalDefault, session.ApprovalAuto} {
-		if needsApproval(mode, "ask_user_question") {
-			t.Fatalf("ask_user_question must not need approval in mode %s", mode)
+		if needsApproval(mode, "question") {
+			t.Fatalf("question must not need approval in mode %s", mode)
 		}
 	}
 }
@@ -119,7 +119,7 @@ func TestQuestionInvalidArgs(t *testing.T) {
 func TestQuestionOpenAnswerFlow(t *testing.T) {
 	env := newTestEnv(t, session.ApprovalStrict, func(call int, input []*schema.Message) []*schema.Message {
 		if call == 1 {
-			return toolCallChunks("call_q1", "ask_user_question", askArgs)
+			return toolCallChunks("call_q1", "question", askArgs)
 		}
 		return textChunks("好的，按 A 方案执行。", nil)
 	})
@@ -141,7 +141,7 @@ func TestQuestionOpenAnswerFlow(t *testing.T) {
 		t.Fatalf("question/asked questions mismatch: %+v", asked.Questions)
 	}
 	if n := len(env.es.byType(session.EventApprovalAsked)); n != 0 {
-		t.Fatal("ask_user_question must not trigger approval")
+		t.Fatal("question must not trigger approval")
 	}
 
 	delivered, err := env.orch.AnswerQuestion(env.session.ID, "call_q1", testAnswers, "user-1")
@@ -201,7 +201,7 @@ func TestQuestionOpenAnswerFlow(t *testing.T) {
 func TestQuestionTimeoutPending(t *testing.T) {
 	env := newTestEnv(t, session.ApprovalAuto, func(call int, input []*schema.Message) []*schema.Message {
 		if call == 1 {
-			return toolCallChunks("call_q1", "ask_user_question", askArgs)
+			return toolCallChunks("call_q1", "question", askArgs)
 		}
 		return textChunks("先做别的。", nil)
 	})
@@ -253,7 +253,7 @@ func TestQuestionTimeoutPending(t *testing.T) {
 // turn 取消：等待随 ctx 结束，按现有中断语义收尾；问题仍可补答（continued）。
 func TestQuestionCancelReleasesWait(t *testing.T) {
 	env := newTestEnv(t, session.ApprovalAuto, func(call int, input []*schema.Message) []*schema.Message {
-		return toolCallChunks("call_q1", "ask_user_question", askArgs)
+		return toolCallChunks("call_q1", "question", askArgs)
 	})
 	env.prompt(t, "需要时问我", "req-1")
 	go func() { _ = env.orch.StartTurn(context.Background(), env.session.ID) }()
