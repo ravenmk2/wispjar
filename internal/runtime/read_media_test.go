@@ -263,7 +263,7 @@ func TestReadMediaVisionGateEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(results[0].Data, &tr); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(tr.Content, "不支持图片输入") {
+	if !strings.Contains(tr.Content, "does not support image input") {
 		t.Fatalf("vision gate content: %q", tr.Content)
 	}
 	if len(tr.Attachments) != 0 {

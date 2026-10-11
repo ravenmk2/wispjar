@@ -133,7 +133,7 @@ func TestReadMediaVisionGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := singleText(t, invokeEnhanced(t, rm, ctx, `{"path":"/workspace/a.png"}`))
-	if !strings.Contains(text, "不支持图片输入") {
+	if !strings.Contains(text, "does not support image input") {
 		t.Fatalf("vision gate text: %q", text)
 	}
 	if saver.callCount() != 0 {
@@ -156,7 +156,7 @@ func TestReadMediaNonImage(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := singleText(t, invokeEnhanced(t, rm, ctx, `{"path":"/workspace/a.txt"}`))
-	if !strings.Contains(text, "不是可读取的图片") {
+	if !strings.Contains(text, "is not a supported image") {
 		t.Fatalf("non-image text: %q", text)
 	}
 	if saver.callCount() != 0 {
@@ -175,7 +175,7 @@ func TestReadMediaTooLarge(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := singleText(t, invokeEnhanced(t, rm, ctx, `{"path":"/workspace/big.png"}`))
-	if !strings.Contains(text, "超过 8MB 上限") || !strings.Contains(text, "exec 缩放") {
+	if !strings.Contains(text, "exceeding the 8MB limit") || !strings.Contains(text, "downscale it with exec") {
 		t.Fatalf("oversize text must carry limit + downscale advice: %q", text)
 	}
 	if saver.callCount() != 0 {
@@ -194,7 +194,7 @@ func TestReadMediaTooManyPixels(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := singleText(t, invokeEnhanced(t, rm, ctx, `{"path":"/workspace/huge.png"}`))
-	if !strings.Contains(text, "超出 64M 像素限制") || !strings.Contains(text, "exec 缩放") {
+	if !strings.Contains(text, "exceeds the 64M pixel limit") || !strings.Contains(text, "downscale it with exec") {
 		t.Fatalf("pixel-limit text must carry limit + downscale advice: %q", text)
 	}
 	if saver.callCount() != 0 {
@@ -212,7 +212,7 @@ func TestReadMediaNoImageSaver(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := singleText(t, invokeEnhanced(t, rm, ctx, `{"path":"/workspace/a.png"}`))
-	if !strings.Contains(text, "附件服务未配置") {
+	if !strings.Contains(text, "attachment service is not configured") {
 		t.Fatalf("missing-saver text: %q", text)
 	}
 }

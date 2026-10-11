@@ -84,7 +84,7 @@ func offloadedImageText(ref session.AttachmentRef) string {
 	if len(short) > 8 {
 		short = short[:8]
 	}
-	return fmt.Sprintf("[图片已卸载] %q (sha256:%s)：因超出单次请求图片预算未随历史发送；如需模型查看该图片，请提醒用户重新发送。", ref.Name, short)
+	return fmt.Sprintf("[image offloaded] %q (sha256:%s): not sent with history because it exceeded the per-request image budget; if you need to see this image, ask the user to resend it.", ref.Name, short)
 }
 
 // offloadedToolImageText tool 消息图片卸载位的确定性占位文本：文件名 + sha256 前 8 位，
@@ -95,7 +95,7 @@ func offloadedToolImageText(ref session.AttachmentRef) string {
 	if len(short) > 8 {
 		short = short[:8]
 	}
-	return fmt.Sprintf("[图片已卸载] %q (sha256:%s)：因超出单次请求图片预算未随历史发送；可用 read_media 工具重新读取（路径见本工具结果的 path 字段）。", ref.Name, short)
+	return fmt.Sprintf("[image offloaded] %q (sha256:%s): not sent with history because it exceeded the per-request image budget; re-read it with the read_media tool (path in the path field of this tool result).", ref.Name, short)
 }
 
 // toolMessageContent 取 tool 消息的文本内容：enhanced 工具（read_media）的消息 Content 为空、

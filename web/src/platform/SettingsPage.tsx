@@ -114,7 +114,7 @@ export default function SettingsPage() {
   if (!loaded) {
     return (
       <div>
-        <PageHeader title="设置" description="平台沙箱全局配置" />
+        <PageHeader title="设置" description="平台云电脑全局配置" />
         <TableSkeleton rows={4} />
       </div>
     )
@@ -122,7 +122,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-3xl">
-      <PageHeader title="设置" description="平台沙箱全局配置">
+      <PageHeader title="设置" description="平台云电脑全局配置">
         <Button size="sm" onClick={save} disabled={saving}>
           {saving ? "保存中…" : "保存"}
         </Button>
@@ -131,7 +131,7 @@ export default function SettingsPage() {
       <div className="space-y-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">沙箱镜像</CardTitle>
+            <CardTitle className="text-base">云电脑镜像</CardTitle>
             <CardDescription>默认镜像与可选镜像列表（智能体编辑器下拉来源）</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -171,7 +171,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">出站策略（egress）</CardTitle>
-            <CardDescription>沙箱网络访问控制：默认动作 + 规则列表</CardDescription>
+            <CardDescription>云电脑网络访问控制：默认动作 + 规则列表</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3">
@@ -248,7 +248,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">资源默认</CardTitle>
-            <CardDescription>沙箱默认 CPU / 内存配额</CardDescription>
+            <CardDescription>云电脑默认 CPU / 内存配额</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">

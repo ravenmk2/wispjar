@@ -60,10 +60,10 @@ const DEFAULT_FORM: AgentBody = {
 }
 
 const TOOL_LABELS: Array<{ key: keyof AgentToolsEnabled; label: string; description: string }> = [
-  { key: "exec", label: "exec", description: "在沙箱中执行命令" },
-  { key: "read", label: "read", description: "读取沙箱文件" },
-  { key: "write", label: "write", description: "写入沙箱文件" },
-  { key: "edit", label: "edit", description: "编辑沙箱文件" },
+  { key: "exec", label: "exec", description: "在云电脑中执行命令" },
+  { key: "read", label: "read", description: "读取云电脑文件" },
+  { key: "write", label: "write", description: "写入云电脑文件" },
+  { key: "edit", label: "edit", description: "编辑云电脑文件" },
   { key: "glob", label: "glob", description: "按模式匹配文件" },
   { key: "grep", label: "grep", description: "搜索文件内容" },
 ]
@@ -75,7 +75,7 @@ const SECTIONS = [
   { id: "tools", label: "工具" },
   { id: "skills", label: "技能" },
   { id: "subagents", label: "子智能体" },
-  { id: "sandbox", label: "沙箱" },
+  { id: "sandbox", label: "云电脑" },
 ] as const
 
 type SectionId = (typeof SECTIONS)[number]["id"]
@@ -548,7 +548,7 @@ function PromptSection({ form, patch }: { form: AgentBody; patch: (p: Partial<Ag
 function ToolsSection({ form, patch }: { form: AgentBody; patch: (p: Partial<AgentBody>) => void }) {
   return (
     <div>
-      <SectionTitle title="工具" hint="沙箱工具开关，默认全开" />
+      <SectionTitle title="工具" hint="云电脑工具开关，默认全开" />
       <div className="divide-y rounded-md border">
         {TOOL_LABELS.map((tool) => (
           <div key={tool.key} className="flex items-center gap-3 px-3 py-2.5">
@@ -733,7 +733,7 @@ function SandboxSection({
 
   return (
     <div>
-      <SectionTitle title="沙箱" hint="留空使用平台默认配置" />
+      <SectionTitle title="云电脑" hint="留空使用平台默认配置" />
       <div className="space-y-4">
         <div className="space-y-1.5">
           <Label>镜像</Label>

@@ -43,7 +43,7 @@ type taskTool struct {
 
 func taskDescription(subs []agent.SnapshotSubAgent) string {
 	var b strings.Builder
-	b.WriteString("Delegate a self-contained task to a subagent. The subagent works in its own context (it does NOT see this conversation) and shares your sandbox filesystem. It returns only its final result. Available subagents:\n")
+	b.WriteString("Delegate a self-contained task to a subagent. The subagent works in its own context (it does NOT see this conversation) and shares your filesystem. It returns only its final result. Available subagents:\n")
 	for _, sa := range subs {
 		fmt.Fprintf(&b, "- %s: %s\n", sa.Name, sa.Description)
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 // toolFailurePrefix 错误文本工具结果前缀（runtime.md §4.11 错误语义）。
-const toolFailurePrefix = "工具执行失败: "
+const toolFailurePrefix = "Tool execution failed: "
 
 // errorResultMiddleware 工具错误归一化：除中断类信号外，一切工具执行错误转为
 // 错误文本工具结果回喂模型，Go error 不再外溢（eino ToolsNode 会把工具返回的

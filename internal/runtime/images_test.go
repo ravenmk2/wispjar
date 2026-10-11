@@ -168,7 +168,7 @@ func TestBuildUserMessageOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	parts = msg.UserInputMultiContent
-	if parts[0].Type != schema.ChatMessagePartTypeText || !strings.Contains(parts[0].Text, "图片已卸载") {
+	if parts[0].Type != schema.ChatMessagePartTypeText || !strings.Contains(parts[0].Text, "image offloaded") {
 		t.Fatalf("offloaded occurrence must be placeholder text: %+v", parts[0])
 	}
 	if parts[1].Type != schema.ChatMessagePartTypeImageURL {

@@ -24,7 +24,7 @@ import { FilePreview } from "./FilePreview"
 import { previewKind } from "./previewUtils"
 
 const STATUS_LABEL: Record<SandboxStatus, string> = {
-  none: "无沙箱",
+  none: "无云电脑",
   creating: "创建中",
   running: "运行中",
   paused: "已暂停",
@@ -279,7 +279,7 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
       )}
       <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
         <Box className="size-4 text-muted-foreground" />
-        <span className="text-sm font-medium">沙箱</span>
+        <span className="text-sm font-medium">云电脑</span>
         <Badge
           variant={status === "running" ? "default" : "secondary"}
           className="text-[11px] font-normal"
@@ -297,18 +297,18 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
 
       {status === "none" && (
         <div className="flex flex-1 items-center justify-center p-4 text-center text-xs text-muted-foreground">
-          尚未创建沙箱，会话使用沙箱工具时将自动创建
+          尚未创建云电脑，会话使用工具时将自动创建
         </div>
       )}
       {status === "creating" && (
         <div className="flex flex-1 items-center justify-center gap-2 p-4 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" />
-          沙箱创建中…
+          云电脑创建中…
         </div>
       )}
       {status === "recycled" && (
         <div className="flex flex-1 items-center justify-center p-4 text-center text-xs text-muted-foreground">
-          沙箱已回收，文件已清空
+          云电脑已回收，文件已清空
         </div>
       )}
       {status === "running" && (

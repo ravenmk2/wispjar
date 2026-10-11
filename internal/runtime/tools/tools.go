@@ -17,7 +17,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/agent"
 )
 
-var errSandboxUnavailable = errors.New("沙箱不可用，请稍后重试一次")
+var errSandboxUnavailable = errors.New("execution environment unavailable; please retry once")
 
 const (
 	execMaxOutput  = 64 * 1024
@@ -37,7 +37,7 @@ type execArgs struct {
 
 func newExecTool() (tool.BaseTool, error) {
 	return utils.InferTool("exec",
-		"Execute a shell command in the sandbox (bash -lc). Returns exit code, stdout and stderr.",
+		"Execute a shell command (bash -lc). Returns exit code, stdout and stderr.",
 		func(ctx context.Context, in execArgs) (string, error) {
 			tc := FromContext(ctx)
 			meta := tc.beginMeta(ctx, RenderTerminal)
@@ -77,14 +77,14 @@ func newExecTool() (tool.BaseTool, error) {
 }
 
 type readArgs struct {
-	Path   string `json:"path" jsonschema:"description=absolute file path inside the sandbox"`
+	Path   string `json:"path" jsonschema:"description=absolute file path"`
 	Offset int    `json:"offset,omitempty" jsonschema:"description=start line (1-based), default 1"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"description=max lines to return, default 200, max 2000"`
 }
 
 func newReadTool() (tool.BaseTool, error) {
 	return utils.InferTool("read",
-		"Read a text file from the sandbox with line numbers. Supports paging via offset/limit.",
+		"Read a text file with line numbers. Supports paging via offset/limit.",
 		func(ctx context.Context, in readArgs) (string, error) {
 			tc := FromContext(ctx)
 			meta := tc.beginMeta(ctx, RenderRead)
@@ -148,13 +148,13 @@ func newReadTool() (tool.BaseTool, error) {
 }
 
 type writeArgs struct {
-	Path    string `json:"path" jsonschema:"description=absolute file path inside the sandbox"`
+	Path    string `json:"path" jsonschema:"description=absolute file path"`
 	Content string `json:"content" jsonschema:"description=full file content (overwrites existing file)"`
 }
 
 func newWriteTool() (tool.BaseTool, error) {
 	return utils.InferTool("write",
-		"Write a file in the sandbox (overwrite). Parent directories are created automatically.",
+		"Write a file (overwrite). Parent directories are created automatically.",
 		func(ctx context.Context, in writeArgs) (string, error) {
 			tc := FromContext(ctx)
 			meta := tc.beginMeta(ctx, RenderDiff)
@@ -187,7 +187,7 @@ func newWriteTool() (tool.BaseTool, error) {
 }
 
 type editArgs struct {
-	Path       string `json:"path" jsonschema:"description=absolute file path inside the sandbox"`
+	Path       string `json:"path" jsonschema:"description=absolute file path"`
 	OldString  string `json:"old_string" jsonschema:"description=exact string to replace; must match exactly once unless replace_all is set"`
 	NewString  string `json:"new_string" jsonschema:"description=replacement string"`
 	ReplaceAll bool   `json:"replace_all,omitempty" jsonschema:"description=replace all occurrences, default false"`
@@ -195,7 +195,7 @@ type editArgs struct {
 
 func newEditTool() (tool.BaseTool, error) {
 	return utils.InferTool("edit",
-		"Edit a file in the sandbox by exact string replacement. old_string must match exactly once unless replace_all is true.",
+		"Edit a file by exact string replacement. old_string must match exactly once unless replace_all is true.",
 		func(ctx context.Context, in editArgs) (string, error) {
 			tc := FromContext(ctx)
 			meta := tc.beginMeta(ctx, RenderDiff)
@@ -242,7 +242,7 @@ type globArgs struct {
 
 func newGlobTool() (tool.BaseTool, error) {
 	return utils.InferTool("glob",
-		"Search file names in the sandbox by glob pattern. Returns matches sorted by modification time (newest first), up to 100 entries.",
+		"Search file names by glob pattern. Returns matches sorted by modification time (newest first), up to 100 entries.",
 		func(ctx context.Context, in globArgs) (string, error) {
 			tc := FromContext(ctx)
 			meta := tc.beginMeta(ctx, RenderSearch)
@@ -289,7 +289,7 @@ type grepArgs struct {
 
 func newGrepTool() (tool.BaseTool, error) {
 	return utils.InferTool("grep",
-		"Search file contents in the sandbox (ripgrep semantics). Returns matching lines as path:line:text, up to 250 lines.",
+		"Search file contents (ripgrep semantics). Returns matching lines as path:line:text, up to 250 lines.",
 		func(ctx context.Context, in grepArgs) (string, error) {
 			tc := FromContext(ctx)
 			meta := tc.beginMeta(ctx, RenderSearch)
@@ -372,7 +372,7 @@ func newActivateSkillTool() (tool.BaseTool, error) {
 				"name":         skill.Name,
 				"instructions": content,
 				"files":        files,
-				"sandbox_dir":  "/skills/" + skill.Name + "/",
+				"dir":          "/skills/" + skill.Name + "/",
 			})
 		})
 }

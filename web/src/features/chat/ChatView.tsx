@@ -134,7 +134,7 @@ export default function ChatView() {
             variant="ghost"
             size="icon"
             className={cn("size-8", followStatus !== "stalled" && "ml-auto", sandboxOpen && "bg-accent")}
-            title="沙箱面板"
+            title="云电脑面板"
             onClick={() => setSandboxOpen((v) => !v)}
           >
             <PanelRight className="size-4" />

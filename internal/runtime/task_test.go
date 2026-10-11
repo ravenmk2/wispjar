@@ -525,7 +525,7 @@ func TestTaskDescriptionAndMatch(t *testing.T) {
 	desc := taskDescription(subs)
 	for _, want := range []string{
 		"it does NOT see this conversation",
-		"shares your sandbox filesystem",
+		"shares your filesystem",
 		"- data-analyst: 数据分析与可视化，擅长 pandas/matplotlib",
 		"- web-researcher: 联网检索与资料综述",
 	} {

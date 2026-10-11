@@ -220,9 +220,9 @@ func renderInstruction(snap *agent.Snapshot, sess *store.Session) string {
 		for _, sa := range snap.SubAgents {
 			fmt.Fprintf(&b, "- %s: %s\n", sa.Name, sa.Description)
 		}
-		b.WriteString("使用 task 工具把自包含的子任务委派给子智能体：子智能体在独立上下文中执行（看不到本会话历史），与你共享沙箱文件系统，只返回最终结果；prompt 中必须包含子智能体所需的全部信息。\n")
+		b.WriteString("使用 task 工具把自包含的子任务委派给子智能体：子智能体在独立上下文中执行（看不到本会话历史），与你共享文件系统，只返回最终结果；prompt 中必须包含子智能体所需的全部信息。\n")
 	}
-	fmt.Fprintf(&b, "\n## 运行环境\n- 当前日期：%s\n- 沙箱工作目录：/workspace（exec/read/write/edit/glob/grep 工具均在沙箱内操作）\n",
+	fmt.Fprintf(&b, "\n## 运行环境\n- 当前日期：%s\n- 工作目录：/workspace（exec/read/write/edit/glob/grep 工具均在此目录树下操作）\n",
 		date.Format("2006-01-02"))
 	switch sess.ApprovalMode {
 	case session.ApprovalStrict:

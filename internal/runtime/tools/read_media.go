@@ -24,7 +24,7 @@ type ImageSaver interface {
 }
 
 type readMediaArgs struct {
-	Path string `json:"path" jsonschema:"description=absolute image file path inside the sandbox"`
+	Path string `json:"path" jsonschema:"description=absolute image file path"`
 }
 
 // textResult 可恢复的域拒绝（vision 门控/非图/超限）：以文本工具结果回喂模型而非 Go error
@@ -38,7 +38,7 @@ func textResult(msg string) *schema.ToolResult {
 // 文本信封 + 图片 part（eino ToolResult → ToolsNode 写入 UserInputMultiContent）。
 func newReadMediaTool(vision bool) (tool.BaseTool, error) {
 	return utils.InferEnhancedTool("read_media",
-		"Read a PNG/JPEG/WebP/GIF image file from the sandbox and return the image itself for viewing. Use this to look at screenshots, photos, charts or other image files; the read tool only handles text.",
+		"Read a PNG/JPEG/WebP/GIF image file and return the image itself for viewing. Use this to look at screenshots, photos, charts or other image files; the read tool only handles text.",
 		func(ctx context.Context, in readMediaArgs) (*schema.ToolResult, error) {
 			tc := FromContext(ctx)
 			meta := tc.beginMeta(ctx, RenderRead)
@@ -47,19 +47,19 @@ func newReadMediaTool(vision bool) (tool.BaseTool, error) {
 
 			// vision 门控先于任何 I/O（读图只为让模型看见；纯文本模型看见的是空气）。
 			if !vision {
-				return textResult("当前模型不支持图片输入（capabilities.vision=false），read_media 不可用；请切换到支持视觉的模型后再试"), nil
+				return textResult("the current model does not support image input (capabilities.vision=false); read_media is unavailable - switch to a vision-capable model and retry"), nil
 			}
 			if tc.Images == nil {
-				return textResult("附件服务未配置，read_media 不可用"), nil
+				return textResult("attachment service is not configured; read_media is unavailable"), nil
 			}
 			h, sid, err := tc.sandboxHandle(ctx)
 			if err != nil {
 				return nil, err
 			}
 			meta.SandboxID = sid
-			downscaleAdvice := fmt.Sprintf("；请用 exec 缩放后再读（如 convert %s -resize 2048x2048 /tmp/scaled.png）", shellQuote(in.Path))
+			downscaleAdvice := fmt.Sprintf("; downscale it with exec and read again (e.g. convert %s -resize 2048x2048 /tmp/scaled.png)", shellQuote(in.Path))
 			if fi, err := h.FileInfo(ctx, in.Path); err == nil && fi.Size > attachment.MaxImageBytes {
-				return textResult(fmt.Sprintf("图片 %s 为 %d 字节，超过 8MB 上限%s", in.Path, fi.Size, downscaleAdvice)), nil
+				return textResult(fmt.Sprintf("image %s is %d bytes, exceeding the 8MB limit%s", in.Path, fi.Size, downscaleAdvice)), nil
 			}
 			data, err := h.DownloadFile(ctx, in.Path)
 			if err != nil {
@@ -68,14 +68,25 @@ func newReadMediaTool(vision bool) (tool.BaseTool, error) {
 			mime, w, height, err := attachment.ValidateImage(data)
 			if err != nil {
 				var ie *attachment.ImageError
-				if errors.As(err, &ie) && (ie.Kind == attachment.GateTooLarge || ie.Kind == attachment.GateTooManyPixels) {
-					return textResult(err.Error() + downscaleAdvice), nil
+				if errors.As(err, &ie) {
+					// 闸值拒绝映射为英文（ImageError.Message 是用户上传侧的中文 REST 文案，
+					// 不透传给模型）；非 ImageError 的未知错误走通用句式。
+					switch ie.Kind {
+					case attachment.GateTooLarge:
+						return textResult(fmt.Sprintf("image %s is %d bytes, exceeding the 8MB limit%s", in.Path, len(data), downscaleAdvice)), nil
+					case attachment.GateTooManyPixels:
+						return textResult(fmt.Sprintf("image %s exceeds the 64M pixel limit%s", in.Path, downscaleAdvice)), nil
+					case attachment.GateNotImage:
+						return textResult(fmt.Sprintf("%s is not a supported image (only PNG / JPEG / WebP / GIF)", in.Path)), nil
+					case attachment.GateDecodeFailed:
+						return textResult(fmt.Sprintf("%s: failed to decode image", in.Path)), nil
+					}
 				}
-				return textResult(fmt.Sprintf("%s 不是可读取的图片: %s", in.Path, err.Error())), nil
+				return textResult(fmt.Sprintf("%s is not a readable image: %s", in.Path, err.Error())), nil
 			}
 			ref, err := tc.Images.Upload(ctx, tc.OrgID, tc.UserID, path.Base(in.Path), data)
 			if err != nil {
-				return nil, fmt.Errorf("read_media %s 入库失败: %w", in.Path, err)
+				return nil, fmt.Errorf("read_media %s: failed to store image: %w", in.Path, err)
 			}
 			meta.Attachments = []session.AttachmentRef{*ref}
 

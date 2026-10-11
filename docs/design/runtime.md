@@ -55,7 +55,7 @@ func buildAgent(ctx context.Context, sess Session, snap AgentSnapshot, deps Deps
 }
 ```
 
-- `renderInstruction`：`agent.system_prompt` + 拼接"## 可用 Skills"索引段（每条 `- {name}: {description}`，提示"用 skill 工具加载完整说明"）+ 末尾注入运行事实（**会话创建日期**（`sess.CreatedAt`，非 `time.Now`——system 是 messages[0]，逐天变化会让其后全部历史的缓存前缀失配，见《缓存命中优先设计原则》§12）、沙箱工作目录 `/workspace`、确认模式说明——strict 模式下提示模型"危险操作会被用户审查"）。
+- `renderInstruction`：`agent.system_prompt` + 拼接"## 可用 Skills"索引段（每条 `- {name}: {description}`，提示"用 skill 工具加载完整说明"）+ 末尾注入运行事实（**会话创建日期**（`sess.CreatedAt`，非 `time.Now`——system 是 messages[0]，逐天变化会让其后全部历史的缓存前缀失配，见《缓存命中优先设计原则》§12）、工作目录 `/workspace`、确认模式说明——strict 模式下提示模型"危险操作会被用户审查"）。
 - 会话级 `model_id`（用户切换过）覆盖快照中的 model。
 - 模型参数三级优先级：**会话 `session.model_params` > Agent 快照 `model_params` > 模型 `default_params`**。会话级承载用户选档（如 `{"reasoning_effort":"high"}`），创建时缺省 = 模型 `capabilities.reasoning_effort_default`；`last_seq > 0` 后锁定（锁档理由：DeepSeek 思考模式带 tools 时要求完整回放历史 `reasoning_content`，中途换档会改变每轮输出形态与回放义务；且同会话内推理深度/时延/成本跳变体验断裂。effort 是请求级参数、不进消息前缀，与前缀缓存无关）。
 
@@ -107,7 +107,7 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 ### 4.1 exec（风险 high，render terminal）
 
 ```jsonc
-// name: exec —— 在沙箱中执行 shell 命令（bash -lc），返回退出码与输出
+// name: exec —— 执行 shell 命令（bash -lc），返回退出码与输出
 { "command": "string（必填）",
   "cwd": "string，默认 /workspace",
   "timeout_ms": "int，默认 30000，上限 600000",
@@ -121,8 +121,8 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 ### 4.2 read（风险 low，render read）
 
 ```jsonc
-// name: read —— 读取沙箱内文本文件（带行号），支持分页
-{ "path": "string（必填，沙箱内绝对路径）",
+// name: read —— 读取文本文件（带行号），支持分页
+{ "path": "string（必填，绝对路径）",
   "offset": "int，起始行（1-based），默认 1",
   "limit": "int，最多返回行数，默认 200，上限 2000" }
 // 返回：{ "path", "content": "1\tline...", "total_lines": N, "truncated": bool }
@@ -183,7 +183,7 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 // name: skill —— 加载指定 Skill 的完整使用说明（SKILL.md 全文 + 包内文件清单）
 { "name": "string（必填，Skills 索引段中的 name）" }
 // 返回：{ "name", "instructions": "<SKILL.md markdown 全文>",
-//         "files": ["scripts/a.py", ...], "sandbox_dir": "/skills/<name>/" }
+//         "files": ["scripts/a.py", ...], "dir": "/skills/<name>/" }
 ```
 
 实现：读平台磁盘 `<data_dir>/skills/<org>/<id>/SKILL.md`（不进沙箱）；SKILL.md >32KB 截断并提示用 read 工具读包内具体文件。
@@ -192,7 +192,7 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 
 ```jsonc
 // name: task —— 把自包含任务委派给指定子智能体。子智能体在独立上下文中执行
-//（看不到本会话历史），与你共享同一个沙箱文件系统，完成后返回最终结果（不含中间步骤）。
+//（看不到本会话历史），与你共享同一个文件系统，完成后返回最终结果（不含中间步骤）。
 { "subagent": "string（必填，可用子智能体名，见工具描述枚举）",
   "prompt": "string（必填，完整自包含的任务描述——子智能体看不到本会话，必须包含全部必要信息）" }
 // 返回：{ "output": "子智能体最终答复文本" }
@@ -203,7 +203,7 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 
 ```txt
 Delegate a self-contained task to a subagent. The subagent works in its own context
-(it does NOT see this conversation) and shares your sandbox filesystem. It returns
+(it does NOT see this conversation) and shares your filesystem. It returns
 only its final result. Available subagents:
 - data-analyst: 数据分析与可视化，擅长 pandas/matplotlib
 - web-researcher: 联网检索与资料综述
@@ -233,21 +233,21 @@ Use this when a subtask is focused and independent; include everything the subag
 ### 4.10 read_media（风险 low，render read）
 
 ```jsonc
-// name: read_media —— 读取沙箱内 PNG/JPEG/WebP/GIF 图片并把图片本身返回给模型查看
-{ "path": "string（必填，沙箱内绝对路径，与 read 工具同语义）" }
+// name: read_media —— 读取 PNG/JPEG/WebP/GIF 图片并把图片本身返回给模型查看
+{ "path": "string（必填，绝对路径，与 read 工具同语义）" }
 // 返回（eino ToolResult，tool 消息直接携带多模态 parts）：
 //   parts[0] text:  { "path", "mime", "width", "height", "bytes",
 //                     "sha256": "<前8位>", "attachment_id": "sha256:<64 hex>" }（确定性信封）
 //   parts[1] image: Base64Data + MIMEType（原始字节，v1 不归一化）
 // 域拒绝均为文本工具结果（非 Go error，不中断 run）：
-//   当前模型非 vision → "当前模型不支持图片输入…"（先于任何沙箱 I/O）
-//   非图片（魔数嗅探 png/jpeg/webp/gif）→ "不是可读取的图片…"
+//   当前模型非 vision → "the current model does not support image input…"（先于任何沙箱 I/O）
+//   非图片（魔数嗅探 png/jpeg/webp/gif）→ "is not a supported image…"
 //   原图 >8MB / >64M 像素 → 拒绝并建议用 exec 缩放后再读
 ```
 
 实现（internal/runtime/tools/read_media.go）：沙箱读文件（FileInfo 预检大小 → download）→ `attachment.ValidateImage`（与上传准入同一套 8MB/64M 像素闸值）→ 字节原样写入内容寻址存储（`attachment.Service.Upload`，同字节去重命中同一引用，跨轮字节一致）→ 附件引用登记进 tool/result 事件的 `attachments`（结构同 user/message.attachments）。**v1 决策：不做 DSH 式归一化管线**（EXIF 转正/重编码/尺寸压缩；纯 Go 图像栈的定参与版本化留待后续，字节原样 = 天然确定性）。vision 门控按**当前 Agent 模型** `capabilities.vision` 在工具构建期捕获（主/子 Agent 各自判定；子 Agent 非 vision 模型同样拒绝）。审批分级与 read 同级（low，strict 也不拦）。
 
-回放与卸载：derive 把 tool/result 的 attachments 投影到 tool 消息；history 组装时从附件存储读字节重组 `[text 信封, image]`（顺序与 in-run 一致，逐字节确定）。`planImageOffload` 对 user 与 tool 消息图片共用同一预算与最旧优先量子化规则（§8.3）；tool 图片卸载位占位文本为确定性字符串（文件名 + sha256 前 8 位 + "可用 read_media 重新读取，路径见本工具结果的 path 字段"）。
+回放与卸载：derive 把 tool/result 的 attachments 投影到 tool 消息；history 组装时从附件存储读字节重组 `[text 信封, image]`（顺序与 in-run 一致，逐字节确定）。`planImageOffload` 对 user 与 tool 消息图片共用同一预算与最旧优先量子化规则（§8.3）；tool 图片卸载位占位文本为确定性字符串（文件名 + sha256 前 8 位 + "re-read it with the read_media tool (path in the path field of this tool result)"）。
 
 **供应商兼容注意**：eino 链路（acl openai）允许 tool 角色消息携带 content 数组（text+image_url），与 DSH 的 tool_result 带图同构；但严格 OpenAI 规范里 tool 消息 content 是 string，各家兼容实现（DeepSeek/doubao/qwen）对 tool 消息多模态的接受度**需实测**——实测不通的供应商后续在 provider 层降级为占位文本（只发信封）。
 
@@ -256,7 +256,7 @@ Use this when a subtask is focused and independent; include everything the subag
 eino ToolsNode 会把工具返回的 Go error 升级为整个 run 失败（turn interrupted）。因此运行时统一约定：**工具执行失败一律作为错误文本的 tool result 回喂模型继续运行，Go error 不外溢**。三类语义：
 
 - **域拒绝**（模型可修正的输入问题）：工具内直接返回文本结果（read_media 的 vision 门控/非图/超限；edit 的 old_string 未命中；read 的文件不存在/非 UTF-8 等——后者经归一化层统一转换）。
-- **执行失败**（infra/环境错误：`errorResultMiddleware`（注册在 `ToolCallMiddlewares` 链尾、贴近执行处，Invokable 与 EnhancedInvokable 双链覆盖）把工具返回的 Go error 统一转为文本结果 `工具执行失败: <err>`；exec 例外地返回结构化结果 `{"error": "...", "stderr": "..."}`（render 仍为 terminal）。失败路径 meta/render/duration 照常落 tool/result 事件。
+- **执行失败**（infra/环境错误：`errorResultMiddleware`（注册在 `ToolCallMiddlewares` 链尾、贴近执行处，Invokable 与 EnhancedInvokable 双链覆盖）把工具返回的 Go error 统一转为文本结果 `Tool execution failed: <err>`；exec 例外地返回结构化结果 `{"error": "...", "stderr": "..."}`（render 仍为 terminal）。失败路径 meta/render/duration 照常落 tool/result 事件。
 - **中断**（不外溢也不归一化，原样上抛）：仅来自 ① 用户停止/服务中断（外层 ctx 取消/超时，工具自身超时不在此列——外层 ctx 存活时按执行失败转文本）；② 审批等 eino interrupt 机制（interrupt 信号原样传递，审批 deny 本就是文本结果 `"denied by user"`）。
 
 链序：`approvalMiddleware`（外层，interrupt/deny 不经归一化层）→ `errorResultMiddleware`（内层）。grep 在缺 `rg` 的沙箱（exit 127 / "command not found"）自动降级 `grep -rInE --color=never`（`--ignore-case→-i`、`-g→--include`、`-l` 保持），重试仍失败按执行失败归一化。
@@ -366,7 +366,7 @@ type Handle struct {
 - **恢复（resume）**：沙箱获取路径（turn 内 ensure / REST 沙箱面板）遇到 paused 句柄先 `POST /sandboxes/{id}/resume`（同会话并发由句柄级互斥锁串行，只 resume 一次）→ `status="running"` + `action:"resumed"`，文件系统与 /skills 保留；resume 失败（沙箱已消失）→ 落入按需新建（Skills 自动重传逻辑不变）。
 - **硬 TTL 回收**：`expiresAt` 到期（续约也无法延续）的句柄无论 running/paused 都 DELETE 回收（reason `ttl_expired`）→ `status="recycled"` + `action:"recycled"`。删除会话（DeleteSession）的回收不变：直接 recycle，不 pause。
 - **重启 adopt**：启动时与每小时对比 lifecycle `GET /sandboxes` 列表与本进程句柄。wispjar 标签的孤儿沙箱：metadata 会话在本库存在且未软删且沙箱处于可恢复状态 → 重连并暂停，adopt 为 paused 句柄（不 touch 文件系统，之后按需 resume，事件 `action:"paused", reason:"adopted"`）；会话不存在/已删除或沙箱终态 → 强制删除（`action:"recycled", reason:"orphan"`）。
-- **失败**：创建失败置 `session.sandbox.status="failed"` + 事件，工具调用返回"沙箱不可用"错误给模型（可重试一次）。创建路径自带一次退避重试（2s），lifecycle 请求超时 120s（冷启动镜像拉取可能超过 30s）。
+- **失败**：创建失败置 `session.sandbox.status="failed"` + 事件，工具调用返回"execution environment unavailable"错误给模型（可重试一次）。创建路径自带一次退避重试（2s），lifecycle 请求超时 120s（冷启动镜像拉取可能超过 30s）。
 - **配置优先级**：`sandbox.idle_ttl_seconds` 生效顺序为 platform_setting 表（热加载，30s 缓存）→ config 文件 `opensandbox.idle_ttl_seconds` → 代码默认 28800；`sandbox.ttl_seconds`（硬 TTL 步长）经 platform_setting 热加载生效于新建/续约。
 
 ### 7.3 沙箱镜像

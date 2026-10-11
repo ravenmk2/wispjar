@@ -147,7 +147,7 @@ func (t *questionTool) invoke(ctx context.Context, in askUserQuestionArgs) (stri
 			Turn: t.rs.turn, Step: t.rs.currentStep(), CallID: callID, Questions: questions,
 		}},
 	}); err != nil {
-		return "", fmt.Errorf("question/asked 落库失败: %w", err)
+		return "", fmt.Errorf("store question/asked event: %w", err)
 	}
 
 	timer := time.NewTimer(t.o.questionTimeout)
@@ -158,7 +158,7 @@ func (t *questionTool) invoke(ctx context.Context, in askUserQuestionArgs) (stri
 				CallID: callID, Answers: d.answers, AnsweredBy: d.by,
 			}},
 		}); err != nil {
-			return "", fmt.Errorf("question/answered 落库失败: %w", err)
+			return "", fmt.Errorf("store question/answered event: %w", err)
 		}
 		return marshalQuestionResult(map[string]any{"answers": d.answers})
 	}

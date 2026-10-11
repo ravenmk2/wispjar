@@ -125,9 +125,9 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 
 同一 store 数据的另一投影：按 `turn → step → (model request | tool calls)` 时间线展示；每节点显示 seq、时间、耗时（step 边界差值）、usage；消息正文与工具卡片默认折叠、点击展开；顶层待审批不在此渲染内嵌小卡（由聊天标签页的 ApprovalTakeover 处理），嵌套审批仍内嵌——用于调试 Agent 行为。tab 切换不重新取数。
 
-### 6.4 沙箱面板（右侧，可折叠）
+### 6.4 云电脑面板（右侧，可折叠）
 
-- 状态头：沙箱状态（无/创建中/运行中/已回收）+ 镜像名。
+- 状态头：云电脑状态（无/创建中/运行中/已回收）+ 镜像名。
 - 运行中时分 **文件 / 预览** 两个 tab（13px/500，选中蓝字 + 2px 下划线），两个 tab 常驻挂载、切换不丢状态。
 - 文件 tab：工具行（/workspace + 刷新按钮）+ 文件树。文件树经 `GET /sessions/{id}/sandbox/files?path=` 懒加载目录；图标按格式区分（图片 Image / HTML FileCode2 / 其余 FileText）；当前预览的文件在树里保持选中高亮。
   - 手动刷新：工具行 RotateCw 图标钮（加载中转圈），重新拉取根目录并**保留展开态**——记录展开的目录路径集合，刷新后逐层重拉恢复（目录已消失或重拉失败的丢弃、折叠）；失败 toast 并保留旧树，刷新期间不清空旧树。
@@ -136,7 +136,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
   - 图片（png/jpg/jpeg/webp/gif/svg）经 `sandbox/file?max_bytes=4194304` 取 blob 渲染 `<img object-contain>` 大图滚动区，blob 大小小于树节点 size 视为截断，提示"图片过大仅支持下载"。
   - HTML（html/htm）经 `<iframe sandbox="allow-scripts">` srcdoc 白底渲染；Markdown（md/markdown）用 `Markdown` 组件渲染；两者支持预览/源码切换，源码视图为高亮代码。
   - 其余文本/代码文件直接以 highlightCode 高亮展示；非 UTF-8 二进制文件直接触发下载并提示。
-- 沙箱回收后提示"沙箱已回收，文件已清空"。
+- 云电脑回收后提示"云电脑已回收，文件已清空"。
 
 ## 7. 侧栏（sessions + agents）
 
@@ -153,10 +153,10 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 1. **基本信息**：名称、描述（hint：将作为 task 委派时的能力说明）、头像（内置图标集选择）。
 2. **模型**：下拉（`/orgs/{org}/models`，显示供应商/上下文长度）；参数：temperature 滑块（0-2）、max_tokens 数字。
 3. **提示词**：等宽字体 textarea（行数自适应，支持全屏）。
-4. **工具**：沙箱工具开关组（exec/read/write/edit/glob/grep/read_media，默认全开）。
+4. **工具**：云电脑工具开关组（exec/read/write/edit/glob/grep/read_media，默认全开）。
 5. **Skills**：本机构 skills 多选列表（名称+描述），可排序（拖拽）。
 6. **子智能体**：本机构其他 published 智能体多选；保存时前端提示环/层级限制（服务端 409 校验为准）；hint 说明"通过 task 工具委派"。
-7. **沙箱**：镜像下拉（`GET /orgs/{orgId}/admin/sandbox-settings` 的 images 只读展示）、资源覆盖（CPU/内存，留空用平台默认）。
+7. **云电脑**：镜像下拉（`GET /orgs/{orgId}/admin/sandbox-settings` 的 images 只读展示）、资源覆盖（CPU/内存，留空用平台默认）。
 8. **发布**：draft → 「发布」按钮（校验失败显示原因）；published → 「下线」；published 编辑后自动转 draft 并提示重新发布。
 
 ## 9. 机构/平台管理页（规格摘要）
@@ -166,7 +166,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 - **OrgUsage / PlatformUsage**：日期范围 + group_by 切换 + 表格 + 简单柱状图（recharts 或轻量自绘；token 三色系 input/output/cached）。
 - **Providers**：卡片列表（类型徽标、base_url、密钥掩码、连通状态点、最近检查时间）+ 新建/编辑对话框（类型下拉动态字段：deepseek/qwen/ark/openai_compat 各自 base_url 默认值）+ 「测试连通」按钮。
 - **Models**：按供应商分组的表格；上架对话框（model_code、显示名、能力复选：工具/推理/视觉/流式、上下文长度、默认参数 JSON）。
-- **Settings**：沙箱分区（默认镜像、镜像列表编辑器、egress 策略编辑器：defaultAction 切换 + 规则表格 allow/deny×target、资源默认、TTL）。
+- **Settings**：云电脑分区（默认镜像、镜像列表编辑器、egress 策略编辑器：defaultAction 切换 + 规则表格 allow/deny×target、资源默认、TTL）。
 - **Audit**：时间倒序表格（操作者/action/target/时间，detail 展开 JSON）。
 
 ## 10. 视觉与体验基线
