@@ -281,7 +281,7 @@ export function TrajectoryView({ sessionId }: { sessionId: string }) {
                   <Clock className="size-3" />
                   {formatClock(turn.startTime)}
                 </Meta>
-                {turnDuration && <Meta>耗时 {turnDuration}</Meta>}
+                {turnDuration && <Meta>耗时{turnDuration}</Meta>}
                 {turn.reason && (
                   <Badge
                     variant={turn.reason === "failed" ? "destructive" : turn.reason === "interrupted" ? "secondary" : "outline"}
@@ -307,7 +307,7 @@ export function TrajectoryView({ sessionId }: { sessionId: string }) {
                           <Clock className="size-3" />
                           {formatClock(step.startTime)}
                         </Meta>
-                        {stepDuration && <Meta>耗时 {stepDuration}</Meta>}
+                        {stepDuration && <Meta>耗时{stepDuration}</Meta>}
                       </div>
                       <div className={cn("space-y-2 px-2.5 pb-2.5", step.items.length === 0 && "hidden")}>
                         {step.items.map((node) => (

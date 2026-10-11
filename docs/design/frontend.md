@@ -97,7 +97,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 ### 6.1 消息流
 
 - **user**：右置浅蓝气泡（`bg-bubble` #EDF3FE，max-w 85%）；下方操作条：时间戳 + 复制。操作条最新一轮常驻，更早轮次 hover/focus-within 浮现（无 hover 设备常显）。
-- **assistant**：Markdown 流式渲染（结尾光标闪烁）；`reasoning` 块折叠单行（"✦ 思考 · 用时 Ns"，时长取服务端埋点的 `durationMs`，缺省时仅显示"思考"；思考中流式 shimmer 并显示"思考中…"，正文/工具块出现后 shimmer 停止；默认收起，点开展开）；操作条：复制 / 分叉 / token pill / 时间戳，显隐规则同用户气泡；usage 徽标（`↑in ↓out`，hover 展开 cached/reasoning 明细）；`interrupted` 标记"已停止"。
+- **assistant**：Markdown 流式渲染（结尾光标闪烁）；`reasoning` 块折叠单行（"✦ 思考 · 用时Ns"，时长取服务端埋点的 `durationMs`，缺省时仅显示"思考"；思考中流式 shimmer 并显示"思考中…"，正文/工具块出现后 shimmer 停止；默认收起，点开展开）；操作条：复制 / 分叉 / token pill / 时间戳，显隐规则同用户气泡；usage 徽标（`↑in ↓out`，hover 展开 cached/reasoning 明细）；`interrupted` 标记"已停止"。
 - **ToolCallCard**：默认折叠单行（工具图标 + 中文显示名（exec→执行 / read→读取 / write→写入 / edit→编辑 / glob→查找 / grep→搜索 / read_media→查看 / skill→技能 / task→任务 / question→提问，英文原名入 tooltip）+ 参数摘要；运行中摘要 shimmer、失败显示红色小叉图标（exit code 等细节留在展开态）；write/edit 有 diff 数据显示 +N -M），点击展开灰底卡，内容按 `tool/result.meta.render` 或 live 工具名映射：
   | render | 工具 | 展开内容 |
   |---|---|---|
@@ -109,7 +109,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 - **task 子轨迹**：task 卡折叠行显示"委派给 {subagent}：任务摘要"，收起时附"N 条嵌套轨迹"；展开后渲染 `parent_call_id` 相同的嵌套事件序列（递归用同一套节点渲染，层级缩进 + 左侧竖线）。
 - **审批**：顶层待审批不在消息流渲染小卡，由 composer 位的 ApprovalTakeover 接管（见 §6.2）；嵌套子智能体审批（task 卡内）保持消息流内嵌小卡：工具名 + 参数展示（exec 命令高亮 / write/edit 显示 diff）+ 「允许」「拒绝」按钮 + 10 分钟倒计时。已 decided 或 auto-deny 的审批显示结果态一行。点击调 REST 或 uplink（实现任选，协议等价）。
 - **消息分叉**（M4）：助手消息操作条与嵌套用户消息操作条内有分叉按钮（GitFork 图标，tooltip "从这条消息分叉出新会话"）；点击调 `POST /sessions/{id}/fork {at_seq}`，成功后跳转新会话（标题自动带"（分叉）"）。侧栏会话行菜单另有"分叉会话"（从末尾分叉）。
-- **滚动与流式指示**：自己刚发消息或已在底部时吸底跟随新内容；上翻阅读时不拉底；离底出"回到底部"浮钮。运行中列表底部显示"工作中，用时 Ns"蓝色 shimmer。
+- **滚动与流式指示**：自己刚发消息或已在底部时吸底跟随新内容；上翻阅读时不拉底；离底出"回到底部"浮钮。运行中列表底部显示"工作中，用时Ns"蓝色 shimmer。
 
 ### 6.2 Composer（输入区）
 

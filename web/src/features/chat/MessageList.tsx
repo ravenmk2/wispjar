@@ -16,7 +16,7 @@ function RunningStatus({ since }: { since: number }) {
   const seconds = Math.max(0, Math.floor((now - since) / 1000))
   return (
     <div className="flex items-center py-1 text-[13px]">
-      <span className="text-shimmer-blue font-medium">工作中，用时 {seconds}s</span>
+      <span className="text-shimmer-blue font-medium">工作中，用时{seconds}s</span>
     </div>
   )
 }

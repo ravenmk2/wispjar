@@ -59,7 +59,7 @@ export function ReasoningBlock({
         <Sparkles className="size-3.5 shrink-0 text-fg-tertiary" />
         <span className={cn("shrink-0 font-medium text-fg-secondary", streaming && "text-shimmer")}>思考</span>
         <span className="min-w-0 flex-1 truncate text-fg-tertiary">
-          {durationMs !== undefined ? `· 用时 ${formatTurnDuration(durationMs)}` : streaming ? "· 思考中…" : ""}
+          {durationMs !== undefined ? `· 用时${formatTurnDuration(durationMs)}` : streaming ? "· 思考中…" : ""}
         </span>
         {open ? (
           <ChevronDown className="size-3.5 shrink-0 text-fg-tertiary" />

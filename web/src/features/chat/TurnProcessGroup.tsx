@@ -25,7 +25,7 @@ export function TurnProcessGroup({
     if (reason === "interrupted") return "已停止"
     if (failed) return "失败"
     if (reason === "completed") {
-      return segment.durationMs !== undefined ? `已工作 ${formatTurnDuration(segment.durationMs)}` : "已工作"
+      return segment.durationMs !== undefined ? `已工作${formatTurnDuration(segment.durationMs)}` : "已工作"
     }
     return "进行中"
   })()
