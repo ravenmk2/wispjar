@@ -96,10 +96,10 @@ export default function SkillsPage() {
 
   return (
     <div>
-      <PageHeader title="Skills" description="本机构技能包（agentskills.io 规范 zip）">
+      <PageHeader title="技能" description="本机构技能包（agentskills.io 规范 zip）">
         <Button size="sm" disabled={uploading !== null} onClick={() => fileInputRef.current?.click()}>
           <Upload className="size-4" />
-          上传 Skill
+          上传技能
         </Button>
         <input
           ref={fileInputRef}
@@ -137,14 +137,14 @@ export default function SkillsPage() {
             </div>
           </div>
         ) : (
-          <span>拖拽 zip 到此处上传，或点击右上角「上传 Skill」（≤20MB）</span>
+          <span>拖拽 zip 到此处上传，或点击右上角「上传技能」（≤20MB）</span>
         )}
       </div>
 
       {skills === null ? (
         <TableSkeleton />
       ) : skills.length === 0 ? (
-        <EmptyState icon={<Puzzle className="size-10" />} title="暂无 Skills" description="上传 skill zip 包后可被智能体引用" />
+        <EmptyState icon={<Puzzle className="size-10" />} title="暂无技能" description="上传技能 zip 包后可被智能体引用" />
       ) : (
         <TooltipProvider>
           <div className="rounded-md border">
@@ -233,7 +233,7 @@ export default function SkillsPage() {
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="删除 Skill"
+        title="删除技能"
         description={`确定删除「${deleteTarget?.name}」？删除后不可恢复。`}
         confirmText="删除"
         destructive

@@ -73,7 +73,7 @@ const SECTIONS = [
   { id: "model", label: "模型" },
   { id: "prompt", label: "提示词" },
   { id: "tools", label: "工具" },
-  { id: "skills", label: "Skills" },
+  { id: "skills", label: "技能" },
   { id: "subagents", label: "子智能体" },
   { id: "sandbox", label: "沙箱" },
 ] as const
@@ -590,9 +590,9 @@ function SkillsSection({
 
   return (
     <div>
-      <SectionTitle title="Skills" hint="选择并排序，顺序即激活优先级" />
+      <SectionTitle title="技能" hint="选择并排序，顺序即激活优先级" />
       {skills.length === 0 ? (
-        <p className="text-sm text-muted-foreground">本机构暂无 Skills，可先在 Skills 管理页上传。</p>
+        <p className="text-sm text-muted-foreground">本机构暂无技能，可先在技能管理页上传。</p>
       ) : (
         <div className="space-y-4">
           {selected.length > 0 && (

@@ -114,7 +114,7 @@ export default function AgentsPage() {
         <EmptyState
           icon={<Bot className="size-10" />}
           title="暂无智能体"
-          description="创建一个智能体，配置模型、提示词、工具与 Skills"
+          description="创建一个智能体，配置模型、提示词、工具与技能"
           action={
             <Button asChild size="sm">
               <Link to="/admin/agents/new">新建智能体</Link>
@@ -129,7 +129,7 @@ export default function AgentsPage() {
                 <TableHead>名称</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead>模型</TableHead>
-                <TableHead>Skills</TableHead>
+                <TableHead>技能</TableHead>
                 <TableHead>子智能体</TableHead>
                 <TableHead>更新时间</TableHead>
                 <TableHead className="w-52">操作</TableHead>

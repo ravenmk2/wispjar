@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import { authApi } from "@/api/auth"
 import { ApiError, errorMessage } from "@/api/client"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useIdentityStore } from "@/stores/identity"
@@ -61,7 +61,6 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="text-lg">登录 Wispjar</CardTitle>
-          <CardDescription>多租户智能体平台</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
