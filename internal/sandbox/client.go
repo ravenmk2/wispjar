@@ -102,7 +102,7 @@ func isNotFound(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
 }
 
-func (c *Client) listWispJarSandboxes(ctx context.Context) ([]opensandbox.SandboxInfo, error) {
+func (c *Client) listManagedSandboxes(ctx context.Context) ([]opensandbox.SandboxInfo, error) {
 	var out []opensandbox.SandboxInfo
 	page := 1
 	for {

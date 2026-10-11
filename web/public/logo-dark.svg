@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="99 136.5 314 314" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Spritebot — robot sprite logo (dark theme)</title>
+  <desc id="desc">Minimal floating robot spirit with a rounded face; the left eye winks as a command-line prompt.</desc>
+  <!-- Floating body -->
+  <path d="M256 137c-88 0-148 58-148 143 0 79 51 132 118 142l30 28 30-28c67-10 118-63 118-142 0-85-60-143-148-143Z" fill="#F5FAFF"/>
+  <!-- Face plate -->
+  <rect x="143" y="177" width="226" height="182" rx="85" fill="#24284B"/>
+  <!-- Left eye: command-line prompt wink -->
+  <path d="M198 254.5l17 17-17 17" fill="none" stroke="#F5FAFF" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Right eye -->
+  <rect x="294" y="248" width="23" height="47" rx="11.5" fill="#F5FAFF"/>
+</svg>

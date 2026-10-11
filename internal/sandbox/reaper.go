@@ -134,7 +134,7 @@ func (s *Service) pauseIdle() {
 }
 
 func (s *Service) reconcileOrphans(ctx context.Context) {
-	list, err := s.client.listWispJarSandboxes(ctx)
+	list, err := s.client.listManagedSandboxes(ctx)
 	if err != nil {
 		log.Printf("sandbox: orphan reconcile list: %v", err)
 		return

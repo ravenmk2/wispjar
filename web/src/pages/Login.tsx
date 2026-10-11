@@ -60,7 +60,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-lg">登录 WispJar</CardTitle>
+          <CardTitle className="text-lg">登录 Wispjar</CardTitle>
           <CardDescription>多租户智能体平台</CardDescription>
         </CardHeader>
         <CardContent>

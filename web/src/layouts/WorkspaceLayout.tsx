@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator"
 import { AgentPicker } from "@/features/agents/AgentPicker"
 import { SessionList } from "@/features/sessions/SessionList"
 import { followControl } from "@/mux/control"
+import { isDark, useThemeMode } from "@/lib/theme"
 import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 
 export default function WorkspaceLayout() {
@@ -13,6 +14,7 @@ export default function WorkspaceLayout() {
   const token = useIdentityStore((s) => s.token)
   const isAdmin = currentOrg?.role === "admin"
   const isPlatformAdmin = isAdmin && currentOrg?.is_platform
+  const logoSrc = isDark(useThemeMode()) ? "/logo-dark.svg" : "/logo.svg"
 
   useEffect(() => {
     if (!currentOrg || !token) return
@@ -23,7 +25,10 @@ export default function WorkspaceLayout() {
   return (
     <div className="flex h-screen">
       <aside className="flex w-[280px] shrink-0 flex-col border-r bg-sidebar">
-        <div className="flex h-12 shrink-0 items-center px-4 text-sm font-semibold">WispJar</div>
+        <div className="flex h-12 shrink-0 items-center gap-2 px-4 text-sm font-semibold">
+          <img src={logoSrc} alt="" className="size-5" />
+          Wispjar
+        </div>
         <Separator />
         <div className="shrink-0 p-2">
           <OrgSwitcher variant="sidebar" />

@@ -1,4 +1,4 @@
-# WispJar 配置示例。复制为 config.yaml 后按需修改。
+# Wispjar 配置示例。复制为 config.yaml 后按需修改。
 # 敏感项建议用环境变量注入（优先级高于本文件）：
 #   WISPJAR_MASTER_KEY / WISPJAR_JWT_SECRET / WISPJAR_ADMIN_PASSWORD / WISPJAR_SANDBOX_KEY
 # 另支持 WISPJAR_ADDR 覆盖 server.addr。

@@ -141,7 +141,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 ## 7. 侧栏（sessions + agents）
 
 - 宽度 280px，背景 `bg-sidebar`（亮 #f9fbfc 冷白 / 暗 #1B1B1C）。工作台无全局顶栏——机构切换与用户菜单均收进侧栏，主内容区全高。
-- 顶部：品牌行（WispJar）→ 机构切换器行（variant=sidebar：全宽行，建筑图标 + 机构名 + ChevronsUpDown；下拉展示 `auth/me` 的 orgs，平台机构标注"平台"，选中且角色 admin 时可导航进 `/platform/*`）。
+- 顶部：品牌行（Wispjar）→ 机构切换器行（variant=sidebar：全宽行，建筑图标 + 机构名 + ChevronsUpDown；下拉展示 `auth/me` 的 orgs，平台机构标注"平台"，选中且角色 admin 时可导航进 `/platform/*`）。
 - 智能体列表（AgentPicker）：本机构 published 智能体；点击 → POST 创建会话并跳转。
 - 会话列表：搜索框（防抖调 REST）+ 行项：标题（自动生成中显示"新会话"）、running 呼吸点、紧凑相对时间（刚刚/N分/N时/N天/M月D日）；hover 浮现 "…" 菜单：重命名 / 分叉会话 / 归档 / 删除（删除需确认对话框）；悬停出深色 HoverCard（标题 / 时间 / 运行状态）。数据源 `control` 流投影。当前会话选中态 `bg-selected`。
 - 底部：机构管理（admin 可见）、平台管理（超管可见）链接 + 用户菜单行（variant=sidebar：avatar + 显示名 + ChevronsUpDown，dropdown 向上弹出；外观（浅色/深色/跟随系统）/修改密码/退出登录）。机构/平台管理页（SecondaryLayout）保留自身页头（返回工作区 + 标题 + header 变体的机构切换与用户菜单）。

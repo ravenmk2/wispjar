@@ -171,7 +171,7 @@ func TestSandboxIntegration(t *testing.T) {
 		t.Fatalf("renew did not extend expiration: %s -> %s", *before.ExpiresAt, expiresAt)
 	}
 
-	listed, err := client.listWispJarSandboxes(ctx)
+	listed, err := client.listManagedSandboxes(ctx)
 	if err != nil {
 		t.Fatalf("list wispjar sandboxes: %v", err)
 	}
