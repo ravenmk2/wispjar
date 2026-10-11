@@ -214,7 +214,7 @@
 | `--text-secondary` | `rgba(0,0,0,0.6)`（Labels-Secondary） | `rgba(255,255,255,0.56)`（Labels-Secondary） |
 | `--text-tertiary` | `rgba(0,0,0,0.45)`（Labels-Tertiary） | `rgba(255,255,255,0.42)`（Labels-Tertiary） |
 | `--text-caption` | `rgba(0,0,0,0.30)`（Labels-Quaternary） | `rgba(255,255,255,0.26)`（Labels-Quaternary） |
-| `--bubble` | `#e8f3ff`（LightBlueBg） | `#292929`（BubbleGray） |
+| `--bubble` | `#f5f5f5`（BubbleGray，PC 端用户气泡为灰底；蓝底白字是移动端样式） | `#292929`（BubbleGray） |
 | `--success` | `#16c456` | `#16c456` |
 | `--warning` | `#ff9500` | `#ff9f0a` |
 | `--tooltip-bg` | `#2b2b2b`（MaskBg-Toast） | `#404040`（MaskBg-Toast） |
@@ -229,7 +229,7 @@
 2. 深色背景灰阶由偏蓝（`240 5% 9%`）改为**纯中性灰**（#121212/#181817/#1f1f1f）。
 3. 浅色侧边栏 `#f9fbfc` → `#fbfaf9`（带一丝暖调）。
 4. 文字四级梯度透明度微调（如深色 tertiary 42% 不变，caption 34% → 26%）。
-5. 用户气泡浅色 `#edf3fe` → `#e8f3ff`。
+5. 用户气泡浅色 `#edf3fe` → `#f5f5f5`（中性灰，与深色 `#292929` 同语义）。
 6. 正文/代码字体栈扩充（增补 system-ui、Source Han Sans SC、
    Microsoft YaHei UI、Noto Sans CJK SC；等宽换 Geist Mono 优先）。
 7. 基础圆角 `--radius` 8px → 12px，整体更圆润。

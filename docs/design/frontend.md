@@ -171,7 +171,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 
 ## 10. 视觉与体验基线
 
-- 主题：浅色默认 + 深色/跟随系统（Tailwind `class` 策略，localStorage `wispjar-theme`）。语义色经 CSS 变量 + Tailwind 扩展：`primary` 品牌蓝 #1783FF（暗 #1A88FF）、`sidebar` #fbfaf9（暗 #181817）、用户气泡 `bubble` #E8F3FF（暗 #292929）、`success`/`warning`、`tooltip`/`toast` 深色底。完整色板与映射见 docs/design/theme.md。
+- 主题：浅色默认 + 深色/跟随系统（Tailwind `class` 策略，localStorage `wispjar-theme`）。语义色经 CSS 变量 + Tailwind 扩展：`primary` 品牌蓝 #1783FF（暗 #1A88FF）、`sidebar` #fbfaf9（暗 #181817）、用户气泡 `bubble` #F5F5F5（暗 #292929）、`success`/`warning`、`tooltip`/`toast` 深色底。完整色板与映射见 docs/design/theme.md。
 - 文字与边框走透明度：前景 rgba(0,0,0,.9)（暗 rgba(255,255,255,.84)），三级文字 fg-secondary/tertiary/caption = 黑 .6/.45/.3（暗 白 .56/.42/.26）；边框 黑 .13（暗 白 .12）、发丝线 `divider` 黑 .03（暗 白 .05）；hover 黑 .03、选中 `selected` 黑 .05（暗 .05/.1）。
 - 阴影蓝灰基：输入卡 `shadow-input`（0 5px 16px -4px rgba(0,0,0,.07)）、弹层 `shadow-menu`（0 12px 24px rgba(15,23,42,.12)）；radix 弹层 backdrop 毛玻璃 blur(24px) saturate(1.8)。focus-visible 全局 3px 软蓝 ring（`--ring-focus`），文本选区同色。
 - 字体：系统栈（-apple-system / Segoe UI / PingFang SC / Source Han Sans SC 等）；等宽 Geist Mono / SF Mono / Consolas。

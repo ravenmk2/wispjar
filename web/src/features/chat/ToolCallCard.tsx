@@ -129,17 +129,17 @@ function TerminalBody({ node, liveOutput }: { node: ToolCallNode; liveOutput?: s
         <span className="shrink-0 font-mono text-[13px] text-fg-caption">$</span>
         <code className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-[13px]">{command}</code>
         {node.result?.error && (
-          <Badge variant="destructive" className="shrink-0 font-mono text-[11px] font-normal">
-            失败
-          </Badge>
+          <span className="shrink-0 text-[11px] text-destructive">失败</span>
         )}
         {exitCode !== null && (
-          <Badge
-            variant={exitCode === 0 ? "secondary" : "destructive"}
-            className="shrink-0 font-mono text-[11px] font-normal"
+          <span
+            className={cn(
+              "shrink-0 font-mono text-[11px]",
+              exitCode === 0 ? "text-fg-caption" : "text-destructive",
+            )}
           >
             exit {exitCode}
-          </Badge>
+          </span>
         )}
         <CopyIconButton text={command} />
       </div>
