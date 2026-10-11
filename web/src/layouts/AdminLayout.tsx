@@ -112,7 +112,7 @@ function ThemeSubMenu() {
   )
 }
 
-export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar" }) {
+export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar" | "icon" }) {
   const user = useIdentityStore((s) => s.user)
   const orgs = useIdentityStore((s) => s.orgs)
   const setOrg = useIdentityStore((s) => s.setOrg)
@@ -144,7 +144,17 @@ export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        {variant === "sidebar" ? (
+        {variant === "icon" ? (
+          <button
+            type="button"
+            title={user.display_name || user.username}
+            className="flex size-8 items-center justify-center rounded-full hover:bg-accent"
+          >
+            <Avatar className="size-6">
+              <AvatarFallback className="text-xs">{initial}</AvatarFallback>
+            </Avatar>
+          </button>
+        ) : variant === "sidebar" ? (
           <button
             type="button"
             className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm hover:bg-accent"
@@ -164,8 +174,8 @@ export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        side={variant === "sidebar" ? "top" : "bottom"}
-        align={variant === "sidebar" ? "start" : "end"}
+        side={variant === "header" ? "bottom" : "top"}
+        align={variant === "header" ? "end" : "start"}
         className="w-56"
       >
         <DropdownMenuLabel>

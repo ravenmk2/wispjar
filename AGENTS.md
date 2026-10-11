@@ -24,6 +24,7 @@ wispjar/
 - docs/design/api.md：REST API 完整规格（/api/v1）
 - docs/design/protocol.md：WebSocket 实时协议（/api/ws，mux/follow/StreamChunk/事件词表）
 - docs/design/runtime.md：Agent 运行时（eino 集成、工具规格、task 委派、审批、沙箱管理）
+- docs/design/theme.md：界面主题设计 token 规范（深浅双主题色板、字体、圆角阴影与 CSS 变量映射）
 - docs/design/frontend.md：前端工程与界面详细规格
 
 ## 工程约定

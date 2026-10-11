@@ -140,7 +140,7 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 
 ## 7. 侧栏（sessions + agents）
 
-- 宽度 280px，背景 `bg-sidebar`（亮 #f9fbfc 冷白 / 暗 #1B1B1C）。工作台无全局顶栏——机构切换与用户菜单均收进侧栏，主内容区全高。
+- 宽度 280px，背景 `bg-sidebar`（亮 #fbfaf9 / 暗 #181817）；支持折叠为 48px 窄栏（顶部展开按钮 + 底部头像 icon 变体用户菜单），折叠状态持久化 localStorage `wispjar-sidebar-collapsed`。工作台无全局顶栏——机构切换与用户菜单均收进侧栏，主内容区全高。
 - 顶部：品牌行（Wispjar）→ 机构切换器行（variant=sidebar：全宽行，建筑图标 + 机构名 + ChevronsUpDown；下拉展示 `auth/me` 的 orgs，平台机构标注"平台"，选中且角色 admin 时可导航进 `/platform/*`）。
 - 智能体列表（AgentPicker）：本机构 published 智能体；点击 → 跳转 `/c/new?agent=<id>` 草稿页（不立即创建会话），首条消息发送时才 POST 创建会话并紧接发 prompt，成功后 replace 跳 `/c/<id>`；创建失败停留在草稿页且输入内容不丢。工作区首页智能体卡片行为相同。
 - 会话列表：搜索框（防抖调 REST）+ 行项：标题（自动生成中显示"新会话"）、running 呼吸点、紧凑相对时间（刚刚/N分/N时/N天/M月D日）；hover 浮现 "…" 菜单：重命名 / 分叉会话 / 归档 / 删除（删除需确认对话框）；悬停出深色 HoverCard（标题 / 时间 / 运行状态）。数据源 `control` 流投影。当前会话选中态 `bg-selected`。
@@ -171,10 +171,10 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 
 ## 10. 视觉与体验基线
 
-- 主题：浅色默认 + 深色/跟随系统（Tailwind `class` 策略，localStorage `wispjar-theme`）。语义色经 CSS 变量 + Tailwind 扩展：`primary` 蓝 #4176E6、`sidebar` 冷白 #f9fbfc、用户气泡 `bubble` #EDF3FE、`success`/`warning`、`tooltip`/`toast` 深色底。
-- 文字与边框走透明度（借鉴 Kimi Code Desktop）：前景 rgba(0,0,0,.9)（暗 rgba(255,255,255,.84)），三级文字 fg-secondary/tertiary/caption = 黑 .6/.45/.38（暗 白 .56/.42/.34）；边框 黑 .13（暗 白 .12）、发丝线 `divider` 黑 .05；hover 黑 .03、选中 `selected` 黑 .05（暗 .05/.1）。
-- 阴影蓝灰基：输入卡 `shadow-input`（0 5px 16px -4px rgba(0,0,0,.07)）、弹层 `shadow-menu`（rgba(16,24,40,.04/.06)）；radix 弹层 backdrop 毛玻璃 blur(24px) saturate(1.8)。focus-visible 全局 3px 软蓝 ring（rgba(65,118,230,.18)）；文本选区 rgba(65,118,230,.2)。
-- 字体：系统栈（-apple-system / Segoe UI / PingFang SC 等）；等宽 SF Mono / JetBrains Mono / Consolas。
+- 主题：浅色默认 + 深色/跟随系统（Tailwind `class` 策略，localStorage `wispjar-theme`）。语义色经 CSS 变量 + Tailwind 扩展：`primary` 品牌蓝 #1783FF（暗 #1A88FF）、`sidebar` #fbfaf9（暗 #181817）、用户气泡 `bubble` #E8F3FF（暗 #292929）、`success`/`warning`、`tooltip`/`toast` 深色底。完整色板与映射见 docs/design/theme.md。
+- 文字与边框走透明度：前景 rgba(0,0,0,.9)（暗 rgba(255,255,255,.84)），三级文字 fg-secondary/tertiary/caption = 黑 .6/.45/.3（暗 白 .56/.42/.26）；边框 黑 .13（暗 白 .12）、发丝线 `divider` 黑 .03（暗 白 .05）；hover 黑 .03、选中 `selected` 黑 .05（暗 .05/.1）。
+- 阴影蓝灰基：输入卡 `shadow-input`（0 5px 16px -4px rgba(0,0,0,.07)）、弹层 `shadow-menu`（0 12px 24px rgba(15,23,42,.12)）；radix 弹层 backdrop 毛玻璃 blur(24px) saturate(1.8)。focus-visible 全局 3px 软蓝 ring（`--ring-focus`），文本选区同色。
+- 字体：系统栈（-apple-system / Segoe UI / PingFang SC / Source Han Sans SC 等）；等宽 Geist Mono / SF Mono / Consolas。
 - 密度：harness 式紧凑信息密度（消息间距小、卡片边框细、弱化阴影）。
 - 代码块：头部语言标签 + 复制钮；shiki 高亮按需加载语言。
 - 反馈：toast 用 sonner，深色横幅、顶部居中、3s；tooltip 深色底。

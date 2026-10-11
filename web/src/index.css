@@ -8,66 +8,66 @@
     --foreground: rgba(0, 0, 0, 0.9);
     --card: 0 0% 100%;
     --popover: rgba(255, 255, 255, 0.95);
-    --primary: 221 77% 58%;
+    --primary: 214 100% 55%;
     --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 96.1%;
     --muted: 0 0% 96.1%;
     --accent: rgba(0, 0, 0, 0.03);
     --selected: rgba(0, 0, 0, 0.05);
-    --destructive: 0 85% 50%;
+    --destructive: 353 100% 61%;
     --destructive-foreground: 0 0% 100%;
     --border: rgba(0, 0, 0, 0.13);
-    --divider: rgba(0, 0, 0, 0.05);
+    --divider: rgba(0, 0, 0, 0.03);
     --input: 0 0% 90%;
-    --ring: 221 77% 58%;
-    --ring-focus: rgba(65, 118, 230, 0.18);
-    --radius: 0.5rem;
+    --ring: 214 100% 55%;
+    --ring-focus: rgba(23, 131, 255, 0.2);
+    --radius: 0.75rem;
     --shadow-input: 0 5px 16px -4px rgba(0, 0, 0, 0.07);
-    --shadow-menu: 0 6px 18px rgba(16, 24, 40, 0.04), 0 3px 9px rgba(16, 24, 40, 0.06);
+    --shadow-menu: 0 12px 24px rgba(15, 23, 42, 0.12);
 
-    /* DSH 语义色（design-platform.css 对齐，文字/边框走透明度策略） */
-    --sidebar: #f9fbfc;
+    /* 语义色（token 规范见 docs/design/theme.md；文字/边框走透明度策略） */
+    --sidebar: #fbfaf9;
     --text-secondary: rgba(0, 0, 0, 0.6);
     --text-tertiary: rgba(0, 0, 0, 0.45);
-    --text-caption: rgba(0, 0, 0, 0.38);
-    --bubble: #edf3fe;
-    --success: #22c55e;
-    --warning: #f59e0b;
-    --tooltip-bg: #212123;
-    --toast-bg: #353436;
+    --text-caption: rgba(0, 0, 0, 0.3);
+    --bubble: #e8f3ff;
+    --success: #16c456;
+    --warning: #ff9500;
+    --tooltip-bg: #2b2b2b;
+    --toast-bg: #2b2b2b;
   }
 
-  /* DSH dark：base #151517 / 侧栏与代码块 #1B1B1C / elevated #2C2C2E / 文字 #F9FAFB / 蓝 #7AAAFF
-     结构不动，仅同步透明度策略（白字透明度 + 白透明边框/填充） */
+  /* 深色：中性灰阶分层（#121212 主区 / #181817 侧栏 / #1f1f1f 卡片），
+     文字为白色透明度梯度，主色品牌蓝 #1a88ff，蓝底按钮上保持白字 */
   .dark {
-    --background: 240 5% 9%;
+    --background: 0 0% 7%;
     --foreground: rgba(255, 255, 255, 0.84);
-    --card: 240 4% 18%;
-    --popover: rgba(44, 44, 46, 0.95);
-    --primary: 218 100% 74%;
-    --primary-foreground: 240 5% 9%;
-    --secondary: 240 3% 17%;
-    --muted: 240 2% 11%;
+    --card: 0 0% 12%;
+    --popover: rgba(31, 31, 31, 0.95);
+    --primary: 215 100% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 12%;
+    --muted: 0 0% 9%;
     --accent: rgba(255, 255, 255, 0.05);
     --selected: rgba(255, 255, 255, 0.1);
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 20% 98%;
+    --destructive: 354 100% 64%;
+    --destructive-foreground: 0 0% 100%;
     --border: rgba(255, 255, 255, 0.12);
     --divider: rgba(255, 255, 255, 0.05);
-    --input: 240 3% 22%;
-    --ring: 218 100% 74%;
-    --ring-focus: rgba(122, 170, 255, 0.25);
-    --sidebar: #1b1b1c;
+    --input: 0 0% 20%;
+    --ring: 215 100% 55%;
+    --ring-focus: rgba(26, 136, 255, 0.2);
+    --sidebar: #181817;
     --text-secondary: rgba(255, 255, 255, 0.56);
     --text-tertiary: rgba(255, 255, 255, 0.42);
-    --text-caption: rgba(255, 255, 255, 0.34);
-    --bubble: #2c2c2e;
-    --success: #22c55e;
-    --warning: #f59e0b;
-    --tooltip-bg: #353436;
-    --toast-bg: #43434a;
+    --text-caption: rgba(255, 255, 255, 0.26);
+    --bubble: #292929;
+    --success: #16c456;
+    --warning: #ff9f0a;
+    --tooltip-bg: #404040;
+    --toast-bg: #404040;
     --shadow-input: 0 5px 16px -4px rgba(0, 0, 0, 0.3);
-    --shadow-menu: 0 6px 18px rgba(0, 0, 0, 0.3), 0 3px 9px rgba(0, 0, 0, 0.3);
+    --shadow-menu: 0 12px 24px rgba(0, 0, 0, 0.4);
   }
 }
 
@@ -87,7 +87,7 @@
     box-shadow: none !important;
   }
   ::selection {
-    background: rgba(65, 118, 230, 0.2);
+    background: var(--ring-focus);
   }
   /* 弹层毛玻璃（bg-popover 为 0.95 透明底）：只加在显式标记的弹层上；
      注意 backdrop-filter 会形成包含块，嵌套子菜单必须走 Portal（见 dropdown-menu.tsx） */
