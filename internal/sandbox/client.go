@@ -45,7 +45,7 @@ func (c *Client) createSandbox(ctx context.Context, sessionID string, o Options)
 		Image:          o.Image,
 		TimeoutSeconds: &ttl,
 		Metadata: map[string]string{
-			markerMetadataKey:  "1",
+			markerMetadataKey:    "1",
 			"wispjar-session":   sessionID,
 			"wispjar-createdby": "wispjar-manager",
 		},

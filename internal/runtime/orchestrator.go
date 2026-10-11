@@ -79,7 +79,7 @@ type runState struct {
 	denied          map[string]struct{}
 	toolCtx         *tools.Context
 	// usageSink 本 turn 的原始 usage 抓取收集器（挂 iterCtx，transport 旁路写入）。
-	usageSink       *provider.UsageSink
+	usageSink *provider.UsageSink
 }
 
 func (rs *runState) incrStep() int {

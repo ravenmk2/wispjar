@@ -315,10 +315,7 @@ func (s *Service) UpdateProvider(actorID, providerID string, in UpdateProviderIn
 		}
 		updates["api_key_enc"] = enc
 	}
-	extraChanged := false
-	if in.Remark != nil {
-		extraChanged = true
-	}
+	extraChanged := in.Remark != nil
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if extraChanged {
 			extra := extraMap(p.Extra)
@@ -773,7 +770,7 @@ func (s *Service) UpdateSetting(actorID, key string, value json.RawMessage) (*st
 			ActorID: actorID,
 			Action:  audit.SettingsUpdate,
 			Target:  key,
-			Detail:  map[string]any{"value": json.RawMessage(value)},
+			Detail:  map[string]any{"value": value},
 		})
 	})
 	if err != nil {

@@ -35,7 +35,7 @@ func Check(ctx context.Context, baseURL, apiKey string) CheckResult {
 		res.Error = err.Error()
 		return res
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		res.Error = fmt.Sprintf("上游返回状态码 %d", resp.StatusCode)
