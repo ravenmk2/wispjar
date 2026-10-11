@@ -24,6 +24,5 @@ RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${version}" -o /wispj
 # 运行时
 FROM alpine:3
 RUN apk add --no-cache ca-certificates
-COPY --from=go /wispjar /usr/local/bin/wispjar
-RUN chmod +x /usr/local/bin/wispjar
+COPY --from=go --chmod=+x /wispjar /usr/local/bin/wispjar
 ENTRYPOINT ["wispjar"]

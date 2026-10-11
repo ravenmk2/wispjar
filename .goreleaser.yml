@@ -25,7 +25,7 @@ dockers:
   - id: wispjar-amd64
     goarch: amd64
     use: buildx
-    dockerfile: Dockerfile
+    dockerfile: Dockerfile.release
     image_templates:
       - ghcr.io/ravenmk2/wispjar:{{ .Version }}-amd64
     build_flag_templates:
@@ -34,7 +34,7 @@ dockers:
   - id: wispjar-arm64
     goarch: arm64
     use: buildx
-    dockerfile: Dockerfile
+    dockerfile: Dockerfile.release
     image_templates:
       - ghcr.io/ravenmk2/wispjar:{{ .Version }}-arm64
     build_flag_templates:

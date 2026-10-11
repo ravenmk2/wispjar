@@ -1,0 +1,11 @@
+# syntax=docker/dockerfile:1
+
+# goreleaser release image: the binary is prebuilt by goreleaser (with the
+# web/dist frontend embedded via go:embed), and the build context contains
+# only this Dockerfile and the wispjar binary.
+# For building images from source (local/server builds), use the multi-stage
+# Dockerfile at the repository root instead.
+FROM alpine:3
+RUN apk add --no-cache ca-certificates
+COPY wispjar /usr/local/bin/wispjar
+ENTRYPOINT ["wispjar"]

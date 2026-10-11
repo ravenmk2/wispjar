@@ -31,5 +31,6 @@ wispjar/
 - CGO_ENABLED=0 纯 Go 构建；版本经 `-ldflags "-s -w -X main.version=<ver>"` 注入，`main.version` 默认 `dev`
 - 本地构建统一入口 `scripts/build.sh`（Windows 下经 Git Bash 执行）；正式发布走 goreleaser
 - Docker 镜像为**多阶段构建**（node+pnpm 构建 web/dist → go 构建二进制 → alpine 运行时），构建上下文为仓库根：`docker build --build-arg version=<ver> -t wispjar:<ver> .`；模块下载走 `GOPROXY=goproxy.cn`
+- goreleaser release images use **`Dockerfile.release`** at the repo root (runtime-only: alpine + prebuilt binary), because goreleaser dockers build with a minimal context containing only the Dockerfile and the binary — the multi-stage source Dockerfile cannot be used there; release.yml builds the real web/dist before goreleaser (embedded via go:embed), do not revert to the placeholder
 - `web/dist/` 整体忽略，本地编译前需 `mkdir -p web/dist && touch web/dist/index.html`（`scripts/build.sh` 已内置该逻辑）
 - changelog 由 goreleaser 从 Conventional Commits 生成，不维护 CHANGELOG.md
