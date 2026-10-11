@@ -24,11 +24,12 @@ func TestSandboxPauseResumeIntegration(t *testing.T) {
 	if key == "" {
 		key = "opensandbox-dev-key"
 	}
+	proxy := os.Getenv("WISPJAR_SANDBOX_PROXY") == "1"
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	client := NewClient(url, key)
+	client := NewClient(url, key, proxy)
 	svc := NewService(client, 1800, nil)
 	defer svc.Stop()
 

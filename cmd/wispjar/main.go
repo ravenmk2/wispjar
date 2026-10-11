@@ -70,7 +70,7 @@ func main() {
 	var sandboxSvc *sandbox.Service
 	if cfg.OpenSandbox.LifecycleURL != "" {
 		sandboxSvc = sandbox.NewService(
-			sandbox.NewClient(cfg.OpenSandbox.LifecycleURL, cfg.OpenSandbox.APIKey),
+			sandbox.NewClient(cfg.OpenSandbox.LifecycleURL, cfg.OpenSandbox.APIKey, cfg.OpenSandbox.UseServerProxy),
 			cfg.OpenSandbox.IdleTTLSeconds,
 			sandbox.NewCachedSettingsSource(sandbox.NewDBSettingsSource(db), 30*time.Second),
 		)

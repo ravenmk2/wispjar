@@ -47,6 +47,7 @@ type Config struct {
 	OpenSandbox struct {
 		LifecycleURL      string `yaml:"lifecycle_url"`
 		APIKey            string `yaml:"api_key"`
+		UseServerProxy    bool   `yaml:"use_server_proxy"`
 		IdleTTLSeconds    int    `yaml:"idle_ttl_seconds"`
 		SandboxTTLSeconds int    `yaml:"sandbox_ttl_seconds"`
 	} `yaml:"opensandbox"`

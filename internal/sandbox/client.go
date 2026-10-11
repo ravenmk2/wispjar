@@ -19,12 +19,13 @@ type Client struct {
 	lifecycle *opensandbox.LifecycleClient
 }
 
-func NewClient(lifecycleURL, apiKey string) *Client {
+func NewClient(lifecycleURL, apiKey string, useServerProxy bool) *Client {
 	base := strings.TrimSuffix(strings.TrimRight(lifecycleURL, "/"), "/v1")
 	return &Client{
 		conn: opensandbox.ConnectionConfig{
 			Domain:         base,
 			APIKey:         apiKey,
+			UseServerProxy: useServerProxy,
 			RequestTimeout: 120 * time.Second,
 			DisableMetrics: true,
 		},
