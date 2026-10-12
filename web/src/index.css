@@ -41,7 +41,7 @@
      文字为白色透明度梯度，主色品牌蓝 #1a88ff，蓝底按钮上保持白字 */
   .dark {
     --background: 0 0% 7%;
-    --foreground: rgba(255, 255, 255, 0.84);
+    --foreground: rgba(255, 255, 255, 0.9);
     --card: 0 0% 12%;
     --popover: rgba(31, 31, 31, 0.95);
     --primary: 215 100% 55%;
@@ -156,7 +156,7 @@
   }
   .markdown-body h3,
   .markdown-body h4 {
-    @apply text-sm;
+    @apply text-[15px];
   }
   .markdown-body ul {
     @apply my-2 list-disc pl-5;

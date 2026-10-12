@@ -418,7 +418,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
             }}
             rows={2}
             placeholder={busy ? "会话运行中，可点击右侧按钮停止…" : "输入消息，Enter 发送，Shift+Enter 换行"}
-            className="block w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-sm leading-6 outline-none placeholder:text-fg-caption"
+            className="block w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-[15px] leading-6 outline-none placeholder:text-fg-caption"
           />
           <input
             ref={fileInputRef}

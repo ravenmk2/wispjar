@@ -195,7 +195,7 @@
 | 项目变量 | 浅色（token 来源） | 深色（token 来源） |
 |---|---|---|
 | `--background` | `0 0% 100%`（Bg-Primary #fff） | `0 0% 7%`（Bg-Primary #121212） |
-| `--foreground` | `rgba(0,0,0,0.9)`（Labels-Primary） | `rgba(255,255,255,0.84)`（Labels-Primary） |
+| `--foreground` | `rgba(0,0,0,0.9)`（Labels-Primary） | `rgba(255,255,255,0.9)`（Labels-Primary） |
 | `--card` | `0 0% 100%`（浅色浮层保持白色，Bg-Secondary 是输入/填充层而非卡片） | `0 0% 12%`（Bg-Secondary #1f1f1f） |
 | `--popover` | `rgba(255,255,255,0.95)` | `rgba(31,31,31,0.95)`（Bg-Secondary90） |
 | `--primary` | `214 100% 55%`（Brand #1783ff） | `215 100% 55%`（Brand #1a88ff） |

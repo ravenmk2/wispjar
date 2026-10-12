@@ -40,7 +40,7 @@ export function CodeBlock({ lang, code, className }: { lang?: string; code: stri
 
 export const Markdown = memo(function Markdown({ content, className }: { content: string; className?: string }) {
   return (
-    <div className={cn("markdown-body text-sm leading-relaxed", className)}>
+    <div className={cn("markdown-body text-[15px] leading-relaxed", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
