@@ -97,7 +97,7 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
   | openai_compat | `prompt_tokens_details.cached_tokens`（宽容解析，容忍畸形） | 无 |
 
   raw 中没有该家任何缓存字段 → `reported=false`（区分「未命中」与「供应商未上报」）。
-- **合并**：orchestrator 每个 step 提交时从 sink 取最新一条（主流程与 task 子运行均串行，一一对应）；`reported=true` 时覆盖 assistant/message 事件 usage 的 cache_read/cache_write 并置 `cache_reported=true`，否则回退 eino 侧 `CachedTokens`（抓取失败维持原行为）。`cache_reported` 语义：本次调用供应商上报了缓存字段（命中可为 0）；前端据此区分「命中率 0%」与「未上报」（StatsPills 显示「缓存命中 —」）。usage_daily 聚合口径不变。
+- **合并**：orchestrator 每个 step 提交时从 sink 取最新一条（主流程与 task 子运行均串行，一一对应）；`reported=true` 时覆盖 assistant/message 事件 usage 的 cache_read/cache_write 并置 `cache_reported=true`，否则回退 eino 侧 `CachedTokens`（抓取失败维持原行为）。`cache_reported` 语义：本次调用供应商上报了缓存字段（命中可为 0）；前端据此区分「命中率 0%」与「未上报」（ContextRing 悬停统计显示「缓存命中 —」）。usage_daily 聚合口径不变。
 
 ## 4. 工具规格（模型可见 schema）
 

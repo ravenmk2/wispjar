@@ -33,7 +33,7 @@ web/src/
 ├── features/
 │   ├── chat/                  # ChatView、MessageList、NodeList、AssistantMessage（含 TokenBadge）、
 │   │                          #   ToolCallCard、ApprovalCard（含 ApprovalTakeover）、Composer（输入区）、
-│   │                          #   ForkButton、StatsPills（§6）
+│   │                          #   ForkButton、ContextRing（§6）
 │   ├── trajectory/            # TrajectoryView（turn/step 时间线）
 │   ├── sessions/              # SessionList（搜索 + 行 hover "…" 菜单：重命名/分叉/归档/删除）
 │   ├── agents/                # AgentPicker（侧栏智能体列表）
@@ -115,11 +115,11 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
 
 - 胶囊卡（rounded-[28px]、柔和投影）：多行输入自适应长高，约 14 行封顶后内部滚动；Enter 发送 / Shift+Enter 换行；右下角 34px 蓝圆发送钮，会话 running 且无草稿时变为**停止**（POST cancel）。
 - 底行左侧：确认模式 chip 下拉（`严格：全部确认 / 默认：仅命令确认 / 自动：全部放行`，盾牌图标 + 描述，当前项加粗 + ✓）→ PATCH session。
-- 底行右侧：token 用量徽标 + 模型切换下拉（`/orgs/{org}/models`，按供应商分组，模型数 >4 时下拉顶部出搜索框）。
+- 底行右侧：上下文环形进度条（ContextRing，见下）+ 模型切换下拉（`/orgs/{org}/models`，按供应商分组，模型数 >4 时下拉顶部出搜索框）。
 - 乐观对账：发送即插入乐观节点（`request_id`），事件帧到达后替换（protocol.md §8.4）。
 - 会话 running 且来自**本会话**时不允许再发送（置灰 + 提示）；429/409 错误 toast。
 - **ApprovalTakeover**：顶层待审批时整个胶囊位被审批卡接管——琥珀描边卡：「等待审批 + 倒计时」头 + 工具参数明细（exec 命令高亮 / write/edit diff）+ 「拒绝」「允许一次」按钮；Enter 允许 / Esc 拒绝。嵌套审批不触发 takeover；仅聊天标签页渲染（轨迹标签页不渲染）。
-- **StatsPills**：胶囊下方居中统计（"N 轮 · M 步"、"X tok · 缓存命中 N%"），由会话事件投影在前端推导，无新增接口。口径：usage.input_tokens 即 OpenAI prompt_tokens（已含缓存命中），命中率 = cache_read ÷ input_tokens；tok 合计 = input + output + cache_write（缓存读为 input 子集，不重复计入）。
+- **ContextRing**：模型选择器左侧的环形进度条，表示上下文占用（最近一次请求的 prompt tokens ÷ 模型 `context_size`；usage.input_tokens 即 OpenAI prompt_tokens，已含缓存命中；≥70% 转琥珀、≥90% 转红）。悬停出 HoverCard（popover 风格浅色卡片，非 Tooltip 黑块）：头部为「上下文 百分比 + 已用/上限 + 细进度条」（与圆环同色阈值），分隔线下为 label/value 对齐的统计行（对话轮/步、累计 tokens、缓存命中率、输入/输出），全部由会话事件投影在前端推导，无新增接口。tok 合计 = input + output + cache_write（缓存读为 input 子集，不重复计入）；命中率 = cache_read ÷ input_tokens。
 
 ### 6.3 轨迹视图（features/trajectory）
 

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { TokenBadge } from "@/features/chat/AssistantMessage"
+import { ContextRing } from "@/features/chat/ContextRing"
 import { cn, uuid } from "@/lib/utils"
 import type { AgentSummary, ApprovalMode, AttachmentRef, OrgModel } from "@/lib/types"
 import { useComposerStore } from "@/stores/composer"
@@ -479,7 +479,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
               </DropdownMenuContent>
             </DropdownMenu>
             <div className="ml-auto flex items-center gap-1.5">
-              {header?.usageTotal && <TokenBadge usage={header.usageTotal} />}
+              <ContextRing contextSize={currentModel?.context_size} />
               <DropdownMenu
                 onOpenChange={(open) => {
                   if (!open) {

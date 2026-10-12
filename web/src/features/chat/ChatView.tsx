@@ -9,7 +9,6 @@ import { ApprovalTakeover } from "@/features/chat/ApprovalCard"
 import { Composer } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
 import { QuestionTakeover } from "@/features/chat/QuestionCard"
-import { StatsPills } from "@/features/chat/StatsPills"
 import { SandboxPanel } from "@/features/sandbox/SandboxPanel"
 import { TrajectoryView } from "@/features/trajectory/TrajectoryView"
 import { followSession, type FollowHandle } from "@/mux/follow"
@@ -157,7 +156,6 @@ export default function ChatView() {
           ) : (
             <Composer sessionId={sessionId} />
           ))}
-        {tab === "chat" && <StatsPills />}
       </div>
       {sandboxOpen && <SandboxPanel sessionId={sessionId} onClose={() => setSandboxOpen(false)} />}
     </div>
