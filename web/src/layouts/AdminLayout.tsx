@@ -1,4 +1,4 @@
-import { ArrowLeft, Building2, Check, ChevronsUpDown, KeyRound, LogOut, Monitor, Moon, Settings2, ShieldCheck, Sun } from "lucide-react"
+import { ArrowLeft, Building2, Check, ChevronsUpDown, CircleUserRound, KeyRound, LogOut, Monitor, Moon, Settings2, ShieldCheck, Sun } from "lucide-react"
 import { useState } from "react"
 import { Link, NavLink, Outlet, useNavigate } from "react-router"
 import { toast } from "sonner"
@@ -123,7 +123,6 @@ export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar
   const [switching, setSwitching] = useState(false)
 
   if (!user) return null
-  const initial = (user.display_name || user.username).slice(0, 1).toUpperCase()
   const isAdmin = currentOrg?.role === "admin"
   const isPlatformAdmin = isAdmin && currentOrg?.is_platform
 
@@ -151,7 +150,9 @@ export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar
             className="flex size-8 items-center justify-center rounded-full hover:bg-accent"
           >
             <Avatar className="size-6">
-              <AvatarFallback className="text-xs">{initial}</AvatarFallback>
+              <AvatarFallback>
+                <CircleUserRound className="size-4" />
+              </AvatarFallback>
             </Avatar>
           </button>
         ) : variant === "sidebar" ? (
@@ -160,14 +161,18 @@ export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar
             className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm hover:bg-accent"
           >
             <Avatar className="size-6 shrink-0">
-              <AvatarFallback className="text-xs">{initial}</AvatarFallback>
+              <AvatarFallback>
+                <CircleUserRound className="size-4" />
+              </AvatarFallback>
             </Avatar>
             <span className="min-w-0 flex-1 truncate text-left">{user.display_name || user.username}</span>
           </button>
         ) : (
           <Button variant="ghost" size="sm" className="gap-2 px-2">
             <Avatar className="size-6">
-              <AvatarFallback className="text-xs">{initial}</AvatarFallback>
+              <AvatarFallback>
+                <CircleUserRound className="size-4" />
+              </AvatarFallback>
             </Avatar>
             <span className="max-w-32 truncate">{user.display_name || user.username}</span>
           </Button>
