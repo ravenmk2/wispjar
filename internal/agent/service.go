@@ -12,6 +12,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/audit"
 	"github.com/ravenmk2/wispjar/internal/gateway/respond"
 	"github.com/ravenmk2/wispjar/internal/id"
+	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/store"
 )
 
@@ -108,6 +109,7 @@ type SandboxResources struct {
 type SandboxConfig struct {
 	Image     string            `json:"image"`
 	Resources *SandboxResources `json:"resources"`
+	Env       map[string]string `json:"env,omitempty"`
 }
 
 func parseSandboxConfig(raw json.RawMessage) (json.RawMessage, error) {
@@ -117,7 +119,10 @@ func parseSandboxConfig(raw json.RawMessage) (json.RawMessage, error) {
 	}
 	cfg := SandboxConfig{}
 	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return nil, errInvalid("sandbox_config 必须是 {image, resources:{cpu,memory}} 对象", map[string]any{"field": "sandbox_config"})
+		return nil, errInvalid("sandbox_config 必须是 {image, resources:{cpu,memory}, env:{KEY:value}} 对象", map[string]any{"field": "sandbox_config"})
+	}
+	if err := sandbox.ValidateEnv(cfg.Env); err != nil {
+		return nil, errInvalid(err.Error(), map[string]any{"field": "sandbox_config"})
 	}
 	b, err := json.Marshal(cfg)
 	if err != nil {

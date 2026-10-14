@@ -8,7 +8,7 @@ import (
 func TestValidSettingKey(t *testing.T) {
 	for _, key := range []string{
 		SettingDefaultImage, SettingImages, SettingEgressPolicy,
-		SettingResourceLimits, SettingIdleTTLSeconds, SettingTTLSeconds,
+		SettingResourceLimits, SettingEnv, SettingIdleTTLSeconds, SettingTTLSeconds,
 	} {
 		if !ValidSettingKey(key) {
 			t.Errorf("ValidSettingKey(%q) = false, want true", key)
@@ -58,6 +58,14 @@ func TestValidateSettingValue(t *testing.T) {
 
 		{SettingTTLSeconds, `3600`, true},
 		{SettingTTLSeconds, `-3600`, false},
+
+		{SettingEnv, `{}`, true},
+		{SettingEnv, `{"FOO_BAR":"baz","_X":""}`, true},
+		{SettingEnv, `{"1BAD":"v"}`, false},
+		{SettingEnv, `{"A-B":"v"}`, false},
+		{SettingEnv, `{"WISPJAR":"0"}`, false},
+		{SettingEnv, `["FOO"]`, false},
+		{SettingEnv, `{"FOO":1}`, false},
 
 		{"sandbox.unknown", `1`, false},
 	}

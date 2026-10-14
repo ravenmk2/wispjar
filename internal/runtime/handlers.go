@@ -361,7 +361,7 @@ func (h *Handler) sandboxHandle(c *gin.Context, sess *session.Detail) (*sandbox.
 		return nil, false
 	}
 	sc := parseSandboxConfig(snap.SandboxConfig)
-	handle, err := h.sandbox.Get(c.Request.Context(), sess.ID, sandbox.Options{Image: sc.Image, ResourceLimits: sc.Resources})
+	handle, err := h.sandbox.Get(c.Request.Context(), sess.ID, sandbox.Options{Image: sc.Image, ResourceLimits: sc.Resources, Env: sc.Env})
 	if err != nil {
 		respond.Error(c, http.StatusBadGateway, "sandbox/upstream", "调用云电脑失败", gin.H{"reason": err.Error()})
 		return nil, false

@@ -159,6 +159,7 @@ export const SETTING_KEYS = {
   resourceLimits: "sandbox.resource_limits",
   idleTtl: "sandbox.idle_ttl_seconds",
   ttl: "sandbox.ttl_seconds",
+  env: "sandbox.env",
 } as const
 
 export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS]
@@ -600,6 +601,7 @@ export interface AgentSandboxResources {
 export interface AgentSandboxConfig {
   image: string
   resources: AgentSandboxResources | null
+  env?: Record<string, string> | null
 }
 
 export interface AgentBody {

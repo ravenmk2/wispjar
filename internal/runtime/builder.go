@@ -21,6 +21,7 @@ import (
 type sandboxConfig struct {
 	Image     string            `json:"image"`
 	Resources map[string]string `json:"resources"`
+	Env       map[string]string `json:"env"`
 }
 
 func parseSandboxConfig(raw json.RawMessage) sandboxConfig {
@@ -52,6 +53,7 @@ func (o *orchestrator) buildToolContext(sess *store.Session, snap *agent.Snapsho
 	}
 	tc.Image = sc.Image
 	tc.Resources = sc.Resources
+	tc.Env = sc.Env
 	tc.DataDir = o.deps.DataDir
 	tc.Skills = snap.Skills
 	tc.Images = o.deps.ImageSaver

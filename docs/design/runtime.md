@@ -351,8 +351,11 @@ type Handle struct {
 { "image": {"uri": agent.sandbox_config.image || settings.default_image},
   "timeout": settings.sandbox_ttl_seconds,
   "resourceLimits": agent.sandbox_config.resources || settings.resource_limits,  // {"cpu":"1","memory":"1Gi"}
-  "networkPolicy": settings.egress_policy }   // 平台统一黑白名单
+  "networkPolicy": settings.egress_policy,   // 平台统一黑白名单
+  "env": {...settings.sandbox_env, ...agent.sandbox_config.env, "WISPJAR": "1"} }
 ```
+
+环境变量（`env`）仅在**创建时注入**：平台默认 `sandbox.env` 打底，`agent.sandbox_config.env` 逐键覆盖同名键；`WISPJAR` 为平台保留键（校验拒绝用户配置，注入时最后写入）。键名须匹配 `[A-Za-z_][A-Za-z0-9_]*`，上限 64 条、单值 4096 字节。修改 env 对存量/暂停恢复的沙箱不生效，沙箱重建（过期回收、新会话）后才生效。
 
 创建成功后：
 1. `GET /sandboxes/{id}/endpoints/44772` 解析 execd 地址 → 构造 ExecdClient。

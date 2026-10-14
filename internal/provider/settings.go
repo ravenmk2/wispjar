@@ -3,6 +3,8 @@ package provider
 import (
 	"encoding/json"
 	"strings"
+
+	"github.com/ravenmk2/wispjar/internal/sandbox"
 )
 
 const (
@@ -10,6 +12,7 @@ const (
 	SettingImages         = "sandbox.images"
 	SettingEgressPolicy   = "sandbox.egress_policy"
 	SettingResourceLimits = "sandbox.resource_limits"
+	SettingEnv            = "sandbox.env"
 	SettingIdleTTLSeconds = "sandbox.idle_ttl_seconds"
 	SettingTTLSeconds     = "sandbox.ttl_seconds"
 )
@@ -17,7 +20,7 @@ const (
 func ValidSettingKey(key string) bool {
 	switch key {
 	case SettingDefaultImage, SettingImages, SettingEgressPolicy,
-		SettingResourceLimits, SettingIdleTTLSeconds, SettingTTLSeconds:
+		SettingResourceLimits, SettingEnv, SettingIdleTTLSeconds, SettingTTLSeconds:
 		return true
 	}
 	return false
@@ -69,6 +72,14 @@ func ValidateSettingValue(key string, value json.RawMessage) error {
 		}
 		if err := json.Unmarshal(value, &r); err != nil || strings.TrimSpace(r.CPU) == "" || strings.TrimSpace(r.Memory) == "" {
 			return errInvalid("sandbox.resource_limits 必须是 {cpu, memory} 非空字符串", nil)
+		}
+	case SettingEnv:
+		var env map[string]string
+		if err := json.Unmarshal(value, &env); err != nil {
+			return errInvalid("sandbox.env 必须是 {KEY: \"value\"} 对象", nil)
+		}
+		if err := sandbox.ValidateEnv(env); err != nil {
+			return errInvalid(err.Error(), nil)
 		}
 	case SettingIdleTTLSeconds, SettingTTLSeconds:
 		var n float64

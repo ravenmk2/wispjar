@@ -80,6 +80,8 @@ type Context struct {
 	Sandbox   SandboxProvider
 	Image     string
 	Resources map[string]string
+	// Env 智能体级沙箱环境变量（agent.sandbox_config.env），创建沙箱时注入。
+	Env map[string]string
 
 	DataDir string
 	Skills  []agent.SnapshotSkill
@@ -145,7 +147,7 @@ func (c *Context) sandboxHandle(ctx context.Context) (Handle, string, error) {
 	if c.Sandbox == nil {
 		return nil, "", errSandboxUnavailable
 	}
-	opts := sandbox.Options{Image: c.Image, ResourceLimits: c.Resources}
+	opts := sandbox.Options{Image: c.Image, ResourceLimits: c.Resources, Env: c.Env}
 	sh, sid, err := c.Sandbox.Get(ctx, c.SessionID, opts)
 	if err != nil {
 		log.Printf("tools: sandbox get for session %s: %v", c.SessionID, err)

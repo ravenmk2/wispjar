@@ -175,3 +175,27 @@ func TestApplySettingsDefaults(t *testing.T) {
 		t.Fatalf("overrides must win: %+v", got2)
 	}
 }
+
+func TestApplySettingsEnvMerge(t *testing.T) {
+	svc := NewService(nil, 1800, StaticSettings(Settings{
+		Env: map[string]string{"PLATFORM_A": "1", "SHARED": "platform"},
+	}))
+	// 平台默认打底。
+	got := svc.applySettings(context.Background(), Options{})
+	if got.Env["PLATFORM_A"] != "1" || got.Env["SHARED"] != "platform" {
+		t.Fatalf("platform env not applied: %+v", got.Env)
+	}
+	// Agent 级同名键覆盖、不同键并集。
+	got = svc.applySettings(context.Background(), Options{
+		Env: map[string]string{"SHARED": "agent", "AGENT_B": "2"},
+	})
+	if got.Env["SHARED"] != "agent" || got.Env["PLATFORM_A"] != "1" || got.Env["AGENT_B"] != "2" {
+		t.Fatalf("agent env must override per-key: %+v", got.Env)
+	}
+	// 合并不得污染平台设置里的原始 map。
+	got.Env["PLATFORM_A"] = "mutated"
+	again := svc.applySettings(context.Background(), Options{})
+	if again.Env["PLATFORM_A"] != "1" {
+		t.Fatalf("platform env map must not be mutated: %+v", again.Env)
+	}
+}

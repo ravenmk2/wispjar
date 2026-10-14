@@ -23,6 +23,8 @@ type Options struct {
 	TTLSeconds     int
 	ResourceLimits map[string]string
 	NetworkPolicy  json.RawMessage
+	// Env 注入沙箱的环境变量（创建时生效）。
+	Env map[string]string
 }
 
 const (
@@ -183,6 +185,17 @@ func (s *Service) applySettings(ctx context.Context, opts Options) Options {
 	}
 	if len(opts.NetworkPolicy) == 0 {
 		opts.NetworkPolicy = st.EgressPolicy
+	}
+	// Env 逐键合并（不同于 ResourceLimits 整体替换）：平台默认打底，会话/Agent 级覆盖同名键。
+	if len(st.Env) > 0 {
+		merged := make(map[string]string, len(st.Env)+len(opts.Env))
+		for k, v := range st.Env {
+			merged[k] = v
+		}
+		for k, v := range opts.Env {
+			merged[k] = v
+		}
+		opts.Env = merged
 	}
 	return opts
 }

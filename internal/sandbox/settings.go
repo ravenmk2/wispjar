@@ -13,6 +13,7 @@ const (
 	KeyImages         = "sandbox.images"
 	KeyEgressPolicy   = "sandbox.egress_policy"
 	KeyResourceLimits = "sandbox.resource_limits"
+	KeyEnv            = "sandbox.env"
 	KeyIdleTTLSeconds = "sandbox.idle_ttl_seconds"
 	KeyTTLSeconds     = "sandbox.ttl_seconds"
 )
@@ -22,6 +23,7 @@ type Settings struct {
 	Images         []string          `json:"images"`
 	EgressPolicy   json.RawMessage   `json:"egress_policy"`
 	ResourceLimits map[string]string `json:"resource_limits"`
+	Env            map[string]string `json:"env"`
 	IdleTTLSeconds int               `json:"idle_ttl_seconds"`
 	TTLSeconds     int               `json:"ttl_seconds"`
 }
@@ -32,6 +34,7 @@ func DefaultSettings() Settings {
 		Images:         []string{"python:3.12"},
 		EgressPolicy:   json.RawMessage(`{"defaultAction":"allow","rules":[]}`),
 		ResourceLimits: map[string]string{"cpu": "1", "memory": "1Gi"},
+		Env:            map[string]string{},
 		IdleTTLSeconds: 28800,
 		TTLSeconds:     3600,
 	}
@@ -43,7 +46,7 @@ func LoadSettings(ctx context.Context, db *gorm.DB) (Settings, error) {
 	err := db.WithContext(ctx).
 		Where("`key` IN ?", []string{
 			KeyDefaultImage, KeyImages, KeyEgressPolicy,
-			KeyResourceLimits, KeyIdleTTLSeconds, KeyTTLSeconds,
+			KeyResourceLimits, KeyEnv, KeyIdleTTLSeconds, KeyTTLSeconds,
 		}).
 		Find(&rows).Error
 	if err != nil {
@@ -61,6 +64,8 @@ func LoadSettings(ctx context.Context, db *gorm.DB) (Settings, error) {
 			}
 		case KeyResourceLimits:
 			_ = json.Unmarshal(row.Value, &s.ResourceLimits)
+		case KeyEnv:
+			_ = json.Unmarshal(row.Value, &s.Env)
 		case KeyIdleTTLSeconds:
 			_ = json.Unmarshal(row.Value, &s.IdleTTLSeconds)
 		case KeyTTLSeconds:

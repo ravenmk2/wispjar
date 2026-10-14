@@ -42,6 +42,7 @@ export function normalizeAgentDetail(raw: unknown): AdminAgentDetail {
     sandbox_config: {
       image: typeof sandbox.image === "string" ? sandbox.image : "",
       resources: (sandbox.resources as AdminAgentDetail["sandbox_config"]["resources"]) ?? null,
+      env: (sandbox.env as AdminAgentDetail["sandbox_config"]["env"]) ?? null,
     },
   }
 }

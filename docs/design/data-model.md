@@ -149,7 +149,7 @@ CREATE TABLE agent (
   model_params   JSON          NULL,                    -- 覆盖 model.default_params
   max_iterations INT           NOT NULL DEFAULT 20,
   tools_enabled  JSON          NOT NULL,                -- {"exec":true,"read":true,"write":true,"edit":true,"glob":true,"grep":true,"read_media":true}
-  sandbox_config JSON          NULL,                    -- {"image":"","resources":{"cpu":"2","memory":"2Gi"}}；空/缺省=平台默认
+  sandbox_config JSON          NULL,                    -- {"image":"","resources":{"cpu":"2","memory":"2Gi"},"env":{"KEY":"value"}}；空/缺省=平台默认；env 逐键覆盖平台 sandbox.env
   status         VARCHAR(16)   NOT NULL DEFAULT 'draft',-- draft / published / archived
   created_by     CHAR(32)      NOT NULL,
   created_at     DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -323,6 +323,14 @@ INSERT INTO platform_setting (`key`, value, updated_by) VALUES
   ('sandbox.resource_limits',  '{"cpu":"1","memory":"1Gi"}',   'system'),
   ('sandbox.idle_ttl_seconds', '28800',                        'system'),
   ('sandbox.ttl_seconds',      '3600',                         'system');
+```
+
+后续迁移新增的种子数据：
+
+```sql
+-- 000004_sandbox_env.up.sql：平台级沙箱默认环境变量（agent.sandbox_config.env 逐键覆盖）
+INSERT INTO platform_setting (`key`, value, updated_by) VALUES
+  ('sandbox.env', '{}', 'system');
 ```
 
 ## 13. 库外文件存储

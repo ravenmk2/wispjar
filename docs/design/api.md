@@ -233,7 +233,7 @@
   "model_params": { "temperature": 0.7 }, "max_iterations": 20,
   "tools_enabled": { "exec": true, "read": true, "write": true, "edit": true, "glob": true, "grep": true, "read_media": true },
   "skill_ids": ["..."], "sub_agent_ids": ["..."],
-  "sandbox_config": { "image": "", "resources": null } }
+  "sandbox_config": { "image": "", "resources": null, "env": { "KEY": "value" } } }
 ```
 
 ### Skills 管理

@@ -28,6 +28,12 @@ import { SETTING_KEYS, type EgressAction, type EgressPolicy, type EgressRule, ty
 
 const DEFAULT_EGRESS: EgressPolicy = { defaultAction: "allow", rules: [] }
 const DEFAULT_RESOURCES: ResourceLimits = { cpu: "1", memory: "1Gi" }
+const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+interface EnvRow {
+  key: string
+  value: string
+}
 
 export default function SettingsPage() {
   const [loaded, setLoaded] = useState(false)
@@ -37,6 +43,7 @@ export default function SettingsPage() {
   const [resources, setResources] = useState<ResourceLimits>(DEFAULT_RESOURCES)
   const [idleTtl, setIdleTtl] = useState("28800")
   const [ttl, setTtl] = useState("3600")
+  const [envRows, setEnvRows] = useState<EnvRow[]>([])
   const [saving, setSaving] = useState(false)
 
   const load = useCallback(async () => {
@@ -58,6 +65,14 @@ export default function SettingsPage() {
       }
       if (map[SETTING_KEYS.idleTtl] !== undefined) setIdleTtl(String(map[SETTING_KEYS.idleTtl]))
       if (map[SETTING_KEYS.ttl] !== undefined) setTtl(String(map[SETTING_KEYS.ttl]))
+      if (map[SETTING_KEYS.env] && typeof map[SETTING_KEYS.env] === "object") {
+        setEnvRows(
+          Object.entries(map[SETTING_KEYS.env] as Record<string, unknown>).map(([key, v]) => ({
+            key,
+            value: String(v),
+          })),
+        )
+      }
     } catch (e) {
       toast.error(errorMessage(e))
     } finally {
@@ -93,6 +108,20 @@ export default function SettingsPage() {
       return
     }
     const cleanRules = egress.rules.filter((r) => r.target.trim())
+    const cleanEnv: Record<string, string> = {}
+    for (const row of envRows) {
+      const key = row.key.trim()
+      if (!key) continue
+      if (!ENV_KEY_RE.test(key)) {
+        toast.error(`环境变量名 ${key} 不合法：以字母或下划线开头，仅含字母、数字、下划线`)
+        return
+      }
+      if (key === "WISPJAR") {
+        toast.error("WISPJAR 为平台保留变量名，不可使用")
+        return
+      }
+      cleanEnv[key] = row.value
+    }
     setSaving(true)
     try {
       await Promise.all([
@@ -102,6 +131,7 @@ export default function SettingsPage() {
         settingsApi.put(SETTING_KEYS.resourceLimits, resources),
         settingsApi.put(SETTING_KEYS.idleTtl, idle),
         settingsApi.put(SETTING_KEYS.ttl, hard),
+        settingsApi.put(SETTING_KEYS.env, cleanEnv),
       ])
       toast.success("设置已保存")
     } catch (e) {
@@ -269,6 +299,49 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">环境变量</CardTitle>
+            <CardDescription>
+              创建云电脑时注入的环境变量（sandbox.env）；智能体可配置同名变量覆盖，修改后需重建云电脑生效
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {envRows.map((row, i) => (
+              <div key={i} className="flex gap-1.5">
+                <Input
+                  className="w-48 font-mono"
+                  value={row.key}
+                  onChange={(e) => setEnvRows((prev) => prev.map((r, j) => (j === i ? { ...r, key: e.target.value } : r)))}
+                  placeholder="变量名"
+                />
+                <Input
+                  className="font-mono"
+                  value={row.value}
+                  onChange={(e) => setEnvRows((prev) => prev.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)))}
+                  placeholder="值"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="删除"
+                  onClick={() => setEnvRows((prev) => prev.filter((_, j) => j !== i))}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEnvRows((prev) => [...prev, { key: "", value: "" }])}
+            >
+              <Plus className="size-3.5" />
+              添加变量
+            </Button>
           </CardContent>
         </Card>
 

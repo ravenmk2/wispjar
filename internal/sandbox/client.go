@@ -49,7 +49,7 @@ func (c *Client) createSandbox(ctx context.Context, sessionID string, o Options)
 			"wispjar-session":   sessionID,
 			"wispjar-createdby": "wispjar-manager",
 		},
-		Env: map[string]string{"WISPJAR": "1"},
+		Env: mergeEnv(o.Env),
 	}
 	if len(o.ResourceLimits) > 0 {
 		createOpts.ResourceLimits = opensandbox.ResourceLimits(o.ResourceLimits)
@@ -66,6 +66,17 @@ func (c *Client) createSandbox(ctx context.Context, sessionID string, o Options)
 		return nil, fmt.Errorf("sandbox: create: %w", err)
 	}
 	return sb, nil
+}
+
+// mergeEnv 以用户配置（平台默认经 applySettings 合并后的 Agent 级 env）为基础，
+// 最后写入平台保留键，保证标记不可被配置覆盖。
+func mergeEnv(env map[string]string) map[string]string {
+	out := make(map[string]string, len(env)+1)
+	for k, v := range env {
+		out[k] = v
+	}
+	out["WISPJAR"] = "1"
+	return out
 }
 
 func (c *Client) execdURL(ctx context.Context, sb *opensandbox.Sandbox) (string, error) {

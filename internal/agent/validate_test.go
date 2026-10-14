@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -61,6 +62,31 @@ func TestValidateSubagentDAGOK(t *testing.T) {
 	}
 	if err := validateSubagentDAG("a", nil, childOf); err != nil {
 		t.Fatalf("want nil, got %v", err)
+	}
+}
+
+func TestParseSandboxConfigEnv(t *testing.T) {
+	// 合法 env 原样保留并归一化。
+	out, err := parseSandboxConfig(json.RawMessage(`{"image":"python:3.12","env":{"FOO":"bar"}}`))
+	if err != nil {
+		t.Fatalf("want nil, got %v", err)
+	}
+	var cfg SandboxConfig
+	if err := json.Unmarshal(out, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Env["FOO"] != "bar" {
+		t.Fatalf("env lost: %+v", cfg)
+	}
+	// 非法键名与保留键被拒绝。
+	for _, raw := range []string{
+		`{"env":{"1BAD":"v"}}`,
+		`{"env":{"WISPJAR":"0"}}`,
+		`{"env":["FOO"]}`,
+	} {
+		if _, err := parseSandboxConfig(json.RawMessage(raw)); err == nil {
+			t.Fatalf("%s must be rejected", raw)
+		}
 	}
 }
 

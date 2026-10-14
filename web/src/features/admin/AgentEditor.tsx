@@ -56,7 +56,24 @@ const DEFAULT_FORM: AgentBody = {
   tools_enabled: { exec: true, read: true, write: true, edit: true, glob: true, grep: true },
   skill_ids: [],
   sub_agent_ids: [],
-  sandbox_config: { image: "", resources: null },
+  sandbox_config: { image: "", resources: null, env: null },
+}
+
+const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+interface EnvRow {
+  key: string
+  value: string
+}
+
+function envRowsError(rows: EnvRow[]): string | null {
+  for (const row of rows) {
+    const key = row.key.trim()
+    if (!key) continue
+    if (!ENV_KEY_RE.test(key)) return `环境变量名 ${key} 不合法：以字母或下划线开头，仅含字母、数字、下划线`
+    if (key === "WISPJAR") return "WISPJAR 为平台保留变量名，不可使用"
+  }
+  return null
 }
 
 const TOOL_LABELS: Array<{ key: keyof AgentToolsEnabled; label: string; description: string }> = [
@@ -105,6 +122,7 @@ export default function AgentEditorPage() {
   const [agents, setAgents] = useState<AdminAgentSummary[]>([])
   const [sandboxImages, setSandboxImages] = useState<string[] | null>(null)
   const [defaultResources, setDefaultResources] = useState<ResourceLimits | null>(null)
+  const [envRows, setEnvRows] = useState<EnvRow[]>([])
   const [acting, setActing] = useState<"save" | "publish" | "archive" | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -145,6 +163,7 @@ export default function AgentEditorPage() {
     if (isNew) {
       setForm(DEFAULT_FORM)
       setStatus(null)
+      setEnvRows([])
       setLoaded(true)
       return
     }
@@ -154,6 +173,9 @@ export default function AgentEditorPage() {
       .then((detail) => {
         const { id: _id, status: s, updated_at: _u, created_at: _c, ...body } = detail
         setForm({ ...DEFAULT_FORM, ...body })
+        setEnvRows(
+          Object.entries(body.sandbox_config?.env ?? {}).map(([key, value]) => ({ key, value })),
+        )
         setStatus(s)
         setLoaded(true)
       })
@@ -170,6 +192,11 @@ export default function AgentEditorPage() {
     if (params.max_tokens !== undefined && params.max_tokens > 0) modelParams.max_tokens = params.max_tokens
     const resources = form.sandbox_config.resources
     const hasResources = resources && ((resources.cpu ?? "") !== "" || (resources.memory ?? "") !== "")
+    const env: Record<string, string> = {}
+    for (const row of envRows) {
+      const key = row.key.trim()
+      if (key) env[key] = row.value
+    }
     return {
       ...form,
       name: form.name.trim(),
@@ -178,6 +205,7 @@ export default function AgentEditorPage() {
       sandbox_config: {
         image: form.sandbox_config.image,
         resources: hasResources ? resources : null,
+        env: Object.keys(env).length > 0 ? env : null,
       },
     }
   }
@@ -187,6 +215,12 @@ export default function AgentEditorPage() {
     if (!form.name.trim()) {
       setSaveError("名称不能为空")
       setSection("basic")
+      return null
+    }
+    const envErr = envRowsError(envRows)
+    if (envErr) {
+      setSaveError(envErr)
+      setSection("sandbox")
       return null
     }
     setActing("save")
@@ -212,6 +246,12 @@ export default function AgentEditorPage() {
 
   async function publish() {
     if (!currentOrg || acting) return
+    const envErr = envRowsError(envRows)
+    if (envErr) {
+      setSaveError(envErr)
+      setSection("sandbox")
+      return
+    }
     setActing("publish")
     setSaveError(null)
     try {
@@ -301,6 +341,8 @@ export default function AgentEditorPage() {
                 patch={patch}
                 images={sandboxImages}
                 defaultResources={defaultResources}
+                envRows={envRows}
+                setEnvRows={setEnvRows}
               />
             )}
           </div>
@@ -721,11 +763,15 @@ function SandboxSection({
   patch,
   images,
   defaultResources,
+  envRows,
+  setEnvRows,
 }: {
   form: AgentBody
   patch: (p: Partial<AgentBody>) => void
   images: string[] | null
   defaultResources: ResourceLimits | null
+  envRows: EnvRow[]
+  setEnvRows: React.Dispatch<React.SetStateAction<EnvRow[]>>
 }) {
   const resources = form.sandbox_config.resources ?? {}
   const setResources = (r: { cpu?: string; memory?: string }) =>
@@ -786,6 +832,54 @@ function SandboxSection({
               className="w-40 font-mono"
             />
           </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>环境变量</Label>
+          <div className="space-y-1.5">
+            {envRows.map((row, i) => {
+              const key = row.key.trim()
+              const invalid = key !== "" && (!ENV_KEY_RE.test(key) || key === "WISPJAR")
+              return (
+                <div key={i} className="flex gap-1.5">
+                  <Input
+                    className={cn("w-48 font-mono", invalid && "border-destructive focus-visible:ring-destructive")}
+                    value={row.key}
+                    onChange={(e) =>
+                      setEnvRows((prev) => prev.map((r, j) => (j === i ? { ...r, key: e.target.value } : r)))
+                    }
+                    placeholder="变量名"
+                  />
+                  <Input
+                    className="font-mono"
+                    value={row.value}
+                    onChange={(e) =>
+                      setEnvRows((prev) => prev.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)))
+                    }
+                    placeholder="值"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="删除"
+                    onClick={() => setEnvRows((prev) => prev.filter((_, j) => j !== i))}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              )
+            })}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEnvRows((prev) => [...prev, { key: "", value: "" }])}
+            >
+              <Plus className="size-3.5" />
+              添加变量
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            创建云电脑时注入，同名变量覆盖平台默认值，修改后重建云电脑生效
+          </p>
         </div>
       </div>
     </div>
