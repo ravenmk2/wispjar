@@ -174,7 +174,7 @@ export function foldChunks(chunks: StreamChunk[]): { blocks: ContentBlock[]; usa
 
 export function deriveConversationNodes(
   events: SessionEvent[],
-  liveAttempt: { chunks: StreamChunk[] } | null,
+  liveAttempt: { chunks: StreamChunk[]; turn: number; step: number; startedAfterSeq: number } | null,
 ): ConversationNode[] {
   const nodes: ConversationNode[] = []
   const toolNodes = new Map<string, ToolCallNode>()
@@ -208,13 +208,40 @@ export function deriveConversationNodes(
     return node
   }
 
+  // Keep content-block order and identity across live -> committed handoff.
+  const appendAssistant = (
+    blocks: ContentBlock[],
+    seed: Omit<AssistantNode, "kind" | "id" | "content">,
+    parentCallId?: string,
+  ) => {
+    let current: AssistantNode | undefined
+    blocks.forEach((block, index) => {
+      if (block.type === "tool-call") {
+        current = undefined
+        if (block.id) ensureToolNode(block.id, {
+          seq: seed.seq, time: seed.time, turn: seed.turn, step: seed.step,
+          name: block.name, arguments: block.arguments, live: seed.live,
+        }, parentCallId)
+        return
+      }
+      if (!current) {
+        current = {
+          kind: "assistant", id: parentCallId ? `asst-${parentCallId}-${seed.seq}-${index}` : `asst-main-${seed.turn}-${seed.step}-${index}`,
+          ...seed, content: [],
+        }
+        targetList(parentCallId).push(current)
+      }
+      current.content.push(block)
+    })
+  }
+
   for (const e of events) {
     switch (e.type) {
       case "turn/start":
-        nodes.push({ kind: "boundary", id: `boundary-${e.seq}`, seq: e.seq, time: e.time, turn: e.data.turn, phase: "start" })
+        targetList(parentOf(e.data)).push({ kind: "boundary", id: `boundary-${e.seq}`, seq: e.seq, time: e.time, turn: e.data.turn, phase: "start" })
         break
       case "turn/end":
-        nodes.push({
+        targetList(parentOf(e.data)).push({
           kind: "boundary",
           id: `boundary-${e.seq}`,
           seq: e.seq,
@@ -260,32 +287,10 @@ export function deriveConversationNodes(
         break
       }
       case "assistant/message": {
-        const textBlocks = e.data.message.content.filter((b) => b.type !== "tool-call")
-        if (textBlocks.length > 0) {
-          nodes.push({
-            kind: "assistant",
-            id: `asst-${e.seq}`,
-            seq: e.seq,
-            time: e.time,
-            turn: e.data.turn,
-            step: e.data.step,
-            content: textBlocks,
-            usage: e.data.usage,
-            interrupted: e.data.interrupted,
-          })
-        }
-        for (const block of e.data.message.content) {
-          if (block.type !== "tool-call") continue
-          ensureToolNode(block.id, {
-            seq: e.seq,
-            time: e.time,
-            turn: e.data.turn,
-            step: e.data.step,
-            name: block.name,
-            arguments: block.arguments,
-            live: false,
-          })
-        }
+        appendAssistant(e.data.message.content, {
+          seq: e.seq, time: e.time, turn: e.data.turn, step: e.data.step,
+          usage: e.data.usage, interrupted: e.data.interrupted,
+        }, parentOf(e.data))
         break
       }
       case "tool/call":
@@ -358,38 +363,16 @@ export function deriveConversationNodes(
   }
 
   if (liveAttempt) {
-    const { blocks, usage } = foldChunks(liveAttempt.chunks)
-    const textBlocks = blocks.filter((b) => b.type !== "tool-call")
-    if (textBlocks.length > 0 || blocks.length === 0) {
-      nodes.push({
-        kind: "assistant",
-        id: "live-asst",
+    // An event can arrive just before the stream end frame. Do not render both copies.
+    const committed = events.some((e) => e.type === "assistant/message" && !parentOf(e.data)
+      && e.data.turn === liveAttempt.turn && e.data.step === liveAttempt.step && e.seq > liveAttempt.startedAfterSeq)
+    if (!committed) {
+      const { blocks, usage } = foldChunks(liveAttempt.chunks)
+      appendAssistant(blocks, {
         seq: Number.MAX_SAFE_INTEGER,
-        time: Date.now(),
-        turn: 0,
-        step: 0,
-        content: textBlocks,
-        usage,
-        live: true,
+        time: events.find((e) => e.seq === liveAttempt.startedAfterSeq)?.time ?? 0,
+        turn: liveAttempt.turn, step: liveAttempt.step, usage, live: true,
       })
-    }
-    for (const block of blocks) {
-      if (block.type !== "tool-call" || !block.id) continue
-      const node: ToolCallNode = {
-        kind: "tool-call",
-        id: `live-tool-${block.id}`,
-        seq: Number.MAX_SAFE_INTEGER,
-        time: Date.now(),
-        turn: 0,
-        step: 0,
-        callId: block.id,
-        name: block.name,
-        arguments: block.arguments,
-        live: true,
-        children: [],
-      }
-      toolNodes.set(block.id, node)
-      nodes.push(node)
     }
   }
 

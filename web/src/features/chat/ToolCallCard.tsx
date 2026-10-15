@@ -24,6 +24,7 @@ import { safeParseJson } from "@/lib/format"
 import { isQuestionTool, toolDisplayName } from "@/lib/tool-names"
 import { hasPendingApproval } from "@/lib/turn-grouping"
 import { cn } from "@/lib/utils"
+import { useChatDisclosure } from "@/stores/chatPresentation"
 import type { ToolCallNode } from "@/lib/conversation"
 import type { ToolRender } from "@/lib/types"
 
@@ -275,7 +276,7 @@ export function ToolCallCard({
   const isTask = node.name === "task"
   const isQuestion = isQuestionTool(node.name) && !!node.question
   const render = node.result?.meta?.render ?? defaultRender(node.name)
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useChatDisclosure(sessionId, `tool-${node.callId}`)
   const pendingApproval = hasPendingApproval(node.children)
   const pendingQuestion = !!node.question && !node.question.answers
   const expanded = open || pendingApproval || pendingQuestion
@@ -293,6 +294,7 @@ export function ToolCallCard({
       return taskTarget ? `委派给 ${taskTarget}${task ? `：${task}` : ""}` : task
     }
     if (node.name === "exec") return (args?.command as string) ?? ""
+    if (node.name === "skill" || node.name === "activate_skill") return typeof args?.name === "string" ? args.name : ""
     if (isQuestion) return node.question?.questions[0]?.question ?? ""
     return (args?.path ?? args?.pattern ?? "") as string
   })()
@@ -303,7 +305,9 @@ export function ToolCallCard({
     <div>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        aria-expanded={expanded}
+        title={summary || undefined}
+        onClick={() => setOpen(!open)}
         className="flex h-8 w-full items-center gap-1.5 rounded-md px-1 text-left hover:bg-accent/50"
       >
         <span className="shrink-0 text-fg-tertiary">{TOOL_ICONS[node.name] ?? <Wrench className="size-3.5" />}</span>

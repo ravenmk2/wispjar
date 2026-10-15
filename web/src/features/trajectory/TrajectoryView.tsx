@@ -38,6 +38,7 @@ function buildTurns(events: SessionEvent[], nodes: ConversationNode[]): TurnBuck
   let current: TurnBucket | null = null
 
   for (const e of events) {
+    if ((e.data as { parent_call_id?: string }).parent_call_id) continue
     if (e.type === "turn/start") {
       current = { turn: e.data.turn, startSeq: e.seq, startTime: e.time, preItems: [], steps: [], liveItems: [] }
       turns.push(current)
@@ -78,7 +79,7 @@ function buildTurns(events: SessionEvent[], nodes: ConversationNode[]): TurnBuck
 
   for (const node of nodes) {
     if (node.kind === "boundary") continue
-    if (node.id.startsWith("live-")) {
+    if ((node.kind === "assistant" || node.kind === "tool-call") && node.live) {
       if (turns.length > 0) turns[turns.length - 1].liveItems.push(node)
       continue
     }

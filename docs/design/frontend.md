@@ -88,16 +88,19 @@ useSessionStore    // 当前会话窗口：
                    //   pendingApprovals: Record<callId, ApprovalAsked>, toolOutputs: Record<callId, string>,
                    //   followStatus: "connecting"|"live"|"stalled" }
 useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, content } }
+useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程组 / 思考 / 工具详情；纯展示状态
 ```
 
-装配规则（直播与回放一致的关键）：消息渲染节点从 `events`（持久）+ `liveAttempt`（瞬态）统一派生——`deriveConversationNodes(events, liveAttempt)` 纯函数输出节点数组（user / assistant / tool-call / approval / boundary），ToolCallCard 既吃持久 `tool/call+tool/result` 也吃 liveAttempt 中的 tool-call 块 + `toolOutputs`。提交后瞬态丢弃，持久事件无缝接管。
+装配规则（直播与回放一致的关键）：消息渲染节点从 `events`（持久）+ `liveAttempt`（瞬态）统一派生——`deriveConversationNodes(events, liveAttempt)` 输出节点数组（user / assistant / tool-call / approval / boundary），保留原始内容块顺序；流式节点携带真实 turn/step，助手块与工具调用标识在落库前后保持稳定，持久消息到达后不再重复投影同一步的 live 内容。ToolCallCard 既吃持久 `tool/call+tool/result` 也吃 liveAttempt 中的 tool-call 块 + `toolOutputs`。提交后瞬态丢弃，持久事件无缝接管。
 
 ## 6. 聊天视图（features/chat）
 
 ### 6.1 消息流
 
 - **user**：右置浅蓝气泡（`bg-bubble` #EDF3FE，max-w 85%）；下方操作条：时间戳 + 复制。操作条最新一轮常驻，更早轮次 hover/focus-within 浮现（无 hover 设备常显）。
-- **assistant**：Markdown 流式渲染（结尾光标闪烁）；`reasoning` 块折叠单行（"✦ 思考 · 用时Ns"，时长取服务端埋点的 `durationMs`，缺省时仅显示"思考"；思考中流式 shimmer 并显示"思考中…"，正文/工具块出现后 shimmer 停止；默认收起，点开展开）；操作条：复制 / 分叉 / token pill / 时间戳，显隐规则同用户气泡；usage 徽标（`↑in ↓out`，hover 展开 cached/reasoning 明细）；`interrupted` 标记"已停止"。
+- **Turn 折叠**：用户消息始终可见；其后顶部耗时行作为整轮开关，完成态为"已工作 X"，运行态为"工作中 · 用时 X"，停止/失败态保留状态与耗时。最新 Turn 默认展开，完成不自动收起；下一条用户消息成功写入事件流后，上一轮按历史 Turn 默认收起。历史轮收起只展示最终回复及操作条；用户手动展开的轮次不被默认规则覆盖。切换聊天/轨迹、重连保留手动状态，切换会话或刷新恢复默认。无起始事件的历史片段不猜测耗时；中断/失败以最后一条正文兜底，缺少正文时展示结束状态。
+- **过程组**：展开 Turn 后，全部回复正文按原序可见；正文之间连续的思考、工具与审批归入一个过程组，正文（包括同条助手消息里的正文块）切开过程组。混合组显示"处理过程 · N 次工具调用"，纯工具组为"工具调用 · N 次"，单个思考直接复用思考折叠行，避免多一层开关。组默认收起，出错默认展开；待处理审批/提问强制展开所属整轮、过程组与任务卡。运行中收起行显示当前活动或最新思考尾部摘要；工具计数不递归计算子任务。整轮、过程组、思考与工具详情的手动状态独立保存。
+- **assistant**：Markdown 流式渲染（结尾光标闪烁）；`reasoning` 默认收起单行，完成后为"✦ 思考 · 用时X"（时长取服务端 `durationMs`，缺省时仅显示"思考"）。未完成时显示"思考中"并 shimmer：收起状态只展示最新文本末尾、从左侧省略；展开状态最大高度 18rem、内部吸底跟随，用户上滚后暂停，回到底部恢复。正文/工具块出现后停止 shimmer。仅最终回复展示复制 / 分叉 / token / 时间戳操作条，显隐规则同用户气泡；usage 徽标（`↑in ↓out`，hover 展开 cached/reasoning 明细）；`interrupted` 标记"已停止"。
 - **ToolCallCard**：默认折叠单行（工具图标 + 中文显示名（exec→执行 / read→读取 / write→写入 / edit→编辑 / glob→查找 / grep→搜索 / read_media→查看 / skill→技能 / task→任务 / question→提问，英文原名入 tooltip）+ 参数摘要；运行中摘要 shimmer、失败显示红色小叉图标（exit code 等细节留在展开态）；write/edit 有 diff 数据显示 +N -M），点击展开灰底卡，内容按 `tool/result.meta.render` 或 live 工具名映射：
   | render | 工具 | 展开内容 |
   |---|---|---|
@@ -107,9 +110,11 @@ useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, 
   | read | read/read_media | 路径头 + 内容代码块（read_media 附带 `attachments` 引用时渲染图片缩略图，经附件 objectURL 通道加载） |
   | generic | skill/task | 参数 + 结果等宽文本 |
 - **task 子轨迹**：task 卡折叠行显示"委派给 {subagent}：任务摘要"，收起时附"N 条嵌套轨迹"；展开后渲染 `parent_call_id` 相同的嵌套事件序列（递归用同一套节点渲染，层级缩进 + 左侧竖线）。
+- **技能**：`skill` 与旧名 `activate_skill` 的摘要从参数 `name` 提取，统一显示"技能 · 名称"，较长名称截断，悬停可查看完整名称。
+- **过程结束态**：运行摘要以所属 Turn 是否结束为准；已停止或失败的 Turn 即使存在未返回结果的工具，过程组也恢复静态摘要，不继续显示"正在执行"等活动文案。
 - **审批**：顶层待审批不在消息流渲染小卡，由 composer 位的 ApprovalTakeover 接管（见 §6.2）；嵌套子智能体审批（task 卡内）保持消息流内嵌小卡：工具名 + 参数展示（exec 命令高亮 / write/edit 显示 diff）+ 「允许」「拒绝」按钮 + 10 分钟倒计时。已 decided 或 auto-deny 的审批显示结果态一行。点击调 REST 或 uplink（实现任选，协议等价）。
 - **消息分叉**（M4）：助手消息操作条与嵌套用户消息操作条内有分叉按钮（GitFork 图标，tooltip "从这条消息分叉出新会话"）；点击调 `POST /sessions/{id}/fork {at_seq}`，成功后跳转新会话（标题自动带"（分叉）"）。侧栏会话行菜单另有"分叉会话"（从末尾分叉）。
-- **滚动与流式指示**：自己刚发消息或已在底部时吸底跟随新内容；上翻阅读时不拉底；离底出"回到底部"浮钮。运行中列表底部显示"工作中，用时Ns"蓝色 shimmer。
+- **滚动与流式指示**：自己刚发消息或已在底部时吸底跟随新内容；上翻阅读时不拉底；离底出"回到底部"浮钮。手动整轮展开/收起保持顶部开关所在位置；运行计时在 Turn 顶部原位更新，列表底部不重复显示。
 
 ### 6.2 Composer（输入区）
 

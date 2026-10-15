@@ -1,12 +1,12 @@
 import { CircleAlert, CircleStop, Loader2, MessageCircleQuestion } from "lucide-react"
-import { Fragment, useMemo } from "react"
+import { useMemo } from "react"
 import { ApprovalCard } from "@/features/chat/ApprovalCard"
 import { actionBarCls, AssistantMessage } from "@/features/chat/AssistantMessage"
 import { ForkButton } from "@/features/chat/ForkButton"
 import { MessageImages } from "@/features/chat/MessageImages"
 import { QuestionAnswerList } from "@/features/chat/QuestionCard"
 import { ToolCallCard } from "@/features/chat/ToolCallCard"
-import { TurnProcessGroup } from "@/features/chat/TurnProcessGroup"
+import { TurnView } from "@/features/chat/TurnView"
 import { CopyIconButton } from "@/components/CopyIconButton"
 import { formatMessageTime } from "@/lib/format"
 import { groupByTurn } from "@/lib/turn-grouping"
@@ -119,7 +119,7 @@ export function NodeList({
   depth?: number
 }) {
   const latestTurn = useMemo(
-    () => nodes.reduce((max, n) => (n.id.startsWith("live-") ? max : Math.max(max, n.turn)), 0),
+    () => nodes.reduce((max, n) => Math.max(max, n.turn), 0),
     [nodes],
   )
   const grouped = useMemo(() => (depth === 0 ? groupByTurn(nodes) : null), [nodes, depth])
@@ -151,16 +151,7 @@ export function NodeList({
   return (
     <div className="space-y-2">
       {grouped.segments.map((seg) => (
-        <Fragment key={`turn-${seg.turn}`}>
-          {seg.user && <NodeView node={seg.user} sessionId={sessionId} depth={depth} latestTurn={latestTurn} />}
-          {(seg.process.length > 0 || seg.answerReasoning.length > 0) && (
-            <TurnProcessGroup segment={seg} sessionId={sessionId} latestTurn={latestTurn} />
-          )}
-          {seg.answer && (
-            <NodeView node={seg.answer} sessionId={sessionId} depth={depth} latestTurn={latestTurn} isAnswer />
-          )}
-          {seg.end && <NodeView node={seg.end} sessionId={sessionId} depth={depth} latestTurn={latestTurn} />}
-        </Fragment>
+        <TurnView key={`turn-${seg.turn}`} segment={seg} sessionId={sessionId} latestTurn={latestTurn} />
       ))}
       {grouped.loose.map((node) => (
         <NodeView key={node.id} node={node} sessionId={sessionId} depth={depth} latestTurn={latestTurn} />

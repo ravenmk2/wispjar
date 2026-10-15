@@ -1,87 +1,118 @@
 import type { AssistantNode, BoundaryNode, ConversationNode, QuestionReplyNode, UserNode } from "@/lib/conversation"
-import type { ContentBlock } from "@/lib/types"
 
-type ReasoningBlockData = Extract<ContentBlock, { type: "reasoning" }>
+export interface ProcessGroup {
+  kind: "process"
+  id: string
+  nodes: ConversationNode[]
+  hasPending: boolean
+  hasError: boolean
+  running: boolean
+}
+
+export type TurnPart = ProcessGroup | { kind: "reply"; node: AssistantNode }
 
 export interface TurnSegment {
   turn: number
   start?: BoundaryNode
   user?: UserNode | QuestionReplyNode
-  process: ConversationNode[]
-  answer?: AssistantNode
-  // 最终回复剥离出的思考块，随折叠组展开渲染（answer 节点本身只留 text）
-  answerReasoning: ReasoningBlockData[]
+  parts: TurnPart[]
+  answerId?: string
   end?: BoundaryNode
   hasPendingApproval: boolean
   durationMs?: number
 }
 
-// 含未决审批或未决提问（asked 且无 answered）的子树强制展开，复用同一 forceOpen 通道
 export function hasPendingApproval(nodes: ConversationNode[]): boolean {
   return nodes.some((n) => {
     if (n.kind === "approval") return n.status === "pending"
-    if (n.kind === "tool-call") {
-      if (n.question && !n.question.answers) return true
-      return hasPendingApproval(n.children)
-    }
+    if (n.kind === "tool-call") return !!(n.question && !n.question.answers) || hasPendingApproval(n.children)
     return false
   })
 }
 
-// 按 turn 把顶层节点流切段；turn===0 的 live 节点不进组，保持逐条可见
+export function hasProcessError(nodes: ConversationNode[]): boolean {
+  return nodes.some((n) => {
+    if (n.kind === "tool-call") {
+      if (n.result?.error || hasProcessError(n.children)) return true
+      if (n.name === "exec" && n.result) {
+        try {
+          const code = JSON.parse(n.result.content).exit_code
+          return typeof code === "number" && code !== 0
+        } catch { return false }
+      }
+    }
+    return n.kind === "boundary" && n.phase === "end" && n.reason === "failed"
+  })
+}
+
+// Split on visible text, never on stream frames. Reasoning and tools stay in original order.
 export function groupByTurn(nodes: ConversationNode[]): { segments: TurnSegment[]; loose: ConversationNode[] } {
   const segments: TurnSegment[] = []
   const byTurn = new Map<number, TurnSegment>()
   const loose: ConversationNode[] = []
 
-  const segmentOf = (turn: number): TurnSegment => {
-    let seg = byTurn.get(turn)
-    if (!seg) {
-      seg = { turn, process: [], answerReasoning: [], hasPendingApproval: false }
-      byTurn.set(turn, seg)
-      segments.push(seg)
-    }
-    return seg
+  const addProcess = (seg: TurnSegment, node: ConversationNode) => {
+    const last = seg.parts[seg.parts.length - 1]
+    if (last?.kind === "process") last.nodes.push(node)
+    else seg.parts.push({ kind: "process", id: `process-${node.id}`, nodes: [node], hasPending: false, hasError: false, running: true })
   }
 
   for (const node of nodes) {
-    if (node.turn === 0) {
-      loose.push(node)
-      continue
+    if (node.turn <= 0) { loose.push(node); continue }
+    let seg = byTurn.get(node.turn)
+    if (!seg) {
+      seg = { turn: node.turn, parts: [], hasPendingApproval: false }
+      byTurn.set(node.turn, seg)
+      segments.push(seg)
     }
-    const seg = segmentOf(node.turn)
-    switch (node.kind) {
-      case "user":
-      case "question-reply":
-        seg.user = node
-        break
-      case "boundary":
-        if (node.phase === "start") seg.start = node
-        else seg.end = node
-        break
-      default:
-        seg.process.push(node)
-    }
+    if (node.kind === "user" || node.kind === "question-reply") seg.user = node
+    else if (node.kind === "boundary") {
+      if (node.phase === "start") seg.start = node
+      else seg.end = node
+    } else if (node.kind === "assistant") {
+      let reply: AssistantNode | undefined
+      node.content.forEach((block, index) => {
+        if (block.type === "text" && block.text.trim()) {
+          if (reply) reply.content.push(block)
+          else {
+            reply = { ...node, id: `${node.id}-text-${index}`, content: [block] }
+            seg.parts.push({ kind: "reply", node: reply })
+          }
+        } else if (block.type === "reasoning") {
+          reply = undefined
+          addProcess(seg, { ...node, id: `${node.id}-reasoning-${index}`, content: [block] })
+        }
+      })
+    } else addProcess(seg, node)
   }
 
   for (const seg of segments) {
-    // 最终回答：仅当该轮最后一个节点是含 text block 的 assistant 时才算；
-    // 否则（轮次以工具调用收尾：中断/达到迭代上限/被停止）所有内容留在过程段穿插展示，
-    // 不把中间回复误当最终回复
-    const n = seg.process[seg.process.length - 1]
-    if (n && n.kind === "assistant" && n.content.some((b) => b.type === "text")) {
-      seg.process.splice(seg.process.length - 1, 1)
-      seg.answerReasoning = n.content.filter((b): b is ReasoningBlockData => b.type === "reasoning")
-      seg.answer =
-        seg.answerReasoning.length > 0
-          ? { ...n, content: n.content.filter((b) => b.type !== "reasoning") }
-          : n
+    for (const part of seg.parts) {
+      if (part.kind !== "process") continue
+      part.running = !seg.end
+      part.hasPending = hasPendingApproval(part.nodes)
+      part.hasError = hasProcessError(part.nodes)
+      seg.hasPendingApproval ||= part.hasPending
     }
-    seg.hasPendingApproval = hasPendingApproval(seg.process)
+    if (seg.end) {
+      const last = seg.parts[seg.parts.length - 1]
+      if (last?.kind === "reply") seg.answerId = last.node.id
+      else if (seg.end.reason !== "completed") {
+        // Keep the last text of a stopped turn without treating it as a completed answer.
+        for (let i = seg.parts.length - 1; i >= 0; i--) {
+          const part = seg.parts[i]
+          if (part.kind === "reply") { seg.answerId = part.node.id; break }
+        }
+      }
+    }
     if (seg.start && seg.end) seg.durationMs = Math.max(1000, seg.end.time - seg.start.time)
   }
-
   return { segments, loose }
+}
+
+export function reasoningTail(text: string, limit = 160): string {
+  const tail = text.trimEnd().slice(-limit).replace(/\s+/g, " ").trim()
+  return text.trimEnd().length > limit ? `…${tail}` : tail
 }
 
 export function formatTurnDuration(ms: number): string {

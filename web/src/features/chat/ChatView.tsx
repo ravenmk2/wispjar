@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils"
 import { useComposerStore } from "@/stores/composer"
 import { useCurrentOrg } from "@/stores/identity"
 import { useSessionStore } from "@/stores/session"
+import { useChatPresentationStore } from "@/stores/chatPresentation"
 
 interface LoadError {
   title: string
@@ -65,6 +66,7 @@ export default function ChatView() {
 
   useEffect(() => {
     if (!sessionId || !currentOrg) return
+    useChatPresentationStore.getState().enterSession(sessionId)
     composerReset()
     const handle: FollowHandle = followSession(currentOrg.id, sessionId)
     return () => handle.close()

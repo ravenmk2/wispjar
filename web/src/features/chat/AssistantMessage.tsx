@@ -1,12 +1,13 @@
 import { ChevronDown, ChevronRight, OctagonX, Sparkles } from "lucide-react"
-import { useState } from "react"
+import { useLayoutEffect, useRef } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { CopyIconButton } from "@/components/CopyIconButton"
 import { Markdown } from "@/components/Markdown"
 import { ForkButton } from "@/features/chat/ForkButton"
 import { formatMessageTime, formatNumber } from "@/lib/format"
-import { formatTurnDuration } from "@/lib/turn-grouping"
+import { formatTurnDuration, reasoningTail } from "@/lib/turn-grouping"
+import { useChatDisclosure } from "@/stores/chatPresentation"
 import { cn } from "@/lib/utils"
 import type { AssistantNode } from "@/lib/conversation"
 import type { Usage } from "@/lib/types"
@@ -43,23 +44,38 @@ export function ReasoningBlock({
   text,
   streaming,
   durationMs,
+  sessionId = "",
+  disclosureKey = "reasoning",
 }: {
   text: string
   streaming?: boolean
   durationMs?: number
+  sessionId?: string
+  disclosureKey?: string
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useChatDisclosure(sessionId, disclosureKey)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const followRef = useRef(true)
+  useLayoutEffect(() => {
+    const el = bodyRef.current
+    if (el && open && streaming && followRef.current) el.scrollTop = el.scrollHeight
+  }, [text, open, streaming])
+  const detail = streaming && !open ? reasoningTail(text) || "思考中…"
+    : durationMs !== undefined ? `用时${formatTurnDuration(durationMs)}` : streaming ? "思考中…" : ""
   return (
     <div className="my-0.5">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={`${open ? "收起" : "展开"}${streaming ? "思考中" : "思考"}`}
+        onClick={() => { followRef.current = true; setOpen(!open) }}
         className="flex h-8 w-full items-center gap-1.5 rounded-md px-1 text-left text-[13px] hover:bg-accent/50"
       >
         <Sparkles className="size-3.5 shrink-0 text-fg-tertiary" />
-        <span className={cn("shrink-0 font-medium text-fg-secondary", streaming && "text-shimmer")}>思考</span>
-        <span className="min-w-0 flex-1 truncate text-fg-tertiary">
-          {durationMs !== undefined ? `· 用时${formatTurnDuration(durationMs)}` : streaming ? "· 思考中…" : ""}
+        <span className={cn("shrink-0 font-medium text-fg-secondary", streaming && "text-shimmer")}>{streaming ? "思考中" : "思考"}</span>
+        <span className="shrink-0 text-fg-tertiary">{detail && "·"}</span>
+        <span className={cn("min-w-0 flex-1 overflow-hidden whitespace-nowrap text-fg-tertiary", streaming && !open ? "[direction:rtl] [text-overflow:ellipsis] text-left" : "text-ellipsis")} title={detail}>
+          <bdi>{detail}</bdi>
         </span>
         {open ? (
           <ChevronDown className="size-3.5 shrink-0 text-fg-tertiary" />
@@ -68,7 +84,10 @@ export function ReasoningBlock({
         )}
       </button>
       {open && (
-        <div className="max-h-72 overflow-y-auto whitespace-pre-wrap py-1 pl-6 text-[13px] leading-relaxed text-fg-secondary">
+        <div ref={bodyRef} data-reasoning-body onScroll={() => {
+          const el = bodyRef.current
+          if (el) followRef.current = el.scrollHeight - el.clientHeight - el.scrollTop < 24
+        }} className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words py-1 pl-6 text-[13px] leading-relaxed text-fg-secondary">
           {text}
         </div>
       )}
@@ -106,6 +125,8 @@ export function AssistantMessage({
                   text={block.text}
                   streaming={node.live === true && block.streaming === true}
                   durationMs={block.durationMs}
+                  sessionId={sessionId}
+                  disclosureKey={`reasoning-${node.id}-${i}`}
                 />
               )
             }

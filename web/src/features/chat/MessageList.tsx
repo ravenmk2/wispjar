@@ -7,20 +7,6 @@ import { useSessionStore } from "@/stores/session"
 
 const STICK_THRESHOLD = 80
 
-function RunningStatus({ since }: { since: number }) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [])
-  const seconds = Math.max(0, Math.floor((now - since) / 1000))
-  return (
-    <div className="flex items-center py-1 text-[13px]">
-      <span className="text-shimmer-blue font-medium">工作中，用时{seconds}s</span>
-    </div>
-  )
-}
-
 export function MessageList({ sessionId }: { sessionId: string }) {
   const events = useSessionStore((s) => s.events)
   const liveAttempt = useSessionStore((s) => s.liveAttempt)
@@ -33,14 +19,6 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   const nodes = useMemo(() => deriveConversationNodes(events, liveAttempt), [events, liveAttempt])
 
   const running = (header?.running ?? false) || liveAttempt !== null
-  const runningSince = useMemo(() => {
-    for (let i = events.length - 1; i >= 0; i--) {
-      const e = events[i]
-      if (e.type === "turn/end") break
-      if (e.type === "turn/start") return e.time
-    }
-    return Date.now()
-  }, [events])
 
   // 吸底跟随：已在底部或自己刚发消息时跟随新内容；上翻阅读时不拉底
   useEffect(() => {
@@ -65,11 +43,10 @@ export function MessageList({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={containerRef} onScroll={handleScroll} className="h-full overflow-y-auto">
+      <div ref={containerRef} data-chat-scroll onScroll={handleScroll} className="h-full overflow-y-auto">
         <div className="mx-auto max-w-3xl space-y-3 px-4 py-6">
           <NodeList nodes={nodes} sessionId={sessionId} />
           {optimistic && <OptimisticBubble content={optimistic.content} attachments={optimistic.attachments} />}
-          {running && <RunningStatus since={runningSince} />}
         </div>
       </div>
       {!atBottom && (
