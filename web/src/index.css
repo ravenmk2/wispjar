@@ -4,64 +4,77 @@
 
 @layer base {
   :root {
+    color-scheme: light;
     --background: 0 0% 100%;
-    --foreground: rgba(0, 0, 0, 0.9);
+    --foreground: #252525;
     --card: 0 0% 100%;
     --popover: rgba(255, 255, 255, 0.95);
-    --primary: 214 100% 55%;
+    --primary: 216.82540 92.19512% 59.80392%;
+    --primary-hover: #2e76e8;
+    --primary-active: #2668d2;
     --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 96.1%;
     --muted: 0 0% 96.1%;
-    --accent: rgba(0, 0, 0, 0.03);
-    --selected: rgba(0, 0, 0, 0.05);
+    --accent: #f0f0f0;
+    --selected: #eaeaea;
     --destructive: 353 100% 61%;
     --destructive-foreground: 0 0% 100%;
-    --border: rgba(0, 0, 0, 0.13);
-    --divider: rgba(0, 0, 0, 0.03);
+    --border: #e7e7e7;
+    --divider: #eeeeee;
     --input: 0 0% 90%;
-    --ring: 214 100% 55%;
-    --ring-focus: rgba(23, 131, 255, 0.2);
+    --ring: 216.82540 92.19512% 59.80392%;
+    --ring-focus: rgba(58, 131, 247, 0.2);
+    --chat-font-size: 16px;
+    --chat-line-height: 26px;
     --radius: 0.75rem;
     --shadow-input: 0 5px 16px -4px rgba(0, 0, 0, 0.07);
     --shadow-menu: 0 12px 24px rgba(15, 23, 42, 0.12);
 
-    /* 语义色（token 规范见 docs/design/theme.md；文字/边框走透明度策略） */
-    --sidebar: #fbfaf9;
-    --text-secondary: rgba(0, 0, 0, 0.6);
-    --text-tertiary: rgba(0, 0, 0, 0.45);
-    --text-caption: rgba(0, 0, 0, 0.3);
-    --bubble: #f5f5f5;
+    /* 语义色与字号规范见 docs/design/theme.md。 */
+    --sidebar: #f8f8f8;
+    --composer: #ffffff;
+    --text-secondary: #666666;
+    --text-tertiary: #707070;
+    --text-caption: #707070;
+    --bubble: #e8f2ff;
+    --bubble-foreground: #18375d;
+    --link: #2c67c5;
     --success: #16c456;
     --warning: #ff9500;
     --tooltip-bg: #2b2b2b;
     --toast-bg: #2b2b2b;
   }
 
-  /* 深色：中性灰阶分层（#121212 主区 / #181817 侧栏 / #1f1f1f 卡片），
-     文字为白色透明度梯度，主色品牌蓝 #1a88ff，蓝底按钮上保持白字 */
+  /* 深色：主区 / 侧栏 / 卡片 / 输入框分别分层，辅助文字保持可读对比度。 */
   .dark {
-    --background: 0 0% 7%;
-    --foreground: rgba(255, 255, 255, 0.9);
-    --card: 0 0% 12%;
-    --popover: rgba(31, 31, 31, 0.95);
-    --primary: 215 100% 55%;
+    color-scheme: dark;
+    --background: 0.00000 0.00000% 9.41176%;
+    --foreground: #eeeeee;
+    --card: 0.00000 0.00000% 14.11765%;
+    --popover: rgba(36, 36, 36, 0.97);
+    --primary: 216.86275 63.48548% 47.25490%;
+    --primary-hover: #3575d8;
+    --primary-active: #2458ad;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 12%;
-    --muted: 0 0% 9%;
-    --accent: rgba(255, 255, 255, 0.05);
-    --selected: rgba(255, 255, 255, 0.1);
+    --secondary: 0 0% 16%;
+    --muted: 0.00000 0.00000% 14.11765%;
+    --accent: #292929;
+    --selected: #303030;
     --destructive: 354 100% 64%;
     --destructive-foreground: 0 0% 100%;
-    --border: rgba(255, 255, 255, 0.12);
-    --divider: rgba(255, 255, 255, 0.05);
+    --border: #353535;
+    --divider: #2c2c2c;
     --input: 0 0% 20%;
-    --ring: 215 100% 55%;
-    --ring-focus: rgba(26, 136, 255, 0.2);
-    --sidebar: #181817;
-    --text-secondary: rgba(255, 255, 255, 0.56);
-    --text-tertiary: rgba(255, 255, 255, 0.42);
-    --text-caption: rgba(255, 255, 255, 0.26);
-    --bubble: #292929;
+    --ring: 216.86275 63.48548% 47.25490%;
+    --ring-focus: rgba(44, 103, 197, 0.2);
+    --sidebar: #1d1d1d;
+    --composer: #363636;
+    --text-secondary: #ababab;
+    --text-tertiary: #999999;
+    --text-caption: #999999;
+    --bubble: #1d4077;
+    --bubble-foreground: #f1f6ff;
+    --link: #83b5ff;
     --success: #16c456;
     --warning: #ff9f0a;
     --tooltip-bg: #404040;
@@ -76,7 +89,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-sm text-foreground;
+    @apply bg-background font-sans text-base text-foreground antialiased;
   }
   *:focus-visible {
     outline: none;
@@ -125,9 +138,9 @@
   .text-shimmer-blue {
     background-image: linear-gradient(
       90deg,
-      hsl(var(--primary) / 0.5) 35%,
-      hsl(var(--primary)) 50%,
-      hsl(var(--primary) / 0.5) 65%
+      var(--text-secondary) 35%,
+      var(--link) 50%,
+      var(--text-secondary) 65%
     );
   }
 }
@@ -140,7 +153,7 @@
     margin-bottom: 0;
   }
   .markdown-body p {
-    @apply my-2;
+    @apply my-3;
   }
   .markdown-body h1,
   .markdown-body h2,
@@ -149,14 +162,14 @@
     @apply mb-2 mt-4 font-semibold;
   }
   .markdown-body h1 {
-    @apply text-lg;
+    @apply text-xl;
   }
   .markdown-body h2 {
-    @apply text-base;
+    @apply text-lg;
   }
   .markdown-body h3,
   .markdown-body h4 {
-    @apply text-[15px];
+    @apply text-chat;
   }
   .markdown-body ul {
     @apply my-2 list-disc pl-5;
@@ -174,7 +187,7 @@
     @apply my-4;
   }
   .markdown-body table {
-    @apply w-full border-collapse text-[13px];
+    @apply w-full border-collapse text-chat;
   }
   .markdown-body th,
   .markdown-body td {

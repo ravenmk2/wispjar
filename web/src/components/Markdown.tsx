@@ -21,16 +21,16 @@ export function CodeBlock({ lang, code, className }: { lang?: string; code: stri
   return (
     <div className={cn("codeblock group relative my-2 overflow-hidden rounded-md border bg-muted/40", className)}>
       <div className="flex items-center border-b bg-muted/60 py-0.5 pl-3 pr-1">
-        <span className="text-[11px] text-muted-foreground">{lang || "text"}</span>
+        <span className="text-meta text-muted-foreground">{lang || "text"}</span>
         <CopyIconButton text={code} className="ml-auto size-6" />
       </div>
       {html ? (
         <div
-          className="overflow-x-auto p-3 text-[13px] leading-relaxed [&_pre]:!bg-transparent [&_code]:!bg-transparent"
+          className="overflow-x-auto p-3 text-chat [&_pre]:!bg-transparent [&_code]:!bg-transparent"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
-        <pre className="overflow-x-auto p-3 font-mono text-[13px] leading-relaxed">
+        <pre className="overflow-x-auto p-3 font-mono text-chat">
           <code>{code}</code>
         </pre>
       )}
@@ -40,7 +40,7 @@ export function CodeBlock({ lang, code, className }: { lang?: string; code: stri
 
 export const Markdown = memo(function Markdown({ content, className }: { content: string; className?: string }) {
   return (
-    <div className={cn("markdown-body text-[15px] leading-relaxed", className)}>
+    <div className={cn("markdown-body min-w-0 break-words text-chat", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -52,11 +52,11 @@ export const Markdown = memo(function Markdown({ content, className }: { content
               return <CodeBlock lang={match?.[1]} code={text} />
             }
             return (
-              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em]">{text}</code>
+              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[1em]">{text}</code>
             )
           },
           a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2">
+            <a href={href} target="_blank" rel="noreferrer" className="text-link underline underline-offset-2">
               {children}
             </a>
           ),
@@ -76,7 +76,7 @@ export const Markdown = memo(function Markdown({ content, className }: { content
 export function DiffBlock({ diff, className }: { diff: string; className?: string }) {
   const lines = diff.split("\n")
   return (
-    <div className={cn("overflow-x-auto rounded-md border bg-muted/40 font-mono text-xs leading-relaxed", className)}>
+    <div className={cn("overflow-x-auto rounded-md border bg-muted/40 font-mono text-chat", className)}>
       {lines.map((line, i) => {
         let lineClass = "text-muted-foreground"
         if (line.startsWith("+") && !line.startsWith("+++")) {

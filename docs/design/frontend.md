@@ -97,7 +97,7 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 
 ### 6.1 消息流
 
-- **user**：右置浅蓝气泡（`bg-bubble` #EDF3FE，max-w 85%）；下方操作条：时间戳 + 复制。操作条最新一轮常驻，更早轮次 hover/focus-within 浮现（无 hover 设备常显）。
+- **user**：右置浅蓝气泡（`bg-bubble` 浅 #E8F2FF / 深 #1D4077，配套 `text-bubble-foreground`，max-w 85%）；下方操作条：时间戳 + 复制。操作条最新一轮常驻，更早轮次 hover/focus-within 浮现（无 hover 设备常显）。
 - **Turn 折叠**：用户消息始终可见；其后顶部耗时行作为整轮开关，完成态为"已工作 X"，运行态为"工作中 · 用时 X"，停止/失败态保留状态与耗时。最新 Turn 默认展开，完成不自动收起；下一条用户消息成功写入事件流后，上一轮按历史 Turn 默认收起。历史轮收起只展示最终回复及操作条；用户手动展开的轮次不被默认规则覆盖。切换聊天/轨迹、重连保留手动状态，切换会话或刷新恢复默认。无起始事件的历史片段不猜测耗时；中断/失败以最后一条正文兜底，缺少正文时展示结束状态。
 - **过程组**：展开 Turn 后，全部回复正文按原序可见；正文之间连续的思考、工具与审批归入一个过程组，正文（包括同条助手消息里的正文块）切开过程组。混合组显示"思考与行动 · N 次工具调用"，纯工具组为"工具调用 · N 次"，单个思考直接复用思考折叠行，避免多一层开关。组默认收起，出错默认展开；待处理审批/提问强制展开所属整轮、过程组与任务卡。运行中收起行显示当前活动或最新思考尾部摘要；工具计数不递归计算子任务。整轮、过程组、思考与工具详情的手动状态独立保存。
 - **assistant**：Markdown 流式渲染（结尾光标闪烁）；`reasoning` 默认收起单行，完成后为"✦ 思考 · 用时X"（时长取服务端 `durationMs`，缺省时仅显示"思考"）。未完成时显示"思考中"并 shimmer：收起状态只展示最新文本末尾、从左侧省略；展开状态最大高度 18rem、内部吸底跟随，用户上滚后暂停，回到底部恢复。正文/工具块出现后停止 shimmer。仅最终回复展示复制 / 分叉 / token / 时间戳操作条，显隐规则同用户气泡；usage 徽标（`↑in ↓out`，hover 展开 cached/reasoning 明细）；`interrupted` 标记"已停止"。
@@ -146,7 +146,7 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 
 ## 7. 侧栏（sessions + agents）
 
-- 宽度 280px，背景 `bg-sidebar`（亮 #fbfaf9 / 暗 #181817）；支持折叠为 48px 窄栏（顶部展开按钮 + 底部头像 icon 变体用户菜单），折叠状态持久化 localStorage `wispjar-sidebar-collapsed`。工作台无全局顶栏——机构切换与用户菜单均收进侧栏，主内容区全高。
+- 宽度 280px，背景 `bg-sidebar`（亮 #F8F8F8 / 暗 #1D1D1D）；支持折叠为 48px 窄栏（顶部展开按钮 + 底部头像 icon 变体用户菜单），折叠状态持久化 localStorage `wispjar-sidebar-collapsed`。工作台无全局顶栏——机构切换与用户菜单均收进侧栏，主内容区全高。
 - 顶部：品牌行（Wispjar）→ 机构切换器行（variant=sidebar：全宽行，建筑图标 + 机构名 + ChevronsUpDown；下拉展示 `auth/me` 的 orgs，平台机构标注"平台"，选中且角色 admin 时可导航进 `/platform/*`）。
 - 智能体列表（AgentPicker）：本机构 published 智能体；点击 → 跳转 `/c/new?agent=<id>` 草稿页（不立即创建会话），首条消息发送时才 POST 创建会话并紧接发 prompt，成功后 replace 跳 `/c/<id>`；创建失败停留在草稿页且输入内容不丢。工作区首页智能体卡片行为相同。
 - 会话列表：搜索框（防抖调 REST）+ 行项：标题（自动生成中显示"新会话"）、running 呼吸点、紧凑相对时间（刚刚/N分/N时/N天/M月D日）；hover 浮现 "…" 菜单：重命名 / 分叉会话 / 归档 / 删除（删除需确认对话框）；悬停出深色 HoverCard（标题 / 时间 / 运行状态）。数据源 `control` 流投影。当前会话选中态 `bg-selected`。
@@ -177,11 +177,12 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 
 ## 10. 视觉与体验基线
 
-- 主题：浅色默认 + 深色/跟随系统（Tailwind `class` 策略，localStorage `wispjar-theme`）。语义色经 CSS 变量 + Tailwind 扩展：`primary` 品牌蓝 #1783FF（暗 #1A88FF）、`sidebar` #fbfaf9（暗 #181817）、用户气泡 `bubble` #F5F5F5（暗 #292929）、`success`/`warning`、`tooltip`/`toast` 深色底。完整色板与映射见 docs/design/theme.md。
-- 文字与边框走透明度：前景 rgba(0,0,0,.9)（暗 rgba(255,255,255,.84)），三级文字 fg-secondary/tertiary/caption = 黑 .6/.45/.3（暗 白 .56/.42/.26）；边框 黑 .13（暗 白 .12）、发丝线 `divider` 黑 .03（暗 白 .05）；hover 黑 .03、选中 `selected` 黑 .05（暗 .05/.1）。
-- 阴影蓝灰基：输入卡 `shadow-input`（0 5px 16px -4px rgba(0,0,0,.07)）、弹层 `shadow-menu`（0 12px 24px rgba(15,23,42,.12)）；radix 弹层 backdrop 毛玻璃 blur(24px) saturate(1.8)。focus-visible 全局 3px 软蓝 ring（`--ring-focus`），文本选区同色。
-- 字体：系统栈（-apple-system / Segoe UI / PingFang SC / Source Han Sans SC 等）；等宽 Geist Mono / SF Mono / Consolas。
-- 密度：harness 式紧凑信息密度（消息间距小、卡片边框细、弱化阴影）。
+- 主题：浅色默认 + 深色/跟随系统（Tailwind `class` 策略，localStorage `wispjar-theme`）。`primary` 浅 #3A83F7 / 深 #2C67C5，白色按钮内容；链接单独使用 `text-link`（浅 #2C67C5 / 深 #83B5FF）。完整语义色与变量格式见 docs/design/theme.md。
+- 背景：主区白 / #181818，侧栏 #F8F8F8 / #1D1D1D，输入框独立 `bg-composer` 白 / #363636；用户消息为蓝色气泡并配套独立前景色。
+- 对比度：主文字 #252525 / #EEEEEE，辅助文字 #666666 / #ABABAB，时间等元信息 #707070 / #999999；边框 #E7E7E7 / #353535，hover 与选中态使用独立灰阶，不再以低文字透明度区分内容层次。
+- 字体：中文系统字体优先（PingFang SC / Microsoft YaHei UI / Microsoft YaHei / Noto Sans CJK SC / Source Han Sans SC，再回退平台默认）；等宽使用 SFMono-Regular / Consolas / Menlo / Liberation Mono。无外部字体下载。
+- 排版：正文、用户消息、输入文本、思考摘要及详情、工具折叠行与参数/结果/代码、提问及选项统一 16px / 26px。侧栏“智能体”“会话”分组名与聊天名称同为 14px / 22px；通用菜单和按钮 14px，时间、工具耗时和统计 12px / 18px；管理表格保留 14px 密度。
+- 间距与交互：居中 864px 阅读列，段落间距 12px；侧栏会话行高 36px；输入框圆角 28px、发送按钮 36px。阴影克制，焦点为 3px 软蓝 ring；输入框由外容器显示焦点，文本选区同色。
 - 代码块：头部语言标签 + 复制钮；shiki 高亮按需加载语言。
 - 反馈：toast 用 sonner，深色横幅、顶部居中、3s；tooltip 深色底。
 - 空态：工作区首页 hero（"开始新的对话"标题 + 智能体卡片网格 + 最近会话列表）；无智能体时引导去管理页创建（admin）或联系管理员（member）。

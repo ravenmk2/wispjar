@@ -28,7 +28,7 @@ export default function DraftChatView() {
 
   if (!agents || !ready) {
     return (
-      <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
+      <div className="mx-auto w-full max-w-chat flex-1 px-4 py-6">
         <TableSkeleton rows={4} />
       </div>
     )
@@ -54,10 +54,10 @@ export default function DraftChatView() {
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <Bot className="size-4 shrink-0 text-muted-foreground" />
-        <span className="truncate text-sm font-medium">新会话</span>
-        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+        <span className="truncate text-base font-medium">新会话</span>
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-meta text-muted-foreground">
           {agent.name}
         </span>
       </div>

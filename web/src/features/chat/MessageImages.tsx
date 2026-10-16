@@ -77,7 +77,7 @@ function AttachmentImage({
             className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 text-fg-tertiary hover:text-foreground"
           >
             <ImageOff className="size-4" />
-            <span className="text-[10px]">重试</span>
+            <span className="text-meta">重试</span>
           </span>
         )}
       </button>
@@ -99,7 +99,7 @@ function AttachmentImage({
             className="flex flex-col items-center gap-0.5 text-fg-tertiary hover:text-foreground"
           >
             <ImageOff className="size-4" />
-            <span className="text-[10px]">重试</span>
+            <span className="text-meta">重试</span>
           </button>
         ) : (
           <Loader2 className="size-4 animate-spin text-fg-tertiary" />

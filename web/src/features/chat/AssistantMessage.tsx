@@ -24,7 +24,7 @@ export function TokenBadge({ usage, className }: { usage: Usage; className?: str
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={cn("cursor-default font-mono text-[11px] tabular-nums text-fg-caption", className)}>
+        <span className={cn("cursor-default font-mono text-meta tabular-nums text-fg-caption", className)}>
           ↑{formatNumber(usage.input_tokens)} ↓{formatNumber(usage.output_tokens)}
         </span>
       </TooltipTrigger>
@@ -69,7 +69,7 @@ export function ReasoningBlock({
         aria-expanded={open}
         aria-label={`${open ? "收起" : "展开"}${streaming ? "思考中" : "思考"}`}
         onClick={() => { followRef.current = true; setOpen(!open) }}
-        className="flex h-8 w-full items-center gap-1.5 rounded-md px-1 text-left text-[13px] hover:bg-accent/50"
+        className="flex min-h-9 w-full items-center gap-1.5 rounded-md px-1 text-left text-chat hover:bg-accent/50"
       >
         <Sparkles className="size-3.5 shrink-0 text-fg-tertiary" />
         <span className={cn("shrink-0 font-medium text-fg-secondary", streaming && "text-shimmer")}>{streaming ? "思考中" : "思考"}</span>
@@ -87,7 +87,7 @@ export function ReasoningBlock({
         <div ref={bodyRef} data-reasoning-body onScroll={() => {
           const el = bodyRef.current
           if (el) followRef.current = el.scrollHeight - el.clientHeight - el.scrollTop < 24
-        }} className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words py-1 pl-6 text-[13px] leading-relaxed text-fg-secondary">
+        }} className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words py-1 pl-6 text-chat text-fg-secondary">
           {text}
         </div>
       )}
@@ -148,12 +148,12 @@ export function AssistantMessage({
           {sessionId && <ForkButton sessionId={sessionId} seq={node.seq} />}
           {node.usage && <TokenBadge usage={node.usage} className="ml-1" />}
           {node.interrupted && (
-            <Badge variant="secondary" className="ml-1 gap-1 text-[11px] font-normal text-muted-foreground">
+            <Badge variant="secondary" className="ml-1 gap-1 text-meta font-normal text-muted-foreground">
               <OctagonX className="size-3" />
               已停止
             </Badge>
           )}
-          <span className="px-1 text-[13px] text-fg-caption">{formatMessageTime(node.time)}</span>
+          <span className="px-1 text-meta text-fg-caption">{formatMessageTime(node.time)}</span>
         </div>
       ) : (
         showMetaFallback &&
@@ -161,7 +161,7 @@ export function AssistantMessage({
           <div className="mt-1.5 flex items-center gap-2">
             {node.usage && <TokenBadge usage={node.usage} />}
             {node.interrupted && (
-              <Badge variant="secondary" className="gap-1 text-[11px] font-normal text-muted-foreground">
+              <Badge variant="secondary" className="gap-1 text-meta font-normal text-muted-foreground">
                 <OctagonX className="size-3" />
                 已停止
               </Badge>

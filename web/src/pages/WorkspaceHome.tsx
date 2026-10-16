@@ -18,7 +18,7 @@ export default function WorkspaceHome() {
 
   if (!agents) {
     return (
-      <div className="mx-auto grid w-full max-w-3xl gap-3 p-8 sm:grid-cols-2">
+      <div className="mx-auto grid w-full max-w-chat gap-3 p-8 sm:grid-cols-2">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="h-28 animate-pulse rounded-lg bg-muted" />
         ))}
@@ -51,9 +51,9 @@ export default function WorkspaceHome() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-6 py-16">
+    <div className="mx-auto w-full max-w-chat px-6 py-16">
       <h1 className="text-2xl font-semibold tracking-tight">开始新的对话</h1>
-      <p className="mt-2 text-sm text-fg-secondary">选择一个智能体，开始你的工作</p>
+      <p className="mt-2 text-chat text-fg-secondary">选择一个智能体，开始你的工作</p>
       <div className="mt-8 grid gap-3 sm:grid-cols-2">
         {agents.map((agent) => (
           <button
@@ -67,13 +67,13 @@ export default function WorkspaceHome() {
             </Avatar>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="truncate text-sm font-medium">{agent.name}</span>
+                <span className="truncate text-chat font-medium">{agent.name}</span>
               </div>
               {agent.description && (
                 <p className="mt-0.5 line-clamp-2 text-xs text-fg-secondary">{agent.description}</p>
               )}
               {agent.model_display_name && (
-                <p className="mt-1 text-[11px] text-fg-caption">{agent.model_display_name}</p>
+                <p className="mt-1 text-meta text-fg-caption">{agent.model_display_name}</p>
               )}
             </div>
           </button>
@@ -81,7 +81,7 @@ export default function WorkspaceHome() {
       </div>
       {recent.length > 0 && (
         <>
-          <h2 className="mb-3 mt-10 flex items-center gap-1.5 text-xs font-medium text-fg-tertiary">
+          <h2 className="mb-3 mt-10 flex items-center gap-1.5 text-base font-medium text-fg-tertiary">
             <Clock className="size-3.5" />
             最近的会话
           </h2>
@@ -90,7 +90,7 @@ export default function WorkspaceHome() {
               <Link
                 key={s.sessionId}
                 to={`/c/${s.sessionId}`}
-                className="flex items-center gap-2 px-3.5 py-2.5 text-sm transition-colors hover:bg-accent/50"
+                className="flex items-center gap-2 px-3.5 py-2.5 text-chat transition-colors hover:bg-accent/50"
               >
                 <span
                   className={

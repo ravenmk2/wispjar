@@ -36,8 +36,8 @@ const APPROVAL_MODES: Array<{
   { value: "auto", label: "自动", hint: "全部放行", icon: ShieldOff },
 ]
 
-// 内容自适应长高，约 14 行（leading-6）封顶后内部滚动
-const MAX_TEXTAREA_HEIGHT = 14 * 24
+// 内容自适应长高，约 14 行（26px 行高）封顶后内部滚动
+const MAX_TEXTAREA_HEIGHT = 14 * 26
 
 const MAX_IMAGES = 9
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -354,7 +354,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
 
   return (
     <div className="shrink-0">
-      <div className="mx-auto max-w-3xl px-4 pb-4 pt-2">
+      <div className="mx-auto max-w-chat px-4 pb-4 pt-2">
         <div
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes("Files")) {
@@ -372,7 +372,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
             addFiles([...e.dataTransfer.files])
           }}
           className={cn(
-            "rounded-[28px] border bg-card shadow-input focus-within:border-black/25 dark:focus-within:border-white/25",
+            "rounded-[28px] border bg-composer shadow-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/20",
             dragging && "border-primary ring-2 ring-primary/30",
           )}
         >
@@ -432,7 +432,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
             }}
             rows={2}
             placeholder={busy ? "会话运行中，可点击右侧按钮停止…" : "输入消息，Enter 发送，Shift+Enter 换行"}
-            className="block w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-[15px] leading-6 outline-none placeholder:text-fg-caption"
+            className="block w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-chat outline-none placeholder:text-fg-caption"
           />
           <input
             ref={fileInputRef}
@@ -467,7 +467,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                   type="button"
                   disabled={!!draftAgent}
                   title={draftAgent ? "发送首条消息后可调整审批模式" : undefined}
-                  className="group flex h-7 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
+                  className="group flex h-7 items-center gap-1 rounded-md px-2 text-sm font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
                 >
                   {currentMode.label}
                   <ChevronDown className="size-3 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
@@ -482,7 +482,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                   >
                     <m.icon className="mt-0.5 size-4 text-fg-tertiary" />
                     <span className="flex flex-col">
-                      <span className={cn("text-[13px]", approvalMode === m.value && "font-semibold")}>
+                      <span className={cn("text-sm", approvalMode === m.value && "font-semibold")}>
                         {m.label}
                       </span>
                       <span className="text-xs text-fg-caption">{m.hint}</span>
@@ -503,7 +503,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                     aria-label="选择模型"
                     disabled={sending || !!draftAgent || !sessionId}
                     title={draftAgent ? "发送首条消息后可切换模型" : undefined}
-                    className="group flex h-7 min-w-0 max-w-48 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
+                    className="group flex h-7 min-w-0 max-w-48 items-center gap-1 rounded-md px-2 text-sm font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
                   >
                     <span className="truncate">{(modelName ?? modelId) || "选择模型"}</span>
                     <ChevronDown className="size-3 shrink-0 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
@@ -536,7 +536,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                           <DropdownMenuRadioItem
                             key={m.id}
                             value={m.id}
-                            className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
+                            className="px-2.5 text-sm [&>span:first-of-type]:hidden"
                           >
                             <span className={cn("truncate", m.id === modelId && "font-semibold")}>
                               {m.display_name}
@@ -561,7 +561,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                     aria-label="选择推理等级"
                     disabled={sending || effortLocked || !supportsEffort || (!draftAgent && !sessionId)}
                     title={effortLocked ? "对话开始后不可更改思考强度" : !supportsEffort ? "当前模型不支持选择推理等级" : "推理等级"}
-                    className="group flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
+                    className="group flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-sm font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
                   >
                     <span>{selectedEffort ? effortLabel(selectedEffort) : supportsEffort ? "默认" : "推理等级"}</span>
                     <ChevronDown className="size-3 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
@@ -575,7 +575,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                         value=""
                         disabled={sending || effortLocked}
                         title={effortLocked ? "对话开始后不可更改思考强度" : undefined}
-                        className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
+                        className="px-2.5 text-sm [&>span:first-of-type]:hidden"
                       >
                         <span className={cn("truncate", selectedEffort === null && "font-semibold")}>默认</span>
                         {selectedEffort === null && (
@@ -589,7 +589,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                         value={e}
                         disabled={sending || effortLocked}
                         title={effortLocked ? "对话开始后不可更改思考强度" : undefined}
-                        className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
+                        className="px-2.5 text-sm [&>span:first-of-type]:hidden"
                       >
                         <span className={cn("truncate", e === selectedEffort && "font-semibold")}>{effortLabel(e)}</span>
                         {e === selectedEffort && (
@@ -605,7 +605,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                   type="button"
                   title="停止"
                   onClick={() => void stop()}
-                  className="ml-1 flex size-[34px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90"
+                  className="ml-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary-hover active:bg-primary-active"
                 >
                   <Square className="size-3 fill-current" />
                 </button>
@@ -615,9 +615,9 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                   title="发送"
                   onClick={() => void send()}
                   disabled={(!draft.trim() && images.length === 0) || sending || busy}
-                  className="ml-1 flex size-[34px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:bg-primary/90 disabled:opacity-40"
+                  className="ml-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary-hover active:bg-primary-active disabled:opacity-40"
                 >
-                  <ArrowUp className="size-4" />
+                  <ArrowUp className="size-5" />
                 </button>
               )}
             </div>

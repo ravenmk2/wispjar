@@ -6,9 +6,9 @@ import { spawnSync } from "node:child_process"
 
 const dir = await mkdtemp(join(tmpdir(), "wispjar-web-test-"))
 try {
-  const outfile = join(dir, "conversation.test.cjs")
-  await build({ entryPoints: ["src/lib/conversation.test.ts"], bundle: true, platform: "node", format: "cjs", outfile })
-  const result = spawnSync(process.execPath, ["--test", outfile], { stdio: "inherit" })
+  const tests = ["conversation", "utils"]
+  await build({ entryPoints: tests.map((name) => `src/lib/${name}.test.ts`), bundle: true, platform: "node", format: "cjs", outdir: dir, outExtension: { ".js": ".cjs" } })
+  const result = spawnSync(process.execPath, ["--test", ...tests.map((name) => join(dir, `${name}.test.cjs`))], { stdio: "inherit" })
   process.exitCode = result.status ?? 1
 } finally {
   if (!resolve(dir).startsWith(resolve(tmpdir()) + sep)) throw new Error("Unexpected test output path")

@@ -35,7 +35,7 @@ function ApprovalParams({ name, args }: { name: string; args: string }) {
   if (name === "exec" && typeof parsed?.command === "string") {
     return (
       <div className="rounded-md border bg-zinc-950 px-3 py-2">
-        <code className="font-mono text-xs text-zinc-100">$ {parsed.command}</code>
+        <code className="whitespace-pre-wrap break-all font-mono text-chat text-zinc-100">$ {parsed.command}</code>
       </div>
     )
   }
@@ -52,11 +52,11 @@ function ApprovalParams({ name, args }: { name: string; args: string }) {
           : null
     return (
       <div>
-        {path && <div className="mb-1 font-mono text-xs text-muted-foreground">{path}</div>}
+        {path && <div className="mb-1 font-mono text-chat text-muted-foreground">{path}</div>}
         {diff ? (
           <DiffBlock diff={diff} className="max-h-60 overflow-y-auto" />
         ) : (
-          <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-mono text-xs">
+          <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-mono text-chat">
             {args}
           </pre>
         )}
@@ -64,7 +64,7 @@ function ApprovalParams({ name, args }: { name: string; args: string }) {
     )
   }
   return (
-    <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-mono text-xs">
+    <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/40 p-3 font-mono text-chat">
       {args}
     </pre>
   )
@@ -115,13 +115,13 @@ export function ApprovalCard({ node, sessionId }: { node: ApprovalNode; sessionI
     <div className="rounded-md border border-amber-500/50 bg-amber-500/5">
       <div className="flex items-center gap-2 border-b border-amber-500/30 px-3 py-2">
         <ShieldQuestion className="size-4 text-amber-600 dark:text-amber-400" />
-        <span className="text-sm font-medium">审批请求</span>
+        <span className="text-chat font-medium">审批请求</span>
         <span className="text-xs text-muted-foreground" title={node.name}>
           {toolDisplayName(node.name)}
         </span>
         <Badge
           variant={node.risk === "high" ? "destructive" : "secondary"}
-          className="text-[11px] font-normal"
+          className="text-meta font-normal"
         >
           {node.risk === "high" ? "高风险" : "中风险"}
         </Badge>
@@ -196,11 +196,11 @@ export function ApprovalTakeover({
 
   return (
     <div className="shrink-0">
-      <div className="mx-auto max-w-3xl px-4 pb-4 pt-2">
+      <div className="mx-auto max-w-chat px-4 pb-4 pt-2">
         <div
           aria-busy={acting !== null}
           onKeyDown={onKeyDown}
-          className="overflow-hidden rounded-[28px] border border-warning bg-card shadow-input"
+          className="overflow-hidden rounded-[28px] border border-warning bg-composer shadow-input"
         >
           <div className="flex items-center gap-2 bg-warning/10 px-4 py-2.5 text-[13px] font-medium text-warning">
             <span className="size-2 rounded-full bg-warning" />
@@ -214,7 +214,7 @@ export function ApprovalTakeover({
             aria-label="审批详情"
             className="max-h-[336px] overflow-y-auto px-4 pt-3 outline-none"
           >
-            <div className="text-[15px] font-medium leading-6" title={approval.name}>
+            <div className="text-chat font-medium" title={approval.name}>
               工具 {toolDisplayName(approval.name)} 请求执行
             </div>
             <div className="pb-1 pt-1.5">

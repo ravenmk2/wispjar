@@ -70,17 +70,17 @@ export default function WorkspaceLayout() {
               </Button>
             </div>
             <Separator />
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-4">
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto py-4">
               <div className="px-3">
-                <div className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
-                  <Bot className="size-3.5" />
+                <div className="mb-2 flex items-center gap-2 px-1 text-sm leading-[22px] font-medium text-muted-foreground">
+                  <Bot className="size-4" />
                   智能体
                 </div>
                 <AgentPicker />
               </div>
               <div className="px-3">
-                <div className="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
-                  <MessagesSquare className="size-3.5" />
+                <div className="mb-2 flex items-center gap-2 px-1 text-sm leading-[22px] font-medium text-muted-foreground">
+                  <MessagesSquare className="size-4" />
                   会话
                 </div>
                 <SessionList />

@@ -319,7 +319,7 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
               onClick={() => setTab("files")}
               className={cn(
                 "-mb-px border-b-2 border-transparent py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground",
-                tab === "files" && "border-primary text-primary",
+                tab === "files" && "border-primary text-link",
               )}
             >
               文件
@@ -329,7 +329,7 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
               onClick={() => setTab("preview")}
               className={cn(
                 "-mb-px border-b-2 border-transparent py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground",
-                tab === "preview" && "border-primary text-primary",
+                tab === "preview" && "border-primary text-link",
               )}
             >
               预览

@@ -269,7 +269,7 @@ export function TrajectoryView({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-4 px-4 py-6">
+      <div className="mx-auto max-w-chat space-y-4 px-4 py-6">
         {turns.map((turn) => {
           const turnDuration = formatDuration(turn.startTime, turn.endTime)
           return (

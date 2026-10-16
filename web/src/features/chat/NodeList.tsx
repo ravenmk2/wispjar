@@ -58,14 +58,14 @@ export function NodeView({
     case "user":
       return (
         <div className={cn("group flex flex-col gap-1", depth === 0 && "items-end")}>
-          <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-bubble px-3.5 py-2 text-[15px] text-foreground">
+          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-bubble px-4 py-2.5 text-chat text-bubble-foreground">
             {node.attachments && node.attachments.length > 0 && (
               <MessageImages attachments={node.attachments} className={cn(node.content && "mb-1.5")} />
             )}
             {node.content}
           </div>
           <div className={cn("flex items-center gap-0.5", actionBarCls(inLatestTurn))}>
-            <span className="px-1 text-[13px] text-fg-caption">{formatMessageTime(node.time)}</span>
+            <span className="px-1 text-meta text-fg-caption">{formatMessageTime(node.time)}</span>
             <CopyIconButton text={node.content} />
             {depth !== 0 && <ForkButton sessionId={sessionId} seq={node.seq} />}
           </div>
@@ -98,7 +98,7 @@ export function NodeView({
             <QuestionAnswerList questions={node.questions} answers={node.answers} />
           </div>
           <div className={cn("flex items-center gap-0.5", actionBarCls(inLatestTurn))}>
-            <span className="px-1 text-[13px] text-fg-caption">{formatMessageTime(node.time)}</span>
+            <span className="px-1 text-meta text-fg-caption">{formatMessageTime(node.time)}</span>
           </div>
         </div>
       )
@@ -134,7 +134,7 @@ export function NodeList({
   }, [nodes, grouped])
   if (!grouped) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-5">
         {nodes.map((node) => (
           <NodeView
             key={node.id}
@@ -149,7 +149,7 @@ export function NodeList({
     )
   }
   return (
-    <div className="space-y-2">
+    <div className="space-y-5">
       {grouped.segments.map((seg) => (
         <TurnView key={`turn-${seg.turn}`} segment={seg} sessionId={sessionId} latestTurn={latestTurn} />
       ))}
@@ -169,7 +169,7 @@ export function OptimisticBubble({
 }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[85%] rounded-2xl bg-bubble px-3.5 py-2 text-[15px] text-foreground">
+      <div className="max-w-[85%] rounded-2xl bg-bubble px-4 py-2.5 text-chat text-bubble-foreground">
         {attachments && attachments.length > 0 && (
           <div className={cn("flex flex-wrap gap-1", content && "mb-1.5")}>
             {attachments.map((a, i) => (
@@ -186,7 +186,7 @@ export function OptimisticBubble({
             ))}
           </div>
         )}
-        <span className="whitespace-pre-wrap">{content}</span>
+        <span className="whitespace-pre-wrap break-words">{content}</span>
         <Loader2 className="ml-1.5 inline size-3 animate-spin align-text-bottom text-fg-tertiary" />
       </div>
     </div>

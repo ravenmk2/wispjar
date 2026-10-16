@@ -93,11 +93,11 @@ export default function ChatView() {
   return (
     <div className="flex h-full min-w-0 flex-1">
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <div className="flex h-11 shrink-0 items-center gap-2 border-b px-4">
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
           <Bot className="size-4 shrink-0 text-muted-foreground" />
-          <span className="truncate text-sm font-medium">{header?.title || "新会话"}</span>
+          <span className="truncate text-base font-medium">{header?.title || "新会话"}</span>
           {header?.agentName && (
-            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-meta text-muted-foreground">
               {header.agentName}
             </span>
           )}
@@ -106,7 +106,7 @@ export default function ChatView() {
               type="button"
               onClick={() => setTab("chat")}
               className={cn(
-                "flex items-center gap-1 rounded-sm px-2 py-1 text-xs text-muted-foreground hover:text-foreground",
+                "flex items-center gap-1 rounded-sm px-2 py-1 text-sm text-muted-foreground hover:text-foreground",
                 tab === "chat" && "bg-accent font-medium text-foreground",
               )}
             >
@@ -117,7 +117,7 @@ export default function ChatView() {
               type="button"
               onClick={() => setTab("trajectory")}
               className={cn(
-                "flex items-center gap-1 rounded-sm px-2 py-1 text-xs text-muted-foreground hover:text-foreground",
+                "flex items-center gap-1 rounded-sm px-2 py-1 text-sm text-muted-foreground hover:text-foreground",
                 tab === "trajectory" && "bg-accent font-medium text-foreground",
               )}
             >
@@ -142,7 +142,7 @@ export default function ChatView() {
           </Button>
         </div>
         {followStatus === "connecting" && !header ? (
-          <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
+          <div className="mx-auto w-full max-w-chat flex-1 px-4 py-6">
             <TableSkeleton rows={4} />
           </div>
         ) : tab === "chat" ? (

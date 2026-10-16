@@ -89,7 +89,7 @@ function StatusBadge({ node }: { node: ToolCallNode }) {
   }
   const duration = node.result.meta?.duration_ms
   if (duration !== undefined) {
-    return <span className="shrink-0 text-[11px] text-fg-caption">{(duration / 1000).toFixed(1)}s</span>
+    return <span className="shrink-0 text-meta text-fg-caption">{(duration / 1000).toFixed(1)}s</span>
   }
   return null
 }
@@ -127,15 +127,15 @@ function TerminalBody({ node, liveOutput }: { node: ToolCallNode; liveOutput?: s
             failed ? "bg-destructive" : exitCode === null ? "bg-fg-caption" : "bg-success",
           )}
         />
-        <span className="shrink-0 font-mono text-[13px] text-fg-caption">$</span>
-        <code className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-[13px]">{command}</code>
+        <span className="shrink-0 font-mono text-chat text-fg-caption">$</span>
+        <code className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-chat">{command}</code>
         {node.result?.error && (
-          <span className="shrink-0 text-[11px] text-destructive">失败</span>
+          <span className="shrink-0 text-meta text-destructive">失败</span>
         )}
         {exitCode !== null && (
           <span
             className={cn(
-              "shrink-0 font-mono text-[11px]",
+              "shrink-0 font-mono text-meta",
               exitCode === 0 ? "text-fg-caption" : "text-destructive",
             )}
           >
@@ -148,7 +148,7 @@ function TerminalBody({ node, liveOutput }: { node: ToolCallNode; liveOutput?: s
         <div className="border-t px-3 py-2">
           <pre
             className={cn(
-              "whitespace-pre-wrap break-all font-mono text-[13px] leading-relaxed",
+              "whitespace-pre-wrap break-all font-mono text-chat",
               showAll ? "max-h-96 overflow-auto" : "max-h-60 overflow-hidden",
             )}
           >
@@ -162,7 +162,7 @@ function TerminalBody({ node, liveOutput }: { node: ToolCallNode; liveOutput?: s
             <button
               type="button"
               onClick={() => setShowAll((v) => !v)}
-              className="mt-1 rounded-full bg-muted px-2.5 py-0.5 text-[11px] text-fg-secondary hover:text-foreground"
+              className="mt-1 rounded-full bg-muted px-2.5 py-0.5 text-sm text-fg-secondary hover:text-foreground"
             >
               {showAll ? "收起" : "查看全部"}
             </button>
@@ -179,11 +179,11 @@ function DiffBody({ node }: { node: ToolCallNode }) {
   const diff = node.result?.meta?.diff
   return (
     <div className="rounded-lg bg-muted/50 p-3">
-      {path && <div className="mb-1 font-mono text-xs text-fg-secondary">{path}</div>}
+      {path && <div className="mb-1 font-mono text-chat text-fg-secondary">{path}</div>}
       {diff ? (
         <DiffBlock diff={diff} className="max-h-80 overflow-y-auto bg-background" />
       ) : node.result ? (
-        <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-mono text-xs">
+        <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-mono text-chat">
           {node.result.error ?? node.result.content}
         </pre>
       ) : null}
@@ -197,18 +197,18 @@ function SearchBody({ node }: { node: ToolCallNode }) {
   const lines = (node.result?.content ?? "").split("\n").filter(Boolean)
   return (
     <div className="rounded-lg bg-muted/50 p-3">
-      {query && <div className="mb-1 font-mono text-xs text-fg-secondary">/{query}/</div>}
+      {query && <div className="mb-1 font-mono text-chat text-fg-secondary">/{query}/</div>}
       {node.result ? (
         lines.length > 0 ? (
           <div className="max-h-72 overflow-y-auto rounded-md border bg-background">
             {lines.map((line, i) => (
-              <div key={i} className="border-b px-3 py-1 font-mono text-xs last:border-b-0 hover:bg-accent">
+              <div key={i} className="border-b px-3 py-1 font-mono text-chat last:border-b-0 hover:bg-accent">
                 {line}
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-xs text-fg-secondary">无匹配结果</div>
+          <div className="text-chat text-fg-secondary">无匹配结果</div>
         )
       ) : null}
     </div>
@@ -220,12 +220,12 @@ function ReadBody({ node }: { node: ToolCallNode }) {
   const path = typeof args?.path === "string" ? args.path : undefined
   return (
     <div className="rounded-lg bg-muted/50 p-3">
-      {path && <div className="mb-1 font-mono text-xs text-fg-secondary">{path}</div>}
+      {path && <div className="mb-1 font-mono text-chat text-fg-secondary">{path}</div>}
       {node.result?.attachments && node.result.attachments.length > 0 && (
         <MessageImages attachments={node.result.attachments} className="mb-2" />
       )}
       {node.result && (
-        <pre className="max-h-80 overflow-auto whitespace-pre font-mono text-xs leading-relaxed">
+        <pre className="max-h-80 overflow-auto whitespace-pre font-mono text-chat">
           {node.result.error ?? node.result.content}
         </pre>
       )}
@@ -237,10 +237,10 @@ function GenericBody({ node }: { node: ToolCallNode }) {
   return (
     <div className="space-y-2 rounded-lg bg-muted/50 p-3">
       {node.arguments && (
-        <pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-xs">{node.arguments}</pre>
+        <pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-chat">{node.arguments}</pre>
       )}
       {node.result && (
-        <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-mono text-xs">
+        <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-mono text-chat">
           {node.result.error ?? node.result.content}
         </pre>
       )}
@@ -308,20 +308,20 @@ export function ToolCallCard({
         aria-expanded={expanded}
         title={summary || undefined}
         onClick={() => setOpen(!open)}
-        className="flex h-8 w-full items-center gap-1.5 rounded-md px-1 text-left hover:bg-accent/50"
+        className="flex min-h-9 w-full items-center gap-1.5 rounded-md px-1 text-left hover:bg-accent/50"
       >
         <span className="shrink-0 text-fg-tertiary">{TOOL_ICONS[node.name] ?? <Wrench className="size-3.5" />}</span>
-        <span className="shrink-0 text-[13px] font-medium text-fg-secondary" title={node.name}>
+        <span className="shrink-0 text-chat font-medium text-fg-secondary" title={node.name}>
           {toolDisplayName(node.name)}
         </span>
         {error ? (
-          <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-destructive">
+          <span className="min-w-0 flex-1 truncate font-mono text-chat text-destructive">
             · {error.split("\n")[0]}
           </span>
         ) : summary ? (
           <span
             className={cn(
-              "min-w-0 flex-1 truncate font-mono text-[13px] text-fg-tertiary",
+              "min-w-0 flex-1 truncate font-mono text-chat text-fg-secondary",
               running && "text-shimmer",
             )}
           >
@@ -331,20 +331,20 @@ export function ToolCallCard({
           <span className="flex-1" />
         )}
         {stats && (
-          <span className="shrink-0 font-mono text-[11px]">
+          <span className="shrink-0 font-mono text-meta">
             {stats.added > 0 && <span className="text-success">+{stats.added}</span>}
             {stats.added > 0 && stats.removed > 0 && " "}
             {stats.removed > 0 && <span className="text-destructive">-{stats.removed}</span>}
           </span>
         )}
         {pendingApproval && (
-          <Badge variant="outline" className="shrink-0 gap-1 border-amber-500/50 text-[11px] font-normal text-amber-600 dark:text-amber-400">
+          <Badge variant="outline" className="shrink-0 gap-1 border-amber-500/50 text-meta font-normal text-amber-600 dark:text-amber-400">
             <Loader2 className="size-3 animate-spin" />
             待审批
           </Badge>
         )}
         {pendingQuestion && (
-          <Badge variant="outline" className="shrink-0 gap-1 border-amber-500/50 text-[11px] font-normal text-amber-600 dark:text-amber-400">
+          <Badge variant="outline" className="shrink-0 gap-1 border-amber-500/50 text-meta font-normal text-amber-600 dark:text-amber-400">
             待回答
           </Badge>
         )}
@@ -371,7 +371,7 @@ export function ToolCallCard({
         </div>
       )}
       {!expanded && node.children.length > 0 && (
-        <div className="py-0.5 pl-7 text-[11px] text-fg-caption">{node.children.length} 条嵌套轨迹</div>
+        <div className="py-0.5 pl-7 text-meta text-fg-caption">{node.children.length} 条嵌套轨迹</div>
       )}
     </div>
   )

@@ -36,7 +36,7 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
     <div data-process-group={group.id}>
       <button type="button" onClick={() => setOpen(!expanded)} disabled={group.hasPending}
         aria-expanded={expanded} aria-label={`${expanded ? "收起" : "展开"}${label}${detail ? ` · ${detail}` : ""}`}
-        className="flex h-8 w-full items-center gap-1.5 rounded-md px-1 text-left text-[13px] text-fg-tertiary hover:bg-accent/50 disabled:cursor-default">
+        className="flex min-h-9 w-full items-center gap-1.5 rounded-md px-1 text-left text-chat text-fg-secondary hover:bg-accent/50 disabled:cursor-default">
         {expanded ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
         <span className={cn("shrink-0", active && "text-shimmer", group.hasError && "text-destructive")}>{label}</span>
         {detail && <>

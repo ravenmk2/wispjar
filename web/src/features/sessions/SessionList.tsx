@@ -144,11 +144,11 @@ export function SessionList() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索会话"
-          className="h-7 pl-7 text-xs"
+          className="h-9 pl-8 text-sm"
         />
       </div>
       {items.length === 0 ? (
-        <div className="px-2 py-1 text-xs text-muted-foreground">
+        <div className="px-2 py-1 text-sm text-muted-foreground">
           {searchResults ? "没有匹配的会话" : "暂无会话"}
         </div>
       ) : (
@@ -236,7 +236,7 @@ function SessionRow({
           <NavLink
             to={`/c/${item.id}`}
             className={cn(
-              "flex h-8 items-center gap-2 rounded-lg px-2 pr-7 text-sm text-foreground hover:bg-accent",
+              "flex h-9 items-center gap-2 rounded-lg px-2 pr-7 text-sm leading-[22px] text-foreground hover:bg-accent",
               active && "bg-selected font-medium",
             )}
           >
@@ -251,7 +251,7 @@ function SessionRow({
               )}
             />
             <span className="min-w-0 flex-1 truncate">{item.title || "新会话"}</span>
-            <span className="shrink-0 text-[11px] text-fg-caption group-hover:opacity-0">
+            <span className="shrink-0 text-meta text-fg-caption group-hover:opacity-0">
               {formatCompactTime(item.lastActiveAt)}
             </span>
           </NavLink>
