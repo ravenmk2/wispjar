@@ -37,6 +37,7 @@ export function CopyIconButton({
       <TooltipTrigger asChild>
         <button
           type="button"
+          aria-label={copied ? "已复制" : tooltip}
           onClick={(e) => void copy(e)}
           className={cn(
             "flex size-7 shrink-0 items-center justify-center rounded-md text-fg-tertiary transition-colors hover:bg-accent hover:text-foreground",

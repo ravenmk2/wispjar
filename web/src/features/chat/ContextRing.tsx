@@ -146,7 +146,7 @@ export function ContextRing({ contextSize }: { contextSize?: number }) {
         )}
         <div className="my-2.5 border-t border-border/50" />
         <div className="space-y-1.5 text-xs">
-          <StatRow label="对话" value={`${stats.rounds} 轮 · ${stats.steps} 步`} />
+          <StatRow label="聊天" value={`${stats.rounds} 轮 · ${stats.steps} 步`} />
           <StatRow label="累计 tokens" value={formatCompactNumber(stats.tokens)} />
           <StatRow
             label="缓存命中"

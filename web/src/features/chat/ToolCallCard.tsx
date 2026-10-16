@@ -11,9 +11,9 @@ import {
   Search,
   SquareTerminal,
   Wrench,
-  XCircle,
+  X,
 } from "lucide-react"
-import { useState, type ReactNode } from "react"
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
 import { CopyIconButton } from "@/components/CopyIconButton"
 import { DiffBlock } from "@/components/Markdown"
@@ -23,6 +23,7 @@ import { QuestionAnswerList } from "@/features/chat/QuestionCard"
 import { safeParseJson } from "@/lib/format"
 import { isQuestionTool, toolDisplayName } from "@/lib/tool-names"
 import { hasPendingApproval } from "@/lib/turn-grouping"
+import { execOutput, toolCancelled, toolFailure, type ToolOutput } from "@/lib/tool-output"
 import { cn } from "@/lib/utils"
 import { useChatDisclosure } from "@/stores/chatPresentation"
 import type { ToolCallNode } from "@/lib/conversation"
@@ -73,19 +74,15 @@ function diffStats(diff?: string): { added: number; removed: number } | null {
 }
 
 function StatusBadge({ node }: { node: ToolCallNode }) {
-  if (node.result?.error) {
-    return <XCircle className="size-3.5 shrink-0 text-destructive" aria-label="失败" />
+  if (toolCancelled(node) || (!node.result && node.endReason)) {
+    return <span className="shrink-0 text-meta text-fg-caption">已中止</span>
+  }
+  const failure = toolFailure(node)
+  if (failure) {
+    return <span className="shrink-0" title={`调用失败 · ${failure}`}><X className="size-3.5 text-destructive" strokeWidth={2.5} aria-label={`调用失败 · ${failure}`} /></span>
   }
   if (!node.result) {
     return <Loader2 className="size-3.5 shrink-0 animate-spin text-fg-tertiary" />
-  }
-  // exec：退出码非 0 时折叠行只标红色小叉，具体 exit code 看展开详情
-  if (node.name === "exec") {
-    const parsed = safeParseJson(node.result.content)
-    const code = typeof parsed?.exit_code === "number" ? parsed.exit_code : null
-    if (code !== null && code !== 0) {
-      return <XCircle className="size-3.5 shrink-0 text-destructive" aria-label={`exit ${code}`} />
-    }
   }
   const duration = node.result.meta?.duration_ms
   if (duration !== undefined) {
@@ -94,81 +91,71 @@ function StatusBadge({ node }: { node: ToolCallNode }) {
   return null
 }
 
-const TRUNCATE_AT = 2000
+function TerminalSection({ label, content, running = false }: { label: string; content: string; running?: boolean }) {
+  const [expanded, setExpanded] = useState(false)
+  const [overflowing, setOverflowing] = useState(false)
+  const bodyRef = useRef<HTMLPreElement>(null)
+  const followRef = useRef(true)
+  useLayoutEffect(() => {
+    const el = bodyRef.current
+    if (!el) return
+    const measure = () => {
+      setOverflowing(el.scrollHeight > el.clientHeight)
+      if (running && followRef.current) el.scrollTop = el.scrollHeight
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [content, expanded, running])
+  return (
+    <div className="border-t px-3 py-2">
+      <div className="mb-1 flex items-center justify-between gap-2 text-meta text-fg-caption">
+        <span>{label}</span>
+        <CopyIconButton text={content} tooltip={`复制${label}`} className="size-6" />
+      </div>
+      <pre ref={bodyRef} onScroll={() => {
+        const el = bodyRef.current
+        if (el && expanded) followRef.current = el.scrollHeight - el.clientHeight - el.scrollTop < 24
+      }} className={cn("overflow-x-auto whitespace-pre font-mono text-chat text-foreground", expanded ? "max-h-96 overflow-y-auto" : "max-h-[calc(8*var(--chat-line-height))] overflow-y-hidden")}>
+        {content}
+      </pre>
+      {(overflowing || expanded) && <button type="button" aria-expanded={expanded} onClick={() => {
+        setExpanded((value) => !value)
+        followRef.current = true
+      }} className="mt-2 rounded px-1 text-meta text-fg-secondary hover:bg-accent hover:text-foreground">
+        {expanded ? "收起" : "展开全部"}
+      </button>}
+    </div>
+  )
+}
 
-function TerminalBody({ node, liveOutput }: { node: ToolCallNode; liveOutput?: string }) {
-  const [showAll, setShowAll] = useState(false)
+function TerminalBody({ node, liveOutput }: { node: ToolCallNode; liveOutput?: ToolOutput }) {
   const args = safeParseJson(node.arguments)
   const command = typeof args?.command === "string" ? args.command : node.arguments
-  let stdout = ""
-  let stderr = ""
-  let exitCode: number | null = null
-  if (node.result) {
-    const parsed = safeParseJson(node.result.content)
-    if (parsed && ("stdout" in parsed || "exit_code" in parsed)) {
-      stdout = typeof parsed.stdout === "string" ? parsed.stdout : ""
-      stderr = typeof parsed.stderr === "string" ? parsed.stderr : ""
-      exitCode = typeof parsed.exit_code === "number" ? parsed.exit_code : null
-    } else {
-      stdout = node.result.error ?? node.result.content
-    }
-  } else if (liveOutput) {
-    stdout = liveOutput
-  }
-  const truncated = !showAll && stdout.length > TRUNCATE_AT
-  const visibleStdout = truncated ? stdout.slice(0, TRUNCATE_AT) : stdout
-  const failed = !!node.result?.error || (exitCode !== null && exitCode !== 0)
+  const cwd = typeof args?.cwd === "string" && args.cwd ? args.cwd : "/workspace"
+  const output = execOutput(node.result, liveOutput)
+  const running = !node.result && !node.endReason
+  const cancelled = toolCancelled(node) || (!node.result && !!node.endReason)
+  const failure = toolFailure(node)
+  const duration = node.result?.meta?.duration_ms
   return (
-    <div className="overflow-hidden rounded-lg bg-muted/50">
-      <div className="flex items-center gap-2 px-3 py-2">
-        <span
-          className={cn(
-            "size-1.5 shrink-0 rounded-full",
-            failed ? "bg-destructive" : exitCode === null ? "bg-fg-caption" : "bg-success",
-          )}
-        />
-        <span className="shrink-0 font-mono text-chat text-fg-caption">$</span>
-        <code className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-chat">{command}</code>
-        {node.result?.error && (
-          <span className="shrink-0 text-meta text-destructive">失败</span>
-        )}
-        {exitCode !== null && (
-          <span
-            className={cn(
-              "shrink-0 font-mono text-meta",
-              exitCode === 0 ? "text-fg-caption" : "text-destructive",
-            )}
-          >
-            exit {exitCode}
-          </span>
-        )}
-        <CopyIconButton text={command} />
+    <div className="min-w-0 overflow-hidden rounded-lg bg-muted/50">
+      <div className="flex min-w-0 items-center gap-2 px-3 py-2 text-meta text-fg-caption">
+        <span className="min-w-0 flex-1 truncate font-mono" title={cwd}>{cwd}</span>
+        {duration !== undefined && <span className="shrink-0 tabular-nums">{(duration / 1000).toFixed(1)}s</span>}
+        {duration !== undefined && output.exitCode !== null && <span>·</span>}
+        {output.exitCode !== null && <span className="shrink-0 font-mono">exit {output.exitCode}</span>}
+        {running && <span className="shrink-0">运行中</span>}
+        {cancelled && <span className="shrink-0">已中止</span>}
+        {failure && <X className="size-3.5 shrink-0 text-destructive" strokeWidth={2.5} aria-label="执行失败" />}
       </div>
-      {(stdout || stderr || !node.result) && (
-        <div className="border-t px-3 py-2">
-          <pre
-            className={cn(
-              "whitespace-pre-wrap break-all font-mono text-chat",
-              showAll ? "max-h-96 overflow-auto" : "max-h-60 overflow-hidden",
-            )}
-          >
-            {visibleStdout}
-            {stderr && <span className="text-destructive">{stderr}</span>}
-            {!node.result && (
-              <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-fg-tertiary align-text-bottom" />
-            )}
-          </pre>
-          {stdout.length > TRUNCATE_AT && (
-            <button
-              type="button"
-              onClick={() => setShowAll((v) => !v)}
-              className="mt-1 rounded-full bg-muted px-2.5 py-0.5 text-sm text-fg-secondary hover:text-foreground"
-            >
-              {showAll ? "收起" : "查看全部"}
-            </button>
-          )}
-        </div>
-      )}
+      <TerminalSection label="命令" content={command} />
+      {output.stdout && <TerminalSection label="stdout" content={output.stdout} running={running} />}
+      {output.stderr && <TerminalSection label="stderr" content={output.stderr} running={running} />}
+      {output.error && <TerminalSection label={cancelled ? "中止信息" : "错误详情"} content={output.error} />}
+      {!output.stdout && !output.stderr && !output.error && !cancelled && <div className="border-t px-3 py-2 text-meta text-fg-caption">{running ? "等待输出…" : "无输出"}</div>}
+      {output.truncated && <div className="border-t px-3 py-2 text-meta text-fg-caption">输出已达到服务端保留上限，早期内容已截断</div>}
     </div>
   )
 }
@@ -270,18 +257,17 @@ export function ToolCallCard({
 }: {
   node: ToolCallNode
   sessionId: string
-  liveOutput?: string
+  liveOutput?: ToolOutput
   depth?: number
 }) {
   const isTask = node.name === "task"
   const isQuestion = isQuestionTool(node.name) && !!node.question
   const render = node.result?.meta?.render ?? defaultRender(node.name)
   const [open, setOpen] = useChatDisclosure(sessionId, `tool-${node.callId}`)
-  const pendingApproval = hasPendingApproval(node.children)
-  const pendingQuestion = !!node.question && !node.question.answers
+  const pendingApproval = !node.endReason && hasPendingApproval(node.children)
+  const pendingQuestion = !node.endReason && !!node.question && !node.question.answers
   const expanded = open || pendingApproval || pendingQuestion
-  const running = !node.result
-  const error = node.result?.error
+  const running = !node.result && !node.endReason
   const args = safeParseJson(node.arguments)
   const taskTarget =
     isTask && args
@@ -314,11 +300,7 @@ export function ToolCallCard({
         <span className="shrink-0 text-chat font-medium text-fg-secondary" title={node.name}>
           {toolDisplayName(node.name)}
         </span>
-        {error ? (
-          <span className="min-w-0 flex-1 truncate font-mono text-chat text-destructive">
-            · {error.split("\n")[0]}
-          </span>
-        ) : summary ? (
+        {summary ? (
           <span
             className={cn(
               "min-w-0 flex-1 truncate font-mono text-chat text-fg-secondary",

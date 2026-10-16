@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { mux } from "@/mux/connection"
 import { router } from "@/routes"
 import { useIdentityStore } from "@/stores/identity"
+import { useAutoHideScrollbars } from "@/hooks/useAutoHideScrollbars"
 
 function useMuxLifecycle() {
   useEffect(() => {
@@ -19,6 +20,7 @@ function useMuxLifecycle() {
 
 export default function App() {
   useMuxLifecycle()
+  useAutoHideScrollbars()
   return (
     <TooltipProvider delayDuration={300}>
       <RouterProvider router={router} />

@@ -25,9 +25,9 @@ interface LoadError {
 
 function toLoadError(e: unknown): LoadError {
   if (e instanceof ApiError && (e.status === 403 || e.status === 404)) {
-    return { title: "会话不存在或无权访问", description: "该会话可能已被删除，或不属于当前账号。" }
+    return { title: "聊天不存在或无权访问", description: "该聊天可能已被删除，或不属于当前账号。" }
   }
-  return { title: "会话加载失败", description: errorMessage(e) }
+  return { title: "聊天加载失败", description: errorMessage(e) }
 }
 
 export default function ChatView() {
@@ -95,7 +95,7 @@ export default function ChatView() {
       <div className="flex h-full min-w-0 flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
           <Bot className="size-4 shrink-0 text-muted-foreground" />
-          <span className="truncate text-base font-medium">{header?.title || "新会话"}</span>
+          <span className="truncate text-base font-medium">{header?.title || "新聊天"}</span>
           {header?.agentName && (
             <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-meta text-muted-foreground">
               {header.agentName}

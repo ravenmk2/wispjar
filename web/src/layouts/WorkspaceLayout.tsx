@@ -81,7 +81,7 @@ export default function WorkspaceLayout() {
               <div className="px-3">
                 <div className="mb-2 flex items-center gap-2 px-1 text-sm leading-[22px] font-medium text-muted-foreground">
                   <MessagesSquare className="size-4" />
-                  会话
+                  聊天
                 </div>
                 <SessionList />
               </div>

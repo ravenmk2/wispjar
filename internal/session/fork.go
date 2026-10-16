@@ -82,7 +82,7 @@ func planFork(src *store.Session, events []store.SessionEvent, atSeq int64, newI
 }
 
 func forkTitle(title string) string {
-	const suffix = "（分叉）"
+	const suffix = "（副本）"
 	const maxRunes = 256
 	if utf8.RuneCountInString(title)+utf8.RuneCountInString(suffix) <= maxRunes {
 		return title + suffix

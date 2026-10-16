@@ -1,4 +1,4 @@
-import { Archive, GitFork, MoreHorizontal, Pencil, Search, Trash2 } from "lucide-react"
+import { Archive, CopyPlus, MoreHorizontal, Pencil, Search, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { NavLink, useNavigate, useParams } from "react-router"
 import { toast } from "sonner"
@@ -114,7 +114,7 @@ export function SessionList() {
     try {
       const { last_seq } = await sessionsApi.events(item.id, Number.MAX_SAFE_INTEGER)
       const res = await sessionsApi.fork(item.id, last_seq)
-      toast.success("已创建分叉会话")
+      toast.success("已创建聊天副本")
       navigate(`/c/${res.id}`)
     } catch (e) {
       toast.error(errorMessage(e))
@@ -143,13 +143,13 @@ export function SessionList() {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索会话"
+          placeholder="搜索聊天"
           className="h-9 pl-8 text-sm"
         />
       </div>
       {items.length === 0 ? (
         <div className="px-2 py-1 text-sm text-muted-foreground">
-          {searchResults ? "没有匹配的会话" : "暂无会话"}
+          {searchResults ? "没有匹配的聊天" : "暂无聊天"}
         </div>
       ) : (
         <div className="space-y-0.5 px-1">
@@ -173,12 +173,12 @@ export function SessionList() {
       <Dialog open={renameTarget !== null} onOpenChange={(open) => !open && setRenameTarget(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>重命名会话</DialogTitle>
+            <DialogTitle>重命名聊天</DialogTitle>
           </DialogHeader>
           <Input
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
-            placeholder="会话标题"
+            placeholder="聊天标题"
             onKeyDown={(e) => {
               if (e.key === "Enter") void rename()
             }}
@@ -194,8 +194,8 @@ export function SessionList() {
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="删除会话"
-        description={`确定删除「${deleteTarget?.title || "新会话"}」吗？删除后不可恢复。`}
+        title="删除聊天"
+        description={`确定删除「${deleteTarget?.title || "新聊天"}」吗？删除后不可恢复。`}
         confirmText="删除"
         destructive
         loading={acting}
@@ -221,7 +221,7 @@ function SessionRow({
   onDelete: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  // 待审批/待回答只能由 follow 中的会话事件推导（control 投影不含 pending 字段），故仅活动会话可见
+  // 待审批/待回答只能由 follow 中的聊天事件推导（control 投影不含 pending 字段），故仅活动聊天可见
   const pending = useSessionStore((s) => {
     if (!active) return null
     if (Object.values(s.pendingApprovals).some((a) => !a.parentCallId)) return "approval" as const
@@ -250,14 +250,14 @@ function SessionRow({
                     : "bg-transparent",
               )}
             />
-            <span className="min-w-0 flex-1 truncate">{item.title || "新会话"}</span>
+            <span className="min-w-0 flex-1 truncate">{item.title || "新聊天"}</span>
             <span className="shrink-0 text-meta text-fg-caption group-hover:opacity-0">
               {formatCompactTime(item.lastActiveAt)}
             </span>
           </NavLink>
         </HoverCardTrigger>
         <HoverCardContent side="right" sideOffset={8}>
-          <div className="text-[13px] font-medium leading-5">{item.title || "新会话"}</div>
+          <div className="text-[13px] font-medium leading-5">{item.title || "新聊天"}</div>
           <div className="mt-1 text-white/60">{formatCompactTime(item.lastActiveAt)}</div>
           <div className="mt-1.5 flex items-center gap-1.5 text-white/80">
             <span
@@ -289,16 +289,16 @@ function SessionRow({
             重命名
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onFork}>
-            <GitFork className="size-3.5" />
-            分叉会话
+            <CopyPlus className="size-3.5" />
+            创建聊天副本
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onArchive}>
             <Archive className="size-3.5" />
-            归档会话
+            归档聊天
           </DropdownMenuItem>
           <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={onDelete}>
             <Trash2 className="size-3.5" />
-            删除会话
+            删除聊天
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

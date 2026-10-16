@@ -85,7 +85,7 @@ useIdentityStore   // { user, orgs, currentOrgId, setOrg() }
 useSessionListStore// { sessions: Record<id, SessionProjection>, order: id[], applyBaseline/applyUpsert/remove }
 useSessionStore    // 当前会话窗口：
                    // { header, events: SessionEvent[], liveAttempt?: { chunks, nextIndex },
-                   //   pendingApprovals: Record<callId, ApprovalAsked>, toolOutputs: Record<callId, string>,
+                   //   pendingApprovals: Record<callId, ApprovalAsked>, toolOutputs: Record<callId, { stdout, stderr }>,
                    //   followStatus: "connecting"|"live"|"stalled" }
 useComposerStore   // { draft, approvalMode, sending, optimistic?: { requestId, content } }
 useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程组 / 思考 / 工具详情；纯展示状态
@@ -98,27 +98,27 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 ### 6.1 消息流
 
 - **user**：右置浅蓝气泡（`bg-bubble` 浅 #E8F2FF / 深 #1D4077，配套 `text-bubble-foreground`，max-w 85%）；下方操作条：时间戳 + 复制。操作条最新一轮常驻，更早轮次 hover/focus-within 浮现（无 hover 设备常显）。
-- **Turn 折叠**：用户消息始终可见；其后顶部耗时行作为整轮开关，完成态为"已工作 X"，运行态为"工作中 · 用时 X"，停止/失败态保留状态与耗时。最新 Turn 默认展开，完成不自动收起；下一条用户消息成功写入事件流后，上一轮按历史 Turn 默认收起。历史轮收起只展示最终回复及操作条；用户手动展开的轮次不被默认规则覆盖。切换聊天/轨迹、重连保留手动状态，切换会话或刷新恢复默认。无起始事件的历史片段不猜测耗时；中断/失败以最后一条正文兜底，缺少正文时展示结束状态。
-- **过程组**：展开 Turn 后，全部回复正文按原序可见；正文之间连续的思考、工具与审批归入一个过程组，正文（包括同条助手消息里的正文块）切开过程组。混合组显示"思考与行动 · N 次工具调用"，纯工具组为"工具调用 · N 次"，单个思考直接复用思考折叠行，避免多一层开关。组默认收起，出错默认展开；待处理审批/提问强制展开所属整轮、过程组与任务卡。运行中收起行显示当前活动或最新思考尾部摘要；工具计数不递归计算子任务。整轮、过程组、思考与工具详情的手动状态独立保存。
-- **assistant**：Markdown 流式渲染（结尾光标闪烁）；`reasoning` 默认收起单行，完成后为"✦ 思考 · 用时X"（时长取服务端 `durationMs`，缺省时仅显示"思考"）。未完成时显示"思考中"并 shimmer：收起状态只展示最新文本末尾、从左侧省略；展开状态最大高度 18rem、内部吸底跟随，用户上滚后暂停，回到底部恢复。正文/工具块出现后停止 shimmer。仅最终回复展示复制 / 分叉 / token / 时间戳操作条，显隐规则同用户气泡；usage 徽标（`↑in ↓out`，hover 展开 cached/reasoning 明细）；`interrupted` 标记"已停止"。
+- **Turn 折叠**：用户消息始终可见；其后顶部耗时行作为整轮开关，完成态为"已工作 X"，运行态为"工作中 · X"，停止/失败态为"已停止 · X"／"运行出错 · X"。箭头紧跟文字右侧，不对齐内容区右边缘；仅运行中使用高对比度黑白灰扫光，完成后静态。最新 Turn 默认展开，完成不自动收起；下一条用户消息成功写入事件流后，上一轮按历史 Turn 默认收起，保留其结束状态与耗时。输入草稿不改变历史状态，新轮成功也不覆盖旧轮。历史轮收起只展示最终回复及操作条；用户手动展开的轮次不被默认规则覆盖。切换聊天/轨迹、重连保留手动状态，切换会话或刷新恢复默认。无起始事件的历史片段不猜测耗时；中断/失败以最后一条正文兜底，缺少正文时仅保留顶部状态。失败行以小红叉局部提示，原始错误默认隐藏，点击"查看详情"展开中性色详情及复制入口，随整轮收起；不在底部重复展示报错、停止徽标或分隔提示。
+- **过程组**：展开 Turn 后，全部回复正文按原序可见；正文之间连续的思考、工具与审批归入一个过程组，正文（包括同条助手消息里的正文块）切开过程组。混合组显示"思考与行动 · N 次工具调用"，纯工具组为"工具调用 · N 次"，箭头紧跟文字右侧；单个思考直接复用思考折叠行，避免多一层开关。组默认收起，出错默认展开，标题保持普通颜色；待处理审批/提问强制展开所属整轮、过程组与任务卡。仅收起时显示当前活动或最新思考尾部摘要，展开后恢复稳定标题与工具计数；工具计数不递归计算子任务。整轮、过程组、思考与工具详情的手动状态独立保存。
+- **assistant**：Markdown 流式渲染（结尾光标闪烁）；`reasoning` 默认收起单行，完成后为"✦ 思考 · X"（时长取服务端 `durationMs`，缺省时仅显示"思考"）。未完成时显示"思考中"并使用黑白灰 shimmer：收起状态只展示最新文本末尾、从左侧省略；展开后不重复摘要，正文最大高度 18rem、内部吸底跟随，用户上滚后暂停，回到底部恢复。正文/工具块出现或所属 Turn 结束后停止 shimmer。仅最终回复展示复制 / 从这里开始新聊天 / token / 时间戳操作条，显隐规则同用户气泡；usage 徽标（`↑in ↓out`，hover 展开 cached/reasoning 明细）；顶层停止状态集中于 Turn 标题，嵌套轨迹保留 `interrupted` 徽标。
 - **ToolCallCard**：默认折叠单行（工具图标 + 中文显示名（exec→执行 / read→读取 / write→写入 / edit→编辑 / glob→查找 / grep→搜索 / read_media→查看 / skill→技能 / task→任务 / question→提问，英文原名入 tooltip）+ 参数摘要；运行中摘要 shimmer、失败显示红色小叉图标（exit code 等细节留在展开态）；write/edit 有 diff 数据显示 +N -M），点击展开灰底卡，内容按 `tool/result.meta.render` 或 live 工具名映射：
   | render | 工具 | 展开内容 |
   |---|---|---|
-  | terminal | exec | 灰卡：`$命令` 头（状态点按退出码绿/红）+ exit 码徽标 + 复制；stdout/stderr 滚动（live 期间接 tool-output 帧），超 2000 字截断"查看全部" |
+  | terminal | exec | 首行 cwd（缺省 `/workspace`，长路径省略并提供 tooltip）+ 耗时 + exit code／运行状态；下方命令代码区、stdout、stderr 上下分区，各自复制，保留多行命令换行缩进，长行横向滚动；仅渲染非空输出区，stderr 使用普通文字颜色。超过可见高度提供"展开全部"及区内滚动，不再按前端字符数截断；服务端截断另行提示。实时输出保留 stream 分流，完成后由持久结果接管 |
   | diff | write/edit | 文件路径头 + unified diff 着色（新增绿/删除红） |
   | search | glob/grep | 查询词头 + 结果列表（path:line） |
   | read | read/read_media | 路径头 + 内容代码块（read_media 附带 `attachments` 引用时渲染图片缩略图，经附件 objectURL 通道加载） |
   | generic | skill/task | 参数 + 结果等宽文本 |
 - **task 子轨迹**：task 卡折叠行显示"委派给 {subagent}：任务摘要"，收起时附"N 条嵌套轨迹"；展开后渲染 `parent_call_id` 相同的嵌套事件序列（递归用同一套节点渲染，层级缩进 + 左侧竖线）。
 - **技能**：`skill` 与旧名 `activate_skill` 的摘要从参数 `name` 提取，统一显示"技能 · 名称"，较长名称截断，悬停可查看完整名称。
-- **过程结束态**：运行摘要以所属 Turn 是否结束为准；已停止或失败的 Turn 即使存在未返回结果的工具，过程组也恢复静态摘要，不继续显示"正在执行"等活动文案。
+- **过程结束态**：运行摘要以所属 Turn 是否结束为准；Turn 结束后停止思考、正文与未返回结果工具的动画，未完成工具显示灰色"已中止"，覆盖子任务。失败调用保留普通命令／参数摘要，右侧无圆圈小红叉提示，具体错误展开查看；取消引起的错误显示中止状态。
 - **审批**：顶层待审批不在消息流渲染小卡，由 composer 位的 ApprovalTakeover 接管（见 §6.2）；嵌套子智能体审批（task 卡内）保持消息流内嵌小卡：工具名 + 参数展示（exec 命令高亮 / write/edit 显示 diff）+ 「允许」「拒绝」按钮 + 10 分钟倒计时。已 decided 或 auto-deny 的审批显示结果态一行。点击调 REST 或 uplink（实现任选，协议等价）。
-- **消息分叉**（M4）：助手消息操作条与嵌套用户消息操作条内有分叉按钮（GitFork 图标，tooltip "从这条消息分叉出新会话"）；点击调 `POST /sessions/{id}/fork {at_seq}`，成功后跳转新会话（标题自动带"（分叉）"）。侧栏会话行菜单另有"分叉会话"（从末尾分叉）。
+- **聊天副本**（M4）：助手消息操作条与嵌套用户消息操作条内使用 CopyPlus 图标，tooltip／无障碍名称为"从这里开始新聊天"；点击调 `POST /sessions/{id}/fork {at_seq}`，复制截至当前事件的记录，成功提示"已创建聊天副本"并跳转新聊天（标题自动带"（副本）"）。侧栏菜单使用"创建聊天副本"（复制到末尾）。接口及代码中的 fork 名称保留。
 - **滚动与流式指示**：自己刚发消息或已在底部时吸底跟随新内容；上翻阅读时不拉底；离底出"回到底部"浮钮。手动整轮展开/收起保持顶部开关所在位置；运行计时在 Turn 顶部原位更新，列表底部不重复显示。
 
 ### 6.2 Composer（输入区）
 
-- 胶囊卡（rounded-[28px]、柔和投影）：多行输入自适应长高，约 14 行封顶后内部滚动；Enter 发送 / Shift+Enter 换行；右下角 34px 蓝圆发送钮，会话 running 且无草稿时变为**停止**（POST cancel）。
+- 胶囊卡（rounded-[28px]、柔和投影）：聚焦仅轻微加深中性阴影，不展示蓝色边框／光晕；深色主题适度增强灰色边缘。多行输入自适应长高，约 14 行封顶后内部滚动；Enter 发送 / Shift+Enter 换行；右下角 34px 蓝圆发送钮，会话 running 且无草稿时变为**停止**（POST cancel）。
 - 底行左侧：确认模式 chip 下拉（`严格：全部确认 / 默认：仅命令确认 / 自动：全部放行`，盾牌图标 + 描述，当前项加粗 + ✓）→ PATCH session。
 - 底行右侧同一行依次展示：上下文环形进度条（ContextRing，见下）、模型下拉、推理等级下拉。两个下拉独立选择，无需进入二级菜单；模型列表取 `/orgs/{org}/models`，按供应商分组，模型数 >4 时顶部出搜索框。推理等级仅展示当前模型声明的档位，固定按 `none/minimal/low/medium/high/xhigh/max` 排列；不支持选档或会话已锁档时禁用等级下拉，模型仍沿用原有切换规则。
 - 新对话草稿阶段允许选择推理等级：未选择时展示模型默认档（未配置则显示“默认”），显式选择仅保存在当前草稿本地状态，不发会话 PATCH；未配置模型默认档时，选择其它档位后仍可切回“默认”，清除本地选档，首条消息创建请求不带 `reasoning_effort`。显式选档则随 POST 创建会话一起提交，创建失败保留选择，切换智能体草稿后重置。草稿阶段切换模型与审批模式仍不可用；正式会话切回默认用 PATCH `reasoning_effort: ""`，沿用 `last_seq > 0` 锁档规则。
@@ -149,7 +149,7 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 - 宽度 280px，背景 `bg-sidebar`（亮 #F8F8F8 / 暗 #1D1D1D）；支持折叠为 48px 窄栏（顶部展开按钮 + 底部头像 icon 变体用户菜单），折叠状态持久化 localStorage `wispjar-sidebar-collapsed`。工作台无全局顶栏——机构切换与用户菜单均收进侧栏，主内容区全高。
 - 顶部：品牌行（Wispjar）→ 机构切换器行（variant=sidebar：全宽行，建筑图标 + 机构名 + ChevronsUpDown；下拉展示 `auth/me` 的 orgs，平台机构标注"平台"，选中且角色 admin 时可导航进 `/platform/*`）。
 - 智能体列表（AgentPicker）：本机构 published 智能体；点击 → 跳转 `/c/new?agent=<id>` 草稿页（不立即创建会话），首条消息发送时才 POST 创建会话并紧接发 prompt，成功后 replace 跳 `/c/<id>`；创建失败停留在草稿页且输入内容不丢。工作区首页智能体卡片行为相同。
-- 会话列表：搜索框（防抖调 REST）+ 行项：标题（自动生成中显示"新会话"）、running 呼吸点、紧凑相对时间（刚刚/N分/N时/N天/M月D日）；hover 浮现 "…" 菜单：重命名 / 分叉会话 / 归档 / 删除（删除需确认对话框）；悬停出深色 HoverCard（标题 / 时间 / 运行状态）。数据源 `control` 流投影。当前会话选中态 `bg-selected`。
+- 聊天列表：搜索框（防抖调 REST，"搜索聊天"）+ 行项：标题（自动生成中显示"新聊天"）、running 呼吸点、紧凑相对时间（刚刚/N分/N时/N天/M月D日）；hover 浮现 "…" 菜单：重命名 / 创建聊天副本 / 归档 / 删除（删除需确认对话框）；悬停出深色 HoverCard（标题 / 时间 / 运行状态）。数据源 `control` 流投影。当前聊天选中态 `bg-selected`。界面可见文案统一称"聊天"；技术领域与 API 保留 session／会话命名。HTML 文档标题为 `WispJar`。
 - 底部：机构管理（admin 可见）、平台管理（超管可见）链接 + 用户菜单行（variant=sidebar：avatar + 显示名 + ChevronsUpDown，dropdown 向上弹出；外观（浅色/深色/跟随系统）/修改密码/退出登录）。机构/平台管理页（SecondaryLayout）保留自身页头（返回工作区 + 标题 + header 变体的机构切换与用户菜单）。
 
 ## 8. 智能体编辑器（features/admin/AgentEditor）
@@ -176,6 +176,8 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 - **Audit**：时间倒序表格（操作者/action/target/时间，detail 展开 JSON）。
 
 ## 10. 视觉与体验基线
+
+- 侧栏、主内容区及思考／工具等原生滚动区域：细灰色滚动条，滚动时出现，停滚 500ms 后以 150ms 淡出；悬停滚动条边缘或拖动时持续可见，预留稳定 gutter，显隐不造成内容横向跳动。减少动态效果模式停用扫光与淡出过渡。
 
 - 主题：浅色默认 + 深色/跟随系统（Tailwind `class` 策略，localStorage `wispjar-theme`）。`primary` 浅 #3A83F7 / 深 #2C67C5，白色按钮内容；链接单独使用 `text-link`（浅 #2C67C5 / 深 #83B5FF）。完整语义色与变量格式见 docs/design/theme.md。
 - 背景：主区白 / #181818，侧栏 #F8F8F8 / #1D1D1D，输入框独立 `bg-composer` 白 / #363636；用户消息为蓝色气泡并配套独立前景色。

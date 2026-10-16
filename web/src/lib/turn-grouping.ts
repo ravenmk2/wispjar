@@ -1,4 +1,5 @@
 import type { AssistantNode, BoundaryNode, ConversationNode, QuestionReplyNode, UserNode } from "@/lib/conversation"
+import { toolFailure } from "./tool-output"
 
 export interface ProcessGroup {
   kind: "process"
@@ -33,13 +34,7 @@ export function hasPendingApproval(nodes: ConversationNode[]): boolean {
 export function hasProcessError(nodes: ConversationNode[]): boolean {
   return nodes.some((n) => {
     if (n.kind === "tool-call") {
-      if (n.result?.error || hasProcessError(n.children)) return true
-      if (n.name === "exec" && n.result) {
-        try {
-          const code = JSON.parse(n.result.content).exit_code
-          return typeof code === "number" && code !== 0
-        } catch { return false }
-      }
+      if (toolFailure(n) || hasProcessError(n.children)) return true
     }
     return n.kind === "boundary" && n.phase === "end" && n.reason === "failed"
   })
@@ -90,7 +85,7 @@ export function groupByTurn(nodes: ConversationNode[]): { segments: TurnSegment[
     for (const part of seg.parts) {
       if (part.kind !== "process") continue
       part.running = !seg.end
-      part.hasPending = hasPendingApproval(part.nodes)
+      part.hasPending = !seg.end && hasPendingApproval(part.nodes)
       part.hasError = hasProcessError(part.nodes)
       seg.hasPendingApproval ||= part.hasPending
     }

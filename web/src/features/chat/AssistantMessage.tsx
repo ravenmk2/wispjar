@@ -60,8 +60,8 @@ export function ReasoningBlock({
     const el = bodyRef.current
     if (el && open && streaming && followRef.current) el.scrollTop = el.scrollHeight
   }, [text, open, streaming])
-  const detail = streaming && !open ? reasoningTail(text) || "思考中…"
-    : durationMs !== undefined ? `用时${formatTurnDuration(durationMs)}` : streaming ? "思考中…" : ""
+  const detail = streaming && !open ? reasoningTail(text)
+    : durationMs !== undefined ? formatTurnDuration(durationMs) : ""
   return (
     <div className="my-0.5">
       <button
@@ -101,12 +101,14 @@ export function AssistantMessage({
   showActions,
   alwaysShowActions,
   showMetaFallback = true,
+  showInterrupted = true,
 }: {
   node: AssistantNode
   sessionId?: string
   showActions?: boolean
   alwaysShowActions?: boolean
   showMetaFallback?: boolean
+  showInterrupted?: boolean
 }) {
   const empty = node.content.length === 0
   const copyTextValue = node.content
@@ -147,7 +149,7 @@ export function AssistantMessage({
           {copyTextValue && <CopyIconButton text={copyTextValue} />}
           {sessionId && <ForkButton sessionId={sessionId} seq={node.seq} />}
           {node.usage && <TokenBadge usage={node.usage} className="ml-1" />}
-          {node.interrupted && (
+          {showInterrupted && node.interrupted && (
             <Badge variant="secondary" className="ml-1 gap-1 text-meta font-normal text-muted-foreground">
               <OctagonX className="size-3" />
               已停止
@@ -157,10 +159,10 @@ export function AssistantMessage({
         </div>
       ) : (
         showMetaFallback &&
-        (node.usage || node.interrupted) && (
+        (node.usage || (showInterrupted && node.interrupted)) && (
           <div className="mt-1.5 flex items-center gap-2">
             {node.usage && <TokenBadge usage={node.usage} />}
-            {node.interrupted && (
+            {showInterrupted && node.interrupted && (
               <Badge variant="secondary" className="gap-1 text-meta font-normal text-muted-foreground">
                 <OctagonX className="size-3" />
                 已停止

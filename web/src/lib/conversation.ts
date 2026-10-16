@@ -23,6 +23,7 @@ export interface AssistantNode {
   usage?: Usage
   interrupted?: boolean
   live?: boolean
+  endReason?: TurnEndReason
 }
 
 export interface ToolResultData {
@@ -52,6 +53,7 @@ export interface ToolCallNode {
   result?: ToolResultData
   question?: QuestionState
   live?: boolean
+  endReason?: TurnEndReason
   children: ConversationNode[]
 }
 
@@ -376,5 +378,21 @@ export function deriveConversationNodes(
     }
   }
 
+  // A turn boundary settles every outstanding activity, including nested tasks.
+  // Keep historical boundaries local to their turn when a new prompt arrives.
+  const settle = (list: ConversationNode[], inherited?: TurnEndReason) => {
+    const endings = new Map(list.filter((n): n is BoundaryNode => n.kind === "boundary" && n.phase === "end")
+      .map((n) => [n.turn, n.reason]))
+    for (const node of list) {
+      if (node.kind !== "assistant" && node.kind !== "tool-call") continue
+      const reason = endings.get(node.turn) ?? inherited
+      if (reason) {
+        node.endReason = reason
+        node.live = false
+      }
+      if (node.kind === "tool-call") settle(node.children, reason ?? (node.result ? "completed" : undefined))
+    }
+  }
+  settle(nodes)
   return nodes
 }

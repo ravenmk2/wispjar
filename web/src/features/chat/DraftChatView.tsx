@@ -9,7 +9,7 @@ import { MessageList } from "@/features/chat/MessageList"
 import { useComposerStore } from "@/stores/composer"
 import { useSessionStore } from "@/stores/session"
 
-// 草稿会话页（/c/new?agent=<id>）：不创建会话、不 follow 流，首条消息发出时才建会话（见 Composer draftAgent 分支）
+// 草稿聊天页（/c/new?agent=<id>）：不创建聊天、不 follow 流，首条消息发出时才建聊天（见 Composer draftAgent 分支）
 export default function DraftChatView() {
   const [searchParams] = useSearchParams()
   const agentId = searchParams.get("agent") ?? ""
@@ -19,7 +19,7 @@ export default function DraftChatView() {
   const composerReset = useComposerStore((s) => s.reset)
   const [ready, setReady] = useState(false)
 
-  // 清空上一会话残留的事件流与输入草稿，保证消息区为空；reset 同步生效，ready 后再渲染
+  // 清空上一聊天残留的事件流与输入草稿，保证消息区为空；reset 同步生效，ready 后再渲染
   useEffect(() => {
     resetSession()
     composerReset()
@@ -56,7 +56,7 @@ export default function DraftChatView() {
     <div className="flex h-full min-w-0 flex-1 flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <Bot className="size-4 shrink-0 text-muted-foreground" />
-        <span className="truncate text-base font-medium">新会话</span>
+        <span className="truncate text-base font-medium">新聊天</span>
         <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-meta text-muted-foreground">
           {agent.name}
         </span>

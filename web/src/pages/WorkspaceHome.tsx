@@ -34,7 +34,7 @@ export default function WorkspaceHome() {
           className="w-full max-w-lg border-none"
           icon={<Bot className="size-10" />}
           title="还没有可用的智能体"
-          description={isAdmin ? "先创建一个智能体，即可开始对话。" : "当前机构暂无已发布的智能体，请联系机构管理员创建。"}
+          description={isAdmin ? "先创建一个智能体，即可开始聊天。" : "当前机构暂无已发布的智能体，请联系机构管理员创建。"}
           action={
             isAdmin ? (
               <Button asChild size="sm">
@@ -52,7 +52,7 @@ export default function WorkspaceHome() {
 
   return (
     <div className="mx-auto w-full max-w-chat px-6 py-16">
-      <h1 className="text-2xl font-semibold tracking-tight">开始新的对话</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">开始新聊天</h1>
       <p className="mt-2 text-chat text-fg-secondary">选择一个智能体，开始你的工作</p>
       <div className="mt-8 grid gap-3 sm:grid-cols-2">
         {agents.map((agent) => (
@@ -83,7 +83,7 @@ export default function WorkspaceHome() {
         <>
           <h2 className="mb-3 mt-10 flex items-center gap-1.5 text-base font-medium text-fg-tertiary">
             <Clock className="size-3.5" />
-            最近的会话
+            最近的聊天
           </h2>
           <div className="divide-y rounded-xl border bg-card">
             {recent.map((s) => (
@@ -97,7 +97,7 @@ export default function WorkspaceHome() {
                     s.running ? "size-1.5 shrink-0 animate-pulse rounded-full bg-primary" : "size-1.5 shrink-0 rounded-full bg-transparent"
                   }
                 />
-                <span className="min-w-0 flex-1 truncate">{s.title || "新会话"}</span>
+                <span className="min-w-0 flex-1 truncate">{s.title || "新聊天"}</span>
                 <span className="text-xs text-fg-caption">{formatRelativeTime(s.lastActiveAt)}</span>
               </Link>
             ))}

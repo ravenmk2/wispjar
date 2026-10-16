@@ -8,6 +8,7 @@ import type {
   StreamChunk,
 } from "@/lib/types"
 import { useComposerStore } from "@/stores/composer"
+import type { ToolOutput } from "@/lib/tool-output"
 
 export type FollowStatus = "connecting" | "live" | "stalled"
 
@@ -47,7 +48,7 @@ interface SessionState {
   liveAttempt: LiveAttempt | null
   pendingApprovals: Record<string, PendingApproval>
   pendingQuestions: Record<string, PendingQuestion>
-  toolOutputs: Record<string, string>
+  toolOutputs: Record<string, ToolOutput>
   followStatus: FollowStatus
   lastSeq: number
   applySnapshot: (
@@ -59,7 +60,7 @@ interface SessionState {
   ) => void
   appendEvents: (events: SessionEvent[]) => void
   applyStreamFrame: (frame: AssistantStreamFrame) => void
-  appendToolOutput: (callId: string, delta: string) => void
+  appendToolOutput: (callId: string, stream: keyof ToolOutput, delta: string) => void
   settlePendingQuestion: (callId: string) => void
   setFollowStatus: (status: FollowStatus) => void
   reset: () => void
@@ -240,10 +241,11 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
     set({ liveAttempt: null })
   },
 
-  appendToolOutput: (callId, delta) =>
-    set((state) => ({
-      toolOutputs: { ...state.toolOutputs, [callId]: (state.toolOutputs[callId] ?? "") + delta },
-    })),
+  appendToolOutput: (callId, stream, delta) =>
+    set((state) => {
+      const output = state.toolOutputs[callId] ?? { stdout: "", stderr: "" }
+      return { toolOutputs: { ...state.toolOutputs, [callId]: { ...output, [stream]: output[stream] + delta } } }
+    }),
 
   // 服务端判定已作答（如 question/not_pending）时本地撤卡；事件流随后会对账
   settlePendingQuestion: (callId) =>

@@ -162,7 +162,7 @@
 
 ### POST /api/v1/sessions/{id}/fork （M4）
 
-请求 `{ "at_seq": 42 }` → 从该事件点分叉出新会话（复制 ≤at_seq 的事件 + 快照 + `model_params`，标题追加"（分叉）"），201 返回 `{ "id": "<新会话 id>" }`；`at_seq` 不在 `1..last_seq` 时 400。分叉会话 `last_seq ≥ 1`，思考强度天然处于锁定态。
+请求 `{ "at_seq": 42 }` → 从该事件点创建聊天副本（复制 ≤at_seq 的事件 + 快照 + `model_params`，标题追加"（副本）"），201 返回 `{ "id": "<新会话 id>" }`；`at_seq` 不在 `1..last_seq` 时 400。副本会话 `last_seq ≥ 1`，思考强度天然处于锁定态。
 
 ### GET /api/v1/sessions/{id}/events
 

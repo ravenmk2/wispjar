@@ -44,7 +44,7 @@ func TestPlanFork(t *testing.T) {
 	if forked.ID != "fork-1" || forked.OrgID != "org-1" || forked.UserID != "user-1" || forked.AgentID != "agent-1" {
 		t.Fatalf("unexpected identity %+v", forked)
 	}
-	if forked.Title != "原始标题（分叉）" || !forked.TitlePinned {
+	if forked.Title != "原始标题（副本）" || !forked.TitlePinned {
 		t.Fatalf("unexpected title %q pinned=%v", forked.Title, forked.TitlePinned)
 	}
 	if forked.ApprovalMode != ApprovalStrict || forked.ModelID != "model-1" {
@@ -109,10 +109,10 @@ func TestPlanForkInvalidSeq(t *testing.T) {
 }
 
 func TestForkTitle(t *testing.T) {
-	if got := forkTitle("abc"); got != "abc（分叉）" {
+	if got := forkTitle("abc"); got != "abc（副本）" {
 		t.Fatalf("unexpected %q", got)
 	}
-	if got := forkTitle(""); got != "（分叉）" {
+	if got := forkTitle(""); got != "（副本）" {
 		t.Fatalf("unexpected %q", got)
 	}
 	long := strings.Repeat("题", 300)
@@ -120,7 +120,7 @@ func TestForkTitle(t *testing.T) {
 	if n := len([]rune(got)); n != 256 {
 		t.Fatalf("want 256 runes, got %d", n)
 	}
-	if !strings.HasSuffix(got, "（分叉）") {
+	if !strings.HasSuffix(got, "（副本）") {
 		t.Fatal("suffix must be preserved after truncation")
 	}
 }

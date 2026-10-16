@@ -57,7 +57,7 @@ export function followSession(orgId: string, sessionId: string): FollowHandle {
       return
     }
     if (frame.type === "tool-output") {
-      store.getState().appendToolOutput(frame.callId, frame.delta)
+      store.getState().appendToolOutput(frame.callId, frame.stream, frame.delta)
     }
   }
 

@@ -162,7 +162,7 @@ export function QuestionTakeover({
       // open 的 question/answered、continued 的 question/answered+合成 user/message 均随事件流撤卡
     } catch (e) {
       if (e instanceof ApiError && e.code === "session/running") {
-        toast.error("会话忙，稍后重试")
+        toast.error("聊天忙，稍后重试")
       } else if (e instanceof ApiError && e.code === "question/not_pending") {
         // 可能已被他端作答：撤卡，事件流随后对账
         toast.error("该提问已被作答")

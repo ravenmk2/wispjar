@@ -1,4 +1,4 @@
-import { CircleAlert, CircleStop, Loader2, MessageCircleQuestion } from "lucide-react"
+import { Loader2, MessageCircleQuestion, X } from "lucide-react"
 import { useMemo } from "react"
 import { ApprovalCard } from "@/features/chat/ApprovalCard"
 import { actionBarCls, AssistantMessage } from "@/features/chat/AssistantMessage"
@@ -18,20 +18,20 @@ function BoundaryView({ node }: { node: Extract<ConversationNode, { kind: "bound
   if (node.phase === "start") return null
   if (node.reason === "completed") return null
   return (
-    <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
-      <div className="h-px flex-1 bg-border" />
+    <div className="py-1 text-xs text-fg-secondary">
       {node.reason === "interrupted" ? (
-        <span className="flex items-center gap-1">
-          <CircleStop className="size-3.5" />
-          已中断
-        </span>
+        <span>已停止</span>
       ) : (
-        <span className="flex items-center gap-1 text-destructive">
-          <CircleAlert className="size-3.5" />
-          失败{node.error ? `：${node.error}` : ""}
-        </span>
+        <details>
+          <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded hover:bg-accent">
+            运行出错<X className="size-3.5 text-destructive" strokeWidth={2.5} />{node.error && <span>查看详情</span>}
+          </summary>
+          {node.error && <div className="mt-2 rounded-lg bg-muted/50 p-3">
+            <div className="flex items-center justify-between"><span>错误详情</span><CopyIconButton text={node.error} /></div>
+            <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-mono">{node.error}</pre>
+          </div>}
+        </details>
       )}
-      <div className="h-px flex-1 bg-border" />
     </div>
   )
 }
@@ -81,6 +81,7 @@ export function NodeView({
             showActions={isAnswer}
             alwaysShowActions={isAnswer && inLatestTurn}
             showMetaFallback={isAnswer}
+            showInterrupted={depth > 0 || !node.endReason}
           />
         </div>
       )

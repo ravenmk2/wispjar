@@ -1,4 +1,4 @@
-import { GitFork, Loader2 } from "lucide-react"
+import { CopyPlus, Loader2 } from "lucide-react"
 import { useState } from "react"
 import { useNavigate } from "react-router"
 import { toast } from "sonner"
@@ -25,7 +25,7 @@ export function ForkButton({
     setBusy(true)
     try {
       const res = await sessionsApi.fork(sessionId, seq)
-      toast.success("已创建分叉会话")
+      toast.success("已创建聊天副本")
       navigate(`/c/${res.id}`)
     } catch (e) {
       toast.error(errorMessage(e))
@@ -41,16 +41,17 @@ export function ForkButton({
           variant="ghost"
           size="icon"
           disabled={busy}
+          aria-label="从这里开始新聊天"
           onClick={() => void fork()}
           className={cn(
             "size-7 shrink-0 text-fg-tertiary hover:text-foreground [&_svg]:size-3.5",
             className,
           )}
         >
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <GitFork className="size-3.5" />}
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <CopyPlus className="size-3.5" />}
         </Button>
       </TooltipTrigger>
-      <TooltipContent>从这条消息分叉出新会话</TooltipContent>
+      <TooltipContent>从这里开始新聊天</TooltipContent>
     </Tooltip>
   )
 }

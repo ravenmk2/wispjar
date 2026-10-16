@@ -1,5 +1,6 @@
-import { ChevronDown, ChevronRight } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { ChevronDown, ChevronRight, X } from "lucide-react"
+import { useEffect, useId, useRef, useState } from "react"
+import { CopyIconButton } from "@/components/CopyIconButton"
 import { NodeView } from "@/features/chat/NodeList"
 import { TurnProcessGroup } from "@/features/chat/TurnProcessGroup"
 import { formatTurnDuration, type TurnSegment } from "@/lib/turn-grouping"
@@ -12,6 +13,8 @@ export function TurnView({ segment, sessionId, latestTurn }: {
   const running = !segment.end
   const [open, setOpen] = useChatDisclosure(sessionId, `turn-${segment.turn}`, segment.turn === latestTurn)
   const expanded = open || segment.hasPendingApproval
+  const [errorOpen, setErrorOpen] = useChatDisclosure(sessionId, `turn-error-${segment.turn}`)
+  const errorId = useId()
   const headerRef = useRef<HTMLButtonElement>(null)
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
@@ -23,8 +26,8 @@ export function TurnView({ segment, sessionId, latestTurn }: {
 
   const duration = running && segment.start ? Math.max(1000, now - segment.start.time) : segment.durationMs
   const reason = segment.end?.reason
-  const label = running ? "工作中" : reason === "interrupted" ? "已停止" : reason === "failed" ? "失败" : "已工作"
-  const timeText = duration === undefined ? label : `${label}${running || reason !== "completed" ? " · 用时 " : " "}${formatTurnDuration(duration)}`
+  const label = running ? "工作中" : reason === "interrupted" ? "已停止" : reason === "failed" ? "运行出错" : "已工作"
+  const timeText = duration === undefined ? label : `${label}${reason === "completed" ? " " : " · "}${formatTurnDuration(duration)}`
   const answer = segment.parts.find((p) => p.kind === "reply" && p.node.id === segment.answerId)
   const toggle = () => {
     const el = headerRef.current
@@ -39,22 +42,37 @@ export function TurnView({ segment, sessionId, latestTurn }: {
   return (
     <section className="space-y-4" data-turn={segment.turn}>
       {segment.user && <NodeView node={segment.user} sessionId={sessionId} depth={0} latestTurn={latestTurn} />}
-      <button
-        ref={headerRef} type="button" data-turn-header={segment.turn} aria-expanded={expanded}
-        aria-label={`${expanded ? "收起" : "展开"}第 ${segment.turn} 轮：${timeText}`}
-        disabled={segment.hasPendingApproval} onClick={toggle}
-        className="flex min-h-9 w-full items-center gap-1.5 rounded-md text-left text-chat text-fg-secondary hover:bg-accent/50 disabled:cursor-default"
-      >
-        {expanded ? <ChevronDown className="chat-disclosure-icon" /> : <ChevronRight className="chat-disclosure-icon" />}
-        <span className={cn("tabular-nums", running && "text-shimmer-blue", reason === "failed" && "text-destructive")}>{timeText}</span>
-      </button>
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          ref={headerRef} type="button" data-turn-header={segment.turn} aria-expanded={expanded}
+          aria-label={`${expanded ? "收起" : "展开"}第 ${segment.turn} 轮：${timeText}`}
+          disabled={segment.hasPendingApproval} onClick={toggle}
+          className="flex min-h-9 min-w-0 items-center gap-1.5 rounded-md text-left text-chat text-fg-secondary hover:bg-accent/50 disabled:cursor-default"
+        >
+          <span className={cn("truncate tabular-nums", running && "text-shimmer")}>{timeText}</span>
+          {expanded ? <ChevronDown className="chat-disclosure-icon" /> : <ChevronRight className="chat-disclosure-icon" />}
+        </button>
+        {reason === "failed" && <X className="size-3.5 shrink-0 text-destructive" strokeWidth={2.5} aria-label="运行出错" />}
+        {reason === "failed" && segment.end?.error && <button type="button"
+          aria-expanded={expanded && errorOpen} aria-controls={errorId}
+          onClick={() => { setErrorOpen(!(expanded && errorOpen)); if (!expanded) setOpen(true) }}
+          className="shrink-0 rounded px-1 py-1 text-meta text-fg-secondary hover:bg-accent hover:text-foreground">
+          {expanded && errorOpen ? "收起详情" : "查看详情"}
+        </button>}
+      </div>
+      {expanded && errorOpen && reason === "failed" && segment.end?.error && <div id={errorId} className="rounded-lg bg-muted/50 px-3 py-2">
+        <div className="mb-1 flex items-center justify-between gap-2 text-meta text-fg-secondary">
+          <span>错误详情</span>
+          <CopyIconButton text={segment.end.error} tooltip="复制错误详情" />
+        </div>
+        <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-fg-secondary">{segment.end.error}</pre>
+      </div>}
       {expanded ? segment.parts.map((part) => part.kind === "reply" ? (
         <NodeView key={part.node.id} node={part.node} sessionId={sessionId} depth={0} latestTurn={latestTurn} isAnswer={part.node.id === segment.answerId} />
       ) : <TurnProcessGroup key={part.id} group={part} sessionId={sessionId} latestTurn={latestTurn} />) : (
         answer?.kind === "reply" && <NodeView node={answer.node} sessionId={sessionId} depth={0} latestTurn={latestTurn} isAnswer />
       )}
-      {reason === "failed" && segment.end?.error && <div className="text-xs text-destructive">{segment.end.error}</div>}
-      {!expanded && !answer && !running && <div className="text-xs text-fg-caption">本轮未生成最终回复</div>}
+      {!expanded && !answer && reason === "completed" && <div className="text-xs text-fg-caption">本轮未生成最终回复</div>}
     </section>
   )
 }

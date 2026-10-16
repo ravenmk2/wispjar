@@ -130,7 +130,7 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
     [sessionId],
   )
 
-  // 初始加载：沙箱进入 running（或切换会话）时重置并拉取根目录
+  // 初始加载：沙箱进入 running（或切换聊天）时重置并拉取根目录
   useEffect(() => {
     setRoot(null)
     setTreeError(null)
@@ -297,7 +297,7 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
 
       {status === "none" && (
         <div className="flex flex-1 items-center justify-center p-4 text-center text-xs text-muted-foreground">
-          尚未创建云电脑，会话使用工具时将自动创建
+          尚未创建云电脑，聊天使用工具时将自动创建
         </div>
       )}
       {status === "creating" && (

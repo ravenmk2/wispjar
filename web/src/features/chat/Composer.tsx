@@ -128,7 +128,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
     el.style.overflowY = el.scrollHeight > MAX_TEXTAREA_HEIGHT ? "auto" : "hidden"
   }, [draft])
 
-  // 切换会话/卸载时丢弃未发送附件并释放本地预览
+  // 切换聊天/卸载时丢弃未发送附件并释放本地预览
   useEffect(() => {
     return () => {
       for (const img of imagesRef.current) URL.revokeObjectURL(img.previewUrl)
@@ -162,13 +162,13 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   const currentModel = models.find((m) => m.id === modelId)
   const modelEfforts = REASONING_EFFORT_OPTIONS.filter((e) => currentModel?.capabilities.reasoning_efforts?.includes(e))
   const modelEffortDefault = currentModel?.capabilities.reasoning_effort_default ?? ""
-  // 草稿未显式选档时展示模型默认值；正式会话以服务端保存值为准。
+  // 草稿未显式选档时展示模型默认值；正式聊天以服务端保存值为准。
   const selectedEffort = effort ?? (draftAgent ? modelEffortDefault || null : null)
   const supportsEffort = modelEfforts.length > 0
   const visionSupported = currentModel?.capabilities.vision ?? true
 
   function startUpload(item: PendingImage) {
-    // 草稿态会话尚未创建，附件延迟到首条消息发送时（建会话后）再上传
+    // 草稿态聊天尚未创建，附件延迟到首条消息发送时（建聊天后）再上传
     if (draftAgent) {
       setImages((prev) => prev.map((i) => (i.key === item.key ? { ...i, status: "ready" } : i)))
       return
@@ -243,7 +243,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
       let targetSessionId = sessionId
       let refs: AttachmentRef[]
       if (draftAgent) {
-        // 惰性建会话：首条消息先创建会话，再补传附件、发 prompt，最后切换到正式会话页；
+        // 惰性建聊天：首条消息先创建聊天，再补传附件、发 prompt，最后切换到正式聊天页；
         // 任一步失败都停留在草稿页，输入内容与附件保留
         if (!currentOrg) throw new Error("当前机构不可用")
         const session = await sessionsApi.create(currentOrg.id, {
@@ -316,7 +316,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
     setModelOverride(next)
     if (!effortLocked) setEffort(nextDefault || null)
     try {
-      // 未锁定换模型时重置为新模型默认档；空串清除之前的会话档位覆盖。
+      // 未锁定换模型时重置为新模型默认档；空串清除之前的聊天档位覆盖。
       const res = await sessionsApi.update(sessionId, {
         model_id: next,
         ...(!effortLocked ? { reasoning_effort: nextDefault } : {}),
@@ -337,7 +337,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
     ) return
     const prev = effort
     setEffort(next || null)
-    // 新对话尚无会话 ID，选项留在本地，首条消息创建会话时一起提交。
+    // 新聊天尚无聊天 ID，选项留在本地，首条消息创建聊天时一起提交。
     if (draftAgent) return
     try {
       const res = await sessionsApi.update(sessionId, { reasoning_effort: next })
@@ -372,7 +372,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
             addFiles([...e.dataTransfer.files])
           }}
           className={cn(
-            "rounded-[28px] border bg-composer shadow-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/20",
+            "chat-composer rounded-[28px] border bg-composer",
             dragging && "border-primary ring-2 ring-primary/30",
           )}
         >
@@ -431,7 +431,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
               }
             }}
             rows={2}
-            placeholder={busy ? "会话运行中，可点击右侧按钮停止…" : "输入消息，Enter 发送，Shift+Enter 换行"}
+            placeholder={busy ? "聊天运行中，可点击右侧按钮停止…" : "输入消息，Enter 发送，Shift+Enter 换行"}
             className="block w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-chat outline-none placeholder:text-fg-caption"
           />
           <input
@@ -560,7 +560,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                     type="button"
                     aria-label="选择推理等级"
                     disabled={sending || effortLocked || !supportsEffort || (!draftAgent && !sessionId)}
-                    title={effortLocked ? "对话开始后不可更改思考强度" : !supportsEffort ? "当前模型不支持选择推理等级" : "推理等级"}
+                    title={effortLocked ? "聊天开始后不可更改思考强度" : !supportsEffort ? "当前模型不支持选择推理等级" : "推理等级"}
                     className="group flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-sm font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
                   >
                     <span>{selectedEffort ? effortLabel(selectedEffort) : supportsEffort ? "默认" : "推理等级"}</span>
@@ -574,7 +574,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                       <DropdownMenuRadioItem
                         value=""
                         disabled={sending || effortLocked}
-                        title={effortLocked ? "对话开始后不可更改思考强度" : undefined}
+                        title={effortLocked ? "聊天开始后不可更改思考强度" : undefined}
                         className="px-2.5 text-sm [&>span:first-of-type]:hidden"
                       >
                         <span className={cn("truncate", selectedEffort === null && "font-semibold")}>默认</span>
@@ -588,7 +588,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                         key={e}
                         value={e}
                         disabled={sending || effortLocked}
-                        title={effortLocked ? "对话开始后不可更改思考强度" : undefined}
+                        title={effortLocked ? "聊天开始后不可更改思考强度" : undefined}
                         className="px-2.5 text-sm [&>span:first-of-type]:hidden"
                       >
                         <span className={cn("truncate", e === selectedEffort && "font-semibold")}>{effortLabel(e)}</span>

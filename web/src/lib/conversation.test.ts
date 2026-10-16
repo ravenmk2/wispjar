@@ -4,6 +4,8 @@ import { deriveConversationNodes } from "./conversation"
 import { groupByTurn, reasoningTail } from "./turn-grouping"
 import type { ContentBlock, SessionEvent, StreamChunk, TurnEndReason } from "./types"
 import { useChatPresentationStore } from "../stores/chatPresentation"
+import { useSessionStore } from "../stores/session"
+import { execOutput, toolCancelled, toolFailure } from "./tool-output"
 
 const text = (value: string): ContentBlock => ({ type: "text", text: value })
 const thought = (value: string): ContentBlock => ({ type: "reasoning", text: value, durationMs: 1200 })
@@ -85,7 +87,76 @@ test("unreturned tools stop advertising running activity when their turn ends", 
     f.end(reason)
     const settledGroup = f.segment().parts[0]
     assert.equal(settledGroup.kind === "process" && settledGroup.running, false)
+    const node = settledGroup.kind === "process" && settledGroup.nodes[0]
+    assert.equal(node && node.kind === "tool-call" && node.endReason, reason)
   }
+})
+
+test("a new turn does not clear the previous stopped or failed boundary", () => {
+  for (const reason of ["interrupted", "failed"] as const) {
+    const f = fixture(); f.message([text("partial"), tool("unfinished")]); f.end(reason)
+    f.add({ type: "user/message", data: { turn: 2, content: "continue", request_id: "next" } })
+    f.add({ type: "turn/start", data: { turn: 2, request_id: "next" } })
+    f.add({ type: "tool/call", data: { turn: 2, step: 1, call_id: "new-tool", name: "read", arguments: '{}' } })
+    const segments = groupByTurn(deriveConversationNodes(f.events, null)).segments
+    assert.equal(segments[0].end?.reason, reason)
+    assert.equal(segments[0].durationMs, 2000)
+    assert.equal(segments[1].end, undefined)
+    const nextGroup = segments[1].parts[0]
+    assert.equal(nextGroup.kind === "process" && nextGroup.running, true)
+    const nextTool = nextGroup.kind === "process" && nextGroup.nodes[0]
+    assert.equal(nextTool && nextTool.kind === "tool-call" && nextTool.endReason, undefined)
+  }
+})
+
+test("ending a turn settles nested tools and stale live reasoning", () => {
+  const f = fixture(); f.message([{ type: "tool-call", id: "task", name: "task", arguments: '{}' }])
+  f.add({ type: "tool/call", data: { turn: 0, step: 1, parent_call_id: "task", call_id: "child", name: "exec", arguments: '{}' } })
+  f.end("interrupted")
+  const nodes = deriveConversationNodes(f.events, { turn: 1, step: 2, startedAfterSeq: 3, chunks: [
+    { type: "block-start", index: 0, blockType: "reasoning" },
+    { type: "reasoning-delta", index: 0, text: "partial thought" },
+  ] })
+  const task = nodes.find((n) => n.kind === "tool-call")!
+  assert.equal(task.kind === "tool-call" && task.children[0].kind === "tool-call" && task.children[0].endReason, "interrupted")
+  const assistant = nodes.find((n) => n.kind === "assistant")!
+  assert.equal(assistant.kind === "assistant" && assistant.live, false)
+})
+
+test("stdout and stderr stay separate while streaming and after completion", () => {
+  const store = useSessionStore.getState()
+  store.reset()
+  store.appendToolOutput("exec", "stdout", "line 1\n")
+  store.appendToolOutput("exec", "stderr", "progress\n")
+  store.appendToolOutput("exec", "stdout", "line 2\n")
+  const live = useSessionStore.getState().toolOutputs.exec
+  assert.deepEqual(live, { stdout: "line 1\nline 2\n", stderr: "progress\n" })
+  const final = execOutput({ content: JSON.stringify({ ...live, exit_code: 0 }) }, live)
+  assert.equal(final.stdout, live.stdout)
+  assert.equal(final.stderr, live.stderr)
+  assert.equal(final.exitCode, 0)
+  assert.equal(final.error, undefined)
+  const cancelled = execOutput({ content: '{"error":"context canceled","stderr":""}' }, live)
+  assert.equal(cancelled.stdout, live.stdout)
+  assert.equal(cancelled.stderr, live.stderr)
+  store.reset()
+})
+
+test("exec failures include structured tool errors, but stderr alone is not a failure", () => {
+  const f = fixture()
+  f.add({ type: "tool/result", data: { turn: 1, step: 1, call_id: "exec", name: "exec", content: '{"error":"sandbox unavailable","stderr":""}' } })
+  const node = deriveConversationNodes(f.events, null).find((n) => n.kind === "tool-call")!
+  assert.equal(node.kind === "tool-call" && toolFailure(node), "sandbox unavailable")
+  const group = f.segment().parts[0]
+  assert.equal(group.kind === "process" && group.hasError, true)
+  if (node.kind !== "tool-call") return
+  node.result = { content: '{"stdout":"","stderr":"progress","exit_code":0}' }
+  assert.equal(toolFailure(node), undefined)
+  node.endReason = "interrupted"
+  node.result = { content: '{"error":"context canceled"}' }
+  assert.equal(toolCancelled(node), true)
+  assert.equal(toolFailure(node), undefined)
+  assert.equal(execOutput({ content: '{"stdout":"tail","truncated":true}' }).truncated, true)
 })
 
 test("partial history does not invent a duration", () => {

@@ -214,7 +214,7 @@ export default function AgentsPage() {
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="删除智能体"
-        description={`确定删除「${deleteTarget?.name}」？有会话引用时将自动转为下线。`}
+        description={`确定删除「${deleteTarget?.name}」？有聊天引用时将自动转为下线。`}
         confirmText="删除"
         destructive
         loading={deleting}

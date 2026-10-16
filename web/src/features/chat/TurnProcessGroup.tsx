@@ -22,10 +22,10 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
   const working = group.running && last?.kind === "tool-call" && !last.result ? last : undefined
   let label = reasoning.length ? tools.length ? "思考与行动" : "思考" : "工具调用"
   let detail = tools.length ? `${tools.length} 次${reasoning.length ? "工具调用" : ""}` : ""
-  if (thinking?.type === "reasoning") {
+  if (!expanded && thinking?.type === "reasoning") {
     label = "思考中"
     detail = reasoningTail(thinking.text) || "正在思考…"
-  } else if (working) {
+  } else if (!expanded && working) {
     label = working.name === "skill" || working.name === "activate_skill" ? "技能" : `正在${toolDisplayName(working.name)}`
     const args = safeParseJson(working.arguments)
     detail = String(args?.name ?? args?.command ?? args?.path ?? args?.pattern ?? "")
@@ -37,12 +37,12 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
       <button type="button" onClick={() => setOpen(!expanded)} disabled={group.hasPending}
         aria-expanded={expanded} aria-label={`${expanded ? "收起" : "展开"}${label}${detail ? ` · ${detail}` : ""}`}
         className="flex min-h-9 w-full items-center gap-1.5 rounded-md text-left text-chat text-fg-secondary hover:bg-accent/50 disabled:cursor-default">
-        {expanded ? <ChevronDown className="chat-disclosure-icon" /> : <ChevronRight className="chat-disclosure-icon" />}
-        <span className={cn("shrink-0", active && "text-shimmer", group.hasError && "text-destructive")}>{label}</span>
+        <span className={cn("shrink-0", active && "text-shimmer")}>{label}</span>
         {detail && <>
           <span className="shrink-0">·</span>
-          <span className={cn("min-w-0 flex-1 overflow-hidden whitespace-nowrap text-ellipsis", thinking && "[direction:rtl] text-left")} title={detail}><bdi>{detail}</bdi></span>
+          <span className={cn("min-w-0 overflow-hidden whitespace-nowrap text-ellipsis", !expanded && thinking && "[direction:rtl] text-left")} title={detail}><bdi>{detail}</bdi></span>
         </>}
+        {expanded ? <ChevronDown className="chat-disclosure-icon" /> : <ChevronRight className="chat-disclosure-icon" />}
       </button>
       {expanded && <div className="space-y-1 py-1 pl-4">
         {group.nodes.map((node) => <NodeView key={node.id} node={node} sessionId={sessionId} depth={0} latestTurn={latestTurn} />)}
