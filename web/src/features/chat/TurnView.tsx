@@ -43,9 +43,9 @@ export function TurnView({ segment, sessionId, latestTurn }: {
         ref={headerRef} type="button" data-turn-header={segment.turn} aria-expanded={expanded}
         aria-label={`${expanded ? "收起" : "展开"}第 ${segment.turn} 轮：${timeText}`}
         disabled={segment.hasPendingApproval} onClick={toggle}
-        className="flex min-h-9 w-full items-center gap-1.5 rounded-md px-1 text-left text-chat text-fg-secondary hover:bg-accent/50 disabled:cursor-default"
+        className="flex min-h-9 w-full items-center gap-1.5 rounded-md text-left text-chat text-fg-secondary hover:bg-accent/50 disabled:cursor-default"
       >
-        {expanded ? <ChevronDown className="size-3.5 shrink-0" /> : <ChevronRight className="size-3.5 shrink-0" />}
+        {expanded ? <ChevronDown className="chat-disclosure-icon" /> : <ChevronRight className="chat-disclosure-icon" />}
         <span className={cn("tabular-nums", running && "text-shimmer-blue", reason === "failed" && "text-destructive")}>{timeText}</span>
       </button>
       {expanded ? segment.parts.map((part) => part.kind === "reply" ? (
@@ -53,8 +53,8 @@ export function TurnView({ segment, sessionId, latestTurn }: {
       ) : <TurnProcessGroup key={part.id} group={part} sessionId={sessionId} latestTurn={latestTurn} />) : (
         answer?.kind === "reply" && <NodeView node={answer.node} sessionId={sessionId} depth={0} latestTurn={latestTurn} isAnswer />
       )}
-      {reason === "failed" && segment.end?.error && <div className="px-1 text-xs text-destructive">{segment.end.error}</div>}
-      {!expanded && !answer && !running && <div className="px-1 text-xs text-fg-caption">本轮未生成最终回复</div>}
+      {reason === "failed" && segment.end?.error && <div className="text-xs text-destructive">{segment.end.error}</div>}
+      {!expanded && !answer && !running && <div className="text-xs text-fg-caption">本轮未生成最终回复</div>}
     </section>
   )
 }

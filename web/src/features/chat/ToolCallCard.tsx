@@ -308,9 +308,9 @@ export function ToolCallCard({
         aria-expanded={expanded}
         title={summary || undefined}
         onClick={() => setOpen(!open)}
-        className="flex min-h-9 w-full items-center gap-1.5 rounded-md px-1 text-left hover:bg-accent/50"
+        className="flex min-h-9 w-full items-center gap-1.5 rounded-md text-left hover:bg-accent/50"
       >
-        <span className="shrink-0 text-fg-tertiary">{TOOL_ICONS[node.name] ?? <Wrench className="size-3.5" />}</span>
+        <span aria-hidden="true" className="chat-disclosure-icon text-fg-tertiary">{TOOL_ICONS[node.name] ?? <Wrench className="size-3.5" />}</span>
         <span className="shrink-0 text-chat font-medium text-fg-secondary" title={node.name}>
           {toolDisplayName(node.name)}
         </span>
@@ -356,7 +356,7 @@ export function ToolCallCard({
         )}
       </button>
       {expanded && (
-        <div className="py-1 pl-1">
+        <div className="py-1">
           {isQuestion && <QuestionBody node={node} />}
           {!isQuestion && render === "terminal" && <TerminalBody node={node} liveOutput={liveOutput} />}
           {!isQuestion && render === "diff" && <DiffBody node={node} />}
@@ -371,7 +371,7 @@ export function ToolCallCard({
         </div>
       )}
       {!expanded && node.children.length > 0 && (
-        <div className="py-0.5 pl-7 text-meta text-fg-caption">{node.children.length} 条嵌套轨迹</div>
+        <div className="py-0.5 text-meta text-fg-caption">{node.children.length} 条嵌套轨迹</div>
       )}
     </div>
   )

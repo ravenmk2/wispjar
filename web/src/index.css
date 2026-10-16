@@ -146,6 +146,10 @@
 }
 
 @layer components {
+  /* 折叠标记作为行内首项与正文共用左边界，不额外叠加缩进。 */
+  .chat-disclosure-icon {
+    @apply size-3.5 shrink-0;
+  }
   .markdown-body > *:first-child {
     margin-top: 0;
   }

@@ -69,9 +69,9 @@ export function ReasoningBlock({
         aria-expanded={open}
         aria-label={`${open ? "收起" : "展开"}${streaming ? "思考中" : "思考"}`}
         onClick={() => { followRef.current = true; setOpen(!open) }}
-        className="flex min-h-9 w-full items-center gap-1.5 rounded-md px-1 text-left text-chat hover:bg-accent/50"
+        className="flex min-h-9 w-full items-center gap-1.5 rounded-md text-left text-chat hover:bg-accent/50"
       >
-        <Sparkles className="size-3.5 shrink-0 text-fg-tertiary" />
+        <Sparkles className="chat-disclosure-icon text-fg-tertiary" />
         <span className={cn("shrink-0 font-medium text-fg-secondary", streaming && "text-shimmer")}>{streaming ? "思考中" : "思考"}</span>
         <span className="shrink-0 text-fg-tertiary">{detail && "·"}</span>
         <span className={cn("min-w-0 flex-1 overflow-hidden whitespace-nowrap text-fg-tertiary", streaming && !open ? "[direction:rtl] [text-overflow:ellipsis] text-left" : "text-ellipsis")} title={detail}>
@@ -87,7 +87,7 @@ export function ReasoningBlock({
         <div ref={bodyRef} data-reasoning-body onScroll={() => {
           const el = bodyRef.current
           if (el) followRef.current = el.scrollHeight - el.clientHeight - el.scrollTop < 24
-        }} className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words py-1 pl-6 text-chat text-fg-secondary">
+        }} className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words py-1 text-chat text-fg-secondary">
           {text}
         </div>
       )}
