@@ -112,6 +112,7 @@
 - 改 `approval_mode` 追加 `session/approval-mode` 事件；改 `model_id` 追加 `model/selection` 事件；改 `reasoning_effort` 追加 `session/effort` 事件（事件词表见 protocol.md §6）。
 - 改 `model_id`：若目标模型 `capabilities.vision=false` 且会话历史已含图片附件（任一 `user/message` 带 `attachments`），返回 409 `session/vision_locked`（否则历史投影要从图片变占位文本，前缀从此处失效）。
 - `reasoning_effort` 仅当 `last_seq = 0`（对话未开始）可设置；`last_seq > 0` 返回 409 `session/effort_locked`（details 带当前值）。值必须在目标模型 `capabilities.reasoning_efforts` 内，否则 400（同请求改 `model_id` 时按新模型校验）。
+- 显式传 `reasoning_effort: ""` 表示恢复默认：目标模型配置了默认档则恢复该档，否则移除会话级 `reasoning_effort` 覆盖，按既有 Agent/模型参数及提供方默认规则执行；保留其它 `model_params`，空对象写为 NULL。重置同样受锁档规则约束，省略字段表示不修改。
 
 ### DELETE /api/v1/sessions/{id}
 

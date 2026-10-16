@@ -212,7 +212,8 @@ func currentEffort(raw json.RawMessage) string {
 
 // planEffortUpdate 校验并计算一次 effort 改档（api.md §3）：
 // last_seq > 0 锁档返回 409 session/effort_locked；值须在目标模型
-// capabilities.reasoning_efforts 内；成功后并入既有 model_params 的其它键。
+// capabilities.reasoning_efforts 内；空串恢复模型默认档（无默认档则删除覆盖）；
+// 保留既有 model_params 的其它键。
 func planEffortUpdate(sess *store.Session, caps capabilities, effort string) (json.RawMessage, error) {
 	if sess.LastSeq > 0 {
 		return nil, &Error{Status: http.StatusConflict, Code: "session/effort_locked",
@@ -221,16 +222,26 @@ func planEffortUpdate(sess *store.Session, caps capabilities, effort string) (js
 	}
 	effort = strings.TrimSpace(effort)
 	if effort == "" {
-		return nil, errInvalid("reasoning_effort 不能为空", map[string]any{"field": "reasoning_effort"})
+		effort = caps.ReasoningEffortDefault
 	}
-	if !effortAllowed(caps, effort) {
+	if effort != "" && !effortAllowed(caps, effort) {
 		return nil, errEffortInvalid(effort, caps)
 	}
 	m := map[string]any{}
 	if len(sess.ModelParams) > 0 {
 		_ = json.Unmarshal(sess.ModelParams, &m)
 	}
-	m["reasoning_effort"] = effort
+	if effort == "" {
+		delete(m, "reasoning_effort")
+	} else {
+		if m == nil {
+			m = map[string]any{}
+		}
+		m["reasoning_effort"] = effort
+	}
+	if len(m) == 0 {
+		return nil, nil
+	}
 	return json.Marshal(m)
 }
 

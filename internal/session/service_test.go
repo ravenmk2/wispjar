@@ -59,7 +59,7 @@ func TestPlanEffortUpdate(t *testing.T) {
 	})
 	t.Run("value must be within model efforts", func(t *testing.T) {
 		sess := &store.Session{}
-		for _, bad := range []string{"", "max", "ultra"} {
+		for _, bad := range []string{"max", "ultra"} {
 			if _, err := planEffortUpdate(sess, caps, bad); err == nil {
 				t.Fatalf("want 400 for %q", bad)
 			} else {
@@ -88,6 +88,46 @@ func TestPlanEffortUpdate(t *testing.T) {
 		}
 		if m["reasoning_effort"] != "high" || m["temperature"] != 0.5 {
 			t.Fatalf("unexpected merged params: %v", m)
+		}
+	})
+	t.Run("default removes effort and preserves other params", func(t *testing.T) {
+		sess := &store.Session{ModelParams: json.RawMessage(`{"temperature":0.5,"reasoning_effort":"high"}`)}
+		raw, err := planEffortUpdate(sess, caps, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var params map[string]any
+		if err := json.Unmarshal(raw, &params); err != nil {
+			t.Fatal(err)
+		}
+		if _, exists := params["reasoning_effort"]; exists || params["temperature"] != 0.5 {
+			t.Fatalf("reset must only remove effort: %s", raw)
+		}
+	})
+	t.Run("default restores configured model effort", func(t *testing.T) {
+		sess := &store.Session{ModelParams: json.RawMessage(`{"reasoning_effort":"high"}`)}
+		withDefault := capabilities{ReasoningEfforts: caps.ReasoningEfforts, ReasoningEffortDefault: "medium"}
+		raw, err := planEffortUpdate(sess, withDefault, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if currentEffort(raw) != "medium" {
+			t.Fatalf("want model default medium, got %s", raw)
+		}
+	})
+	t.Run("reset empty params yields NULL", func(t *testing.T) {
+		for _, params := range []json.RawMessage{nil, json.RawMessage(`null`), json.RawMessage(`{"reasoning_effort":"high"}`)} {
+			raw, err := planEffortUpdate(&store.Session{ModelParams: params}, capabilities{}, "")
+			if err != nil || raw != nil {
+				t.Fatalf("want NULL params after reset, got %s, %v", raw, err)
+			}
+		}
+	})
+	t.Run("cannot reset locked effort", func(t *testing.T) {
+		_, err := planEffortUpdate(&store.Session{LastSeq: 1}, caps, "")
+		var se *Error
+		if !errors.As(err, &se) || se.Code != "session/effort_locked" {
+			t.Fatalf("want effort_locked for reset, got %v", err)
 		}
 	})
 }

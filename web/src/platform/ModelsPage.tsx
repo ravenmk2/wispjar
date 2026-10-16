@@ -162,7 +162,7 @@ export default function ModelsPage() {
                               档位 {m.capabilities.reasoning_efforts.join(" / ")}
                               {m.capabilities.reasoning_effort_default
                                 ? `（默认 ${m.capabilities.reasoning_effort_default}）`
-                                : "（提供方默认）"}
+                                : "（默认）"}
                             </div>
                           )}
                         </TableCell>
@@ -398,7 +398,7 @@ function ModelDialog({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__provider__">提供方默认</SelectItem>
+                      <SelectItem value="__provider__">默认</SelectItem>
                       {REASONING_EFFORT_OPTIONS.filter((effort) => capabilities.reasoning_efforts?.includes(effort)).map((effort) => (
                         <SelectItem key={effort} value={effort}>
                           {effort}

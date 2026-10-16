@@ -316,10 +316,10 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
     setModelOverride(next)
     if (!effortLocked) setEffort(nextDefault || null)
     try {
-      // 未锁定换模型时档位重置为新模型默认档；无默认档无法经 API 清空，仅本地显示"提供方默认"
+      // 未锁定换模型时重置为新模型默认档；空串清除之前的会话档位覆盖。
       const res = await sessionsApi.update(sessionId, {
         model_id: next,
-        ...(!effortLocked && nextDefault ? { reasoning_effort: nextDefault } : {}),
+        ...(!effortLocked ? { reasoning_effort: nextDefault } : {}),
       })
       const v = res.model_params?.reasoning_effort
       if (!effortLocked) setEffort(typeof v === "string" && v ? v : null)
@@ -332,15 +332,17 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
 
   async function changeEffort(next: string) {
     if (
-      sending || effortLocked || !modelEfforts.includes(next) ||
-      next === selectedEffort || (!draftAgent && !sessionId)
+      sending || effortLocked || (next !== "" && !modelEfforts.includes(next)) ||
+      next === (selectedEffort ?? "") || (!draftAgent && !sessionId)
     ) return
     const prev = effort
-    setEffort(next)
+    setEffort(next || null)
     // 新对话尚无会话 ID，选项留在本地，首条消息创建会话时一起提交。
     if (draftAgent) return
     try {
-      await sessionsApi.update(sessionId, { reasoning_effort: next })
+      const res = await sessionsApi.update(sessionId, { reasoning_effort: next })
+      const value = res.model_params?.reasoning_effort
+      setEffort(typeof value === "string" && value ? value : null)
     } catch (e) {
       toast.error(errorMessage(e))
       setEffort(prev)
@@ -561,7 +563,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                     title={effortLocked ? "对话开始后不可更改思考强度" : !supportsEffort ? "当前模型不支持选择推理等级" : "推理等级"}
                     className="group flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
                   >
-                    <span>{selectedEffort ? effortLabel(selectedEffort) : supportsEffort ? "提供方默认" : "推理等级"}</span>
+                    <span>{selectedEffort ? effortLabel(selectedEffort) : supportsEffort ? "默认" : "推理等级"}</span>
                     <ChevronDown className="size-3 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
                   </button>
                 </DropdownMenuTrigger>
@@ -571,11 +573,11 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                     {!modelEffortDefault && (
                       <DropdownMenuRadioItem
                         value=""
-                        disabled={sending || effortLocked || selectedEffort !== null}
-                        title={effortLocked ? "对话开始后不可更改思考强度" : "已显式选档，暂不支持改回提供方默认"}
+                        disabled={sending || effortLocked}
+                        title={effortLocked ? "对话开始后不可更改思考强度" : undefined}
                         className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
                       >
-                        <span className={cn("truncate", selectedEffort === null && "font-semibold")}>提供方默认</span>
+                        <span className={cn("truncate", selectedEffort === null && "font-semibold")}>默认</span>
                         {selectedEffort === null && (
                           <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
                         )}
