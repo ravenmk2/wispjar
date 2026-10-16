@@ -62,7 +62,7 @@ export default function DraftChatView() {
         </span>
       </div>
       <MessageList sessionId="" />
-      <Composer sessionId="" draftAgent={agent} />
+      <Composer key={agent.id} sessionId="" draftAgent={agent} />
     </div>
   )
 }

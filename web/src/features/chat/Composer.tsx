@@ -88,7 +88,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   const running = header?.running ?? false
   const busy = running || liveAttempt !== null
   const modelId = modelOverride ?? header?.modelId ?? draftAgent?.model_id ?? ""
-  const effortLocked = lastSeq > 0
+  const effortLocked = !draftAgent && lastSeq > 0
 
   useEffect(() => {
     if (header?.approvalMode) setApprovalMode(header.approvalMode)
@@ -100,15 +100,20 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
 
   useEffect(() => {
     setEffort(null)
-    if (draftAgent) return
+    if (draftAgent || !sessionId) return
+    let active = true
     sessionsApi
       .detail(sessionId)
       .then((d) => {
+        if (!active) return
         const v = d.model_params?.reasoning_effort
         setEffort(typeof v === "string" && v ? v : null)
       })
       .catch(() => {})
-  }, [sessionId, draftAgent])
+    return () => {
+      active = false
+    }
+  }, [sessionId, draftAgent?.id])
 
   useEffect(() => {
     if (!currentOrg) return
@@ -158,6 +163,11 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   }, [filteredModels])
 
   const currentModel = models.find((m) => m.id === modelId)
+  const modelEfforts = currentModel?.capabilities.reasoning_efforts ?? []
+  const modelEffortDefault = currentModel?.capabilities.reasoning_effort_default ?? ""
+  // 草稿未显式选档时展示模型默认值；正式会话以服务端保存值为准。
+  const selectedEffort = effort ?? (draftAgent ? modelEffortDefault || null : null)
+  const supportsEffort = modelEfforts.length > 0
   const visionSupported = currentModel?.capabilities.vision ?? true
 
   function startUpload(item: PendingImage) {
@@ -224,7 +234,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
 
   async function send() {
     const content = draft.trim()
-    if (sending || busy) return
+    if (sending || busy || (!draftAgent && !sessionId)) return
     const pending = imagesRef.current
     if (!content && pending.length === 0) return
     if (pending.some((i) => i.status === "error")) {
@@ -239,7 +249,10 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
         // 惰性建会话：首条消息先创建会话，再补传附件、发 prompt，最后切换到正式会话页；
         // 任一步失败都停留在草稿页，输入内容与附件保留
         if (!currentOrg) throw new Error("当前机构不可用")
-        const session = await sessionsApi.create(currentOrg.id, { agent_id: draftAgent.id })
+        const session = await sessionsApi.create(currentOrg.id, {
+          agent_id: draftAgent.id,
+          ...(effort ? { reasoning_effort: effort } : {}),
+        })
         targetSessionId = session.id
         refs = await Promise.all(
           pending.map((i) => i.ref ?? attachmentsApi.upload(targetSessionId, i.file)),
@@ -288,7 +301,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   }
 
   async function changeApprovalMode(mode: ApprovalMode) {
-    if (mode === approvalMode) return
+    if (draftAgent || !sessionId || mode === approvalMode) return
     setApprovalMode(mode)
     try {
       await sessionsApi.update(sessionId, { approval_mode: mode })
@@ -299,7 +312,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   }
 
   async function changeModel(next: string) {
-    if (!next || next === modelId) return
+    if (draftAgent || !sessionId || !next || next === modelId) return
     const prevEffort = effort
     const nextModel = models.find((m) => m.id === next)
     const nextDefault = nextModel?.capabilities.reasoning_effort_default ?? ""
@@ -321,9 +334,14 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   }
 
   async function changeEffort(next: string) {
-    if (effortLocked || !next || next === effort) return
+    if (
+      sending || effortLocked || !modelEfforts.includes(next) ||
+      next === selectedEffort || (!draftAgent && !sessionId)
+    ) return
     const prev = effort
     setEffort(next)
+    // 新对话尚无会话 ID，选项留在本地，首条消息创建会话时一起提交。
+    if (draftAgent) return
     try {
       await sessionsApi.update(sessionId, { reasoning_effort: next })
     } catch (e) {
@@ -333,9 +351,6 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   }
 
   const modelName = currentModel?.display_name
-  const modelEfforts = currentModel?.capabilities.reasoning_efforts ?? []
-  const modelEffortDefault = currentModel?.capabilities.reasoning_effort_default ?? ""
-  const supportsEffort = modelEfforts.length > 0
   const currentMode = APPROVAL_MODES.find((m) => m.value === approvalMode) ?? APPROVAL_MODES[2]
 
   return (
@@ -491,13 +506,12 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    disabled={!!draftAgent}
-                    title={draftAgent ? "发送首条消息后可切换模型" : undefined}
+                    disabled={sending || (!sessionId && !draftAgent)}
                     className="group flex h-7 max-w-48 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
                   >
                     <span className="truncate">{(modelName ?? modelId) || "选择模型"}</span>
-                    {supportsEffort && effort && (
-                      <span className="shrink-0 font-normal text-fg-caption">{effortLabel(effort)}</span>
+                    {supportsEffort && selectedEffort && (
+                      <span className="shrink-0 font-normal text-fg-caption">{effortLabel(selectedEffort)}</span>
                     )}
                     <ChevronDown className="size-3 shrink-0 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
                   </button>
@@ -506,6 +520,8 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                   {menuLevel === "root" && (
                     <>
                       <DropdownMenuItem
+                        disabled={!!draftAgent}
+                        title={draftAgent ? "发送首条消息后可切换模型" : undefined}
                         onSelect={(e) => {
                           e.preventDefault()
                           setMenuLevel("model")
@@ -528,7 +544,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                       >
                         <span>推理等级</span>
                         <span className="ml-auto flex min-w-0 items-center gap-0.5 text-fg-caption">
-                          {effort ? effortLabel(effort) : "提供方默认"}
+                          {selectedEffort ? effortLabel(selectedEffort) : "提供方默认"}
                           <ChevronRight className="size-3.5 shrink-0" />
                         </span>
                       </DropdownMenuItem>
@@ -604,16 +620,16 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                         推理等级
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuRadioGroup value={effort ?? ""} onValueChange={(v) => void changeEffort(v)}>
+                      <DropdownMenuRadioGroup value={selectedEffort ?? ""} onValueChange={(v) => void changeEffort(v)}>
                         {!modelEffortDefault && (
                           <DropdownMenuRadioItem
                             value=""
-                            disabled={effortLocked || effort !== null}
+                            disabled={sending || effortLocked || selectedEffort !== null}
                             title={effortLocked ? "对话开始后不可更改思考强度" : "已显式选档，暂不支持改回提供方默认"}
                             className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
                           >
-                            <span className={cn("truncate", effort === null && "font-semibold")}>提供方默认</span>
-                            {effort === null && (
+                            <span className={cn("truncate", selectedEffort === null && "font-semibold")}>提供方默认</span>
+                            {selectedEffort === null && (
                               <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
                             )}
                           </DropdownMenuRadioItem>
@@ -622,12 +638,12 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                           <DropdownMenuRadioItem
                             key={e}
                             value={e}
-                            disabled={effortLocked}
+                            disabled={sending || effortLocked}
                             title={effortLocked ? "对话开始后不可更改思考强度" : undefined}
                             className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
                           >
-                            <span className={cn("truncate", e === effort && "font-semibold")}>{effortLabel(e)}</span>
-                            {e === effort && (
+                            <span className={cn("truncate", e === selectedEffort && "font-semibold")}>{effortLabel(e)}</span>
+                            {e === selectedEffort && (
                               <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
                             )}
                           </DropdownMenuRadioItem>
