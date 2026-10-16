@@ -120,8 +120,8 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 
 - 胶囊卡（rounded-[28px]、柔和投影）：多行输入自适应长高，约 14 行封顶后内部滚动；Enter 发送 / Shift+Enter 换行；右下角 34px 蓝圆发送钮，会话 running 且无草稿时变为**停止**（POST cancel）。
 - 底行左侧：确认模式 chip 下拉（`严格：全部确认 / 默认：仅命令确认 / 自动：全部放行`，盾牌图标 + 描述，当前项加粗 + ✓）→ PATCH session。
-- 底行右侧：上下文环形进度条（ContextRing，见下）+ 模型切换下拉（`/orgs/{org}/models`，按供应商分组，模型数 >4 时下拉顶部出搜索框）。
-- 新对话草稿阶段允许在模型菜单中选择推理等级：未选择时展示模型默认档（未配置则为提供方默认），显式选择仅保存在当前草稿本地状态，不发会话 PATCH；发送首条消息时将 `reasoning_effort` 随 POST 创建会话一起提交，创建失败保留选择，切换智能体草稿后重置。草稿阶段切换模型与审批模式仍不可用；正式会话沿用 PATCH 更新与 `last_seq > 0` 锁档规则。
+- 底行右侧同一行依次展示：上下文环形进度条（ContextRing，见下）、模型下拉、推理等级下拉。两个下拉独立选择，无需进入二级菜单；模型列表取 `/orgs/{org}/models`，按供应商分组，模型数 >4 时顶部出搜索框。推理等级仅展示当前模型声明的档位，固定按 `none/minimal/low/medium/high/xhigh/max` 排列；不支持选档或会话已锁档时禁用等级下拉，模型仍沿用原有切换规则。
+- 新对话草稿阶段允许选择推理等级：未选择时展示模型默认档（未配置则为提供方默认），显式选择仅保存在当前草稿本地状态，不发会话 PATCH；发送首条消息时将 `reasoning_effort` 随 POST 创建会话一起提交，创建失败保留选择，切换智能体草稿后重置。草稿阶段切换模型与审批模式仍不可用；正式会话沿用 PATCH 更新与 `last_seq > 0` 锁档规则。
 - 乐观对账：发送即插入乐观节点（`request_id`），事件帧到达后替换（protocol.md §8.4）。
 - 会话 running 且来自**本会话**时不允许再发送（置灰 + 提示）；429/409 错误 toast。
 - **ApprovalTakeover**：顶层待审批时整个胶囊位被审批卡接管——琥珀描边卡：「等待审批 + 倒计时」头 + 工具参数明细（exec 命令高亮 / write/edit diff）+ 「拒绝」「允许一次」按钮；Enter 允许 / Esc 拒绝。嵌套审批不触发 takeover；仅聊天标签页渲染（轨迹标签页不渲染）。
@@ -171,7 +171,7 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 - **MemberManager**：表格 + 「添加成员」（输入 username，角色下拉）、角色修改、移出（二次确认）。
 - **OrgUsage / PlatformUsage**：日期范围 + group_by 切换 + 表格 + 简单柱状图（recharts 或轻量自绘；token 三色系 input/output/cached）。
 - **Providers**：卡片列表（类型徽标、base_url、密钥掩码、连通状态点、最近检查时间）+ 新建/编辑对话框（类型下拉动态字段：deepseek/qwen/ark/openai_compat 各自 base_url 默认值）+ 「测试连通」按钮。
-- **Models**：按供应商分组的表格；上架对话框（model_code、显示名、能力复选：工具/推理/视觉/流式、上下文长度、默认参数 JSON）。
+- **Models**：按供应商分组的表格；上架对话框（model_code、显示名、能力复选：工具/推理/视觉/流式、上下文长度、默认参数 JSON）。勾选推理能力后可多选 `none/minimal/low/medium/high/xhigh/max` 并从已选档位中指定默认档（或提供方默认）；取消默认档的勾选时清空默认值。选择的是平台档位，调用时由供应商适配器转换（runtime.md §3）；各模型只勾选其支持的档位，空集表示不提供选档。
 - **Settings**：云电脑分区（默认镜像、镜像列表编辑器、egress 策略编辑器：defaultAction 切换 + 规则表格 allow/deny×target、资源默认、TTL）。
 - **Audit**：时间倒序表格（操作者/action/target/时间，detail 展开 JSON）。
 

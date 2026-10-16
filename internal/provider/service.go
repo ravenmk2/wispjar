@@ -65,7 +65,7 @@ type Capabilities struct {
 	Reasoning bool `json:"reasoning"`
 	Vision    bool `json:"vision"`
 	Streaming bool `json:"streaming"`
-	// ReasoningEfforts 声明模型支持的思考强度档位（如 ["low","medium","high"]）；
+	// ReasoningEfforts 从 none/minimal/low/medium/high/xhigh/max 中逐模型多选；
 	// 缺省/空 = 不支持选档。ReasoningEffortDefault 为缺省注入档位，须 ∈ ReasoningEfforts。
 	ReasoningEfforts       []string `json:"reasoning_efforts,omitempty"`
 	ReasoningEffortDefault string   `json:"reasoning_effort_default,omitempty"`
@@ -510,9 +510,8 @@ func parseCapabilities(raw json.RawMessage) (json.RawMessage, error) {
 	}
 	seen := map[string]bool{}
 	for _, e := range caps.ReasoningEfforts {
-		e = strings.TrimSpace(e)
-		if e == "" || seen[e] {
-			return nil, errInvalid("reasoning_efforts 必须是非空且不重复的字符串数组", nil)
+		if !isReasoningEffort(e) || seen[e] {
+			return nil, errInvalid("reasoning_efforts 仅支持 none/minimal/low/medium/high/xhigh/max，且不能重复", nil)
 		}
 		seen[e] = true
 	}

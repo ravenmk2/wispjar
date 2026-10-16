@@ -113,6 +113,8 @@ export interface Provider {
   created_at: string
 }
 
+export const REASONING_EFFORT_OPTIONS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+
 export interface ModelCapabilities {
   tools: boolean
   reasoning: boolean

@@ -62,9 +62,9 @@ func applyCommonParams(cfg *openai.ChatModelConfig, params map[string]any) {
 	}
 }
 
-// applyReasoningEffort reasoning_effort 任意值透传（OpenAI 兼容顶层标准字段）。
+// applyReasoningEffort 原生支持平台档位的 API：保留值，由目标模型执行其兼容映射。
 func applyReasoningEffort(cfg *openai.ChatModelConfig, params map[string]any) {
-	if v, ok := stringParam(params, "reasoning_effort"); ok {
+	if v, ok := stringParam(params, "reasoning_effort"); ok && isReasoningEffort(v) {
 		cfg.ReasoningEffort = openai.ReasoningEffortLevel(v)
 	}
 }
@@ -87,7 +87,9 @@ func (deepseekAdapter) Capabilities() AdapterCapabilities {
 
 func (deepseekAdapter) ApplyParams(cfg *openai.ChatModelConfig, params map[string]any) {
 	applyCommonParams(cfg, params)
-	applyReasoningEffort(cfg, params)
+	if v, ok := stringParam(params, "reasoning_effort"); ok {
+		applyDeepSeekEffort(cfg, v)
+	}
 }
 
 // NormalizeUsage deepseek 权威字段是顶层 prompt_cache_hit_tokens（官方承诺），
@@ -116,6 +118,9 @@ func (arkAdapter) Capabilities() AdapterCapabilities {
 
 func (a arkAdapter) ApplyParams(cfg *openai.ChatModelConfig, params map[string]any) {
 	applyCommonParams(cfg, params)
+	// 方舟支持选档的模型接受全部七档，由 API 按模型版本转换等效值；
+	// ep-* 接入点隐藏实际模型，不能在客户端统一压到 high 或猜测开关。
+	// https://docs.volcengine.com/docs/ark/deep-thinking
 	applyReasoningEffort(cfg, params)
 	// prompt_cache_key 仅 ark 放行：上下文缓存路由亲和参数（builder 注入 sessionID）。
 	if a.Capabilities().SupportsPromptCacheKey {
@@ -144,14 +149,11 @@ func (qwenAdapter) Capabilities() AdapterCapabilities {
 	}
 }
 
-// ApplyParams qwen 特化：千问无枚举档位，reasoning_effort 按固定映射折算为
-// enable_thinking/thinking_budget 非标准顶层字段（runtime.md §3）。
+// ApplyParams qwen 特化：按模型版本使用原生档位或 enable_thinking/thinking_budget。
 func (qwenAdapter) ApplyParams(cfg *openai.ChatModelConfig, params map[string]any) {
 	applyCommonParams(cfg, params)
 	if v, ok := stringParam(params, "reasoning_effort"); ok {
-		for k, val := range qwenThinkingExtra(v) {
-			setExtraField(cfg, k, val)
-		}
+		applyQwenEffort(cfg, v)
 	}
 }
 

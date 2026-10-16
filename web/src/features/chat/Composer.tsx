@@ -1,4 +1,4 @@
-import { ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, ImageOff, Loader2, Paperclip, RotateCw, Shield, ShieldCheck, ShieldOff, Square, X } from "lucide-react"
+import { ArrowUp, Check, ChevronDown, ImageOff, Loader2, Paperclip, RotateCw, Shield, ShieldCheck, ShieldOff, Square, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router"
 import { toast } from "sonner"
@@ -13,13 +13,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ContextRing } from "@/features/chat/ContextRing"
 import { cn, uuid } from "@/lib/utils"
+import { REASONING_EFFORT_OPTIONS } from "@/lib/types"
 import type { AgentSummary, ApprovalMode, AttachmentRef, OrgModel } from "@/lib/types"
 import { useComposerStore } from "@/stores/composer"
 import { useCurrentOrg } from "@/stores/identity"
@@ -55,8 +55,6 @@ function effortLabel(effort: string): string {
   return effort.charAt(0).toUpperCase() + effort.slice(1)
 }
 
-type ModelMenuLevel = "root" | "model" | "effort"
-
 export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAgent?: AgentSummary }) {
   const currentOrg = useCurrentOrg()
   const navigate = useNavigate()
@@ -75,7 +73,6 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   const [models, setModels] = useState<OrgModel[]>([])
   const [modelOverride, setModelOverride] = useState<string | null>(null)
   const [modelQuery, setModelQuery] = useState("")
-  const [menuLevel, setMenuLevel] = useState<ModelMenuLevel>("root")
   const [effort, setEffort] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -163,7 +160,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   }, [filteredModels])
 
   const currentModel = models.find((m) => m.id === modelId)
-  const modelEfforts = currentModel?.capabilities.reasoning_efforts ?? []
+  const modelEfforts = REASONING_EFFORT_OPTIONS.filter((e) => currentModel?.capabilities.reasoning_efforts?.includes(e))
   const modelEffortDefault = currentModel?.capabilities.reasoning_effort_default ?? ""
   // 草稿未显式选档时展示模型默认值；正式会话以服务端保存值为准。
   const selectedEffort = effort ?? (draftAgent ? modelEffortDefault || null : null)
@@ -493,164 +490,112 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <div className="ml-auto flex items-center gap-1.5">
+            <div className="ml-auto flex min-w-0 items-center gap-1.5">
               <ContextRing contextSize={currentModel?.context_size} />
-              <DropdownMenu
-                onOpenChange={(open) => {
-                  if (!open) {
-                    setModelQuery("")
-                    setMenuLevel("root")
-                  }
-                }}
-              >
+              <DropdownMenu onOpenChange={(open) => {
+                if (!open) setModelQuery("")
+              }}>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    disabled={sending || (!sessionId && !draftAgent)}
-                    className="group flex h-7 max-w-48 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
+                    aria-label="选择模型"
+                    disabled={sending || !!draftAgent || !sessionId}
+                    title={draftAgent ? "发送首条消息后可切换模型" : undefined}
+                    className="group flex h-7 min-w-0 max-w-48 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
                   >
                     <span className="truncate">{(modelName ?? modelId) || "选择模型"}</span>
-                    {supportsEffort && selectedEffort && (
-                      <span className="shrink-0 font-normal text-fg-caption">{effortLabel(selectedEffort)}</span>
-                    )}
                     <ChevronDown className="size-3 shrink-0 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="top" align="end" sideOffset={8} className="w-64">
-                  {menuLevel === "root" && (
-                    <>
-                      <DropdownMenuItem
-                        disabled={!!draftAgent}
-                        title={draftAgent ? "发送首条消息后可切换模型" : undefined}
-                        onSelect={(e) => {
-                          e.preventDefault()
-                          setMenuLevel("model")
+                  {models.length > 4 && (
+                    <div className="px-1 pb-1">
+                      <Input
+                        autoFocus
+                        value={modelQuery}
+                        onChange={(e) => setModelQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Escape" && e.key !== "ArrowDown" && e.key !== "ArrowUp") {
+                            e.stopPropagation()
+                          }
                         }}
-                        className="px-2.5 py-2 text-[13px]"
-                      >
-                        <span>模型</span>
-                        <span className="ml-auto flex min-w-0 items-center gap-0.5 text-fg-caption">
-                          <span className="max-w-36 truncate">{modelName ?? modelId}</span>
-                          <ChevronRight className="size-3.5 shrink-0" />
-                        </span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={!supportsEffort}
-                        onSelect={(e) => {
-                          e.preventDefault()
-                          setMenuLevel("effort")
-                        }}
-                        className="px-2.5 py-2 text-[13px]"
-                      >
-                        <span>推理等级</span>
-                        <span className="ml-auto flex min-w-0 items-center gap-0.5 text-fg-caption">
-                          {selectedEffort ? effortLabel(selectedEffort) : "提供方默认"}
-                          <ChevronRight className="size-3.5 shrink-0" />
-                        </span>
-                      </DropdownMenuItem>
-                    </>
+                        placeholder="搜索模型…"
+                        className="h-8 px-2.5 text-xs shadow-none"
+                      />
+                    </div>
                   )}
-                  {menuLevel === "model" && (
-                    <>
-                      <DropdownMenuItem
-                        onSelect={(e) => {
-                          e.preventDefault()
-                          setMenuLevel("root")
-                        }}
-                        className="px-2.5 py-1.5 text-[13px] text-fg-secondary"
-                      >
-                        <ChevronLeft className="size-3.5" />
-                        模型
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      {models.length > 4 && (
-                        <div className="px-1 pb-1">
-                          <Input
-                            autoFocus
-                            value={modelQuery}
-                            onChange={(e) => setModelQuery(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key !== "Escape" && e.key !== "ArrowDown" && e.key !== "ArrowUp") {
-                                e.stopPropagation()
-                              }
-                            }}
-                            placeholder="搜索模型…"
-                            className="h-8 px-2.5 text-xs shadow-none"
-                          />
-                        </div>
-                      )}
-                      <DropdownMenuRadioGroup value={modelId} onValueChange={(v) => void changeModel(v)}>
-                        {modelGroups.map((group) => (
-                          <div key={group.provider}>
-                            <DropdownMenuLabel className="px-2.5 pb-1 pt-1.5 text-xs font-normal text-fg-caption">
-                              {group.provider}
-                            </DropdownMenuLabel>
-                            {group.items.map((m) => (
-                              <DropdownMenuRadioItem
-                                key={m.id}
-                                value={m.id}
-                                className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
-                              >
-                                <span className={cn("truncate", m.id === modelId && "font-semibold")}>
-                                  {m.display_name}
-                                </span>
-                                {m.id === modelId && (
-                                  <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
-                                )}
-                              </DropdownMenuRadioItem>
-                            ))}
-                          </div>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                      {filteredModels.length === 0 && (
-                        <div className="px-2.5 py-2 text-xs text-fg-caption">无匹配模型</div>
-                      )}
-                    </>
-                  )}
-                  {menuLevel === "effort" && (
-                    <>
-                      <DropdownMenuItem
-                        onSelect={(e) => {
-                          e.preventDefault()
-                          setMenuLevel("root")
-                        }}
-                        className="px-2.5 py-1.5 text-[13px] text-fg-secondary"
-                      >
-                        <ChevronLeft className="size-3.5" />
-                        推理等级
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuRadioGroup value={selectedEffort ?? ""} onValueChange={(v) => void changeEffort(v)}>
-                        {!modelEffortDefault && (
+                  <DropdownMenuRadioGroup value={modelId} onValueChange={(v) => void changeModel(v)}>
+                    {modelGroups.map((group) => (
+                      <div key={group.provider}>
+                        <DropdownMenuLabel className="px-2.5 pb-1 pt-1.5 text-xs font-normal text-fg-caption">
+                          {group.provider}
+                        </DropdownMenuLabel>
+                        {group.items.map((m) => (
                           <DropdownMenuRadioItem
-                            value=""
-                            disabled={sending || effortLocked || selectedEffort !== null}
-                            title={effortLocked ? "对话开始后不可更改思考强度" : "已显式选档，暂不支持改回提供方默认"}
+                            key={m.id}
+                            value={m.id}
                             className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
                           >
-                            <span className={cn("truncate", selectedEffort === null && "font-semibold")}>提供方默认</span>
-                            {selectedEffort === null && (
+                            <span className={cn("truncate", m.id === modelId && "font-semibold")}>
+                              {m.display_name}
+                            </span>
+                            {m.id === modelId && (
                               <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
                             )}
                           </DropdownMenuRadioItem>
+                        ))}
+                      </div>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  {filteredModels.length === 0 && (
+                    <div className="px-2.5 py-2 text-xs text-fg-caption">无匹配模型</div>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="选择推理等级"
+                    disabled={sending || effortLocked || !supportsEffort || (!draftAgent && !sessionId)}
+                    title={effortLocked ? "对话开始后不可更改思考强度" : !supportsEffort ? "当前模型不支持选择推理等级" : "推理等级"}
+                    className="group flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[13px] font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
+                  >
+                    <span>{selectedEffort ? effortLabel(selectedEffort) : supportsEffort ? "提供方默认" : "推理等级"}</span>
+                    <ChevronDown className="size-3 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="top" align="end" sideOffset={8} className="w-40">
+                  <DropdownMenuLabel className="px-2.5 text-xs font-normal text-fg-caption">推理等级</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={selectedEffort ?? ""} onValueChange={(v) => void changeEffort(v)}>
+                    {!modelEffortDefault && (
+                      <DropdownMenuRadioItem
+                        value=""
+                        disabled={sending || effortLocked || selectedEffort !== null}
+                        title={effortLocked ? "对话开始后不可更改思考强度" : "已显式选档，暂不支持改回提供方默认"}
+                        className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
+                      >
+                        <span className={cn("truncate", selectedEffort === null && "font-semibold")}>提供方默认</span>
+                        {selectedEffort === null && (
+                          <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
                         )}
-                        {modelEfforts.map((e) => (
-                          <DropdownMenuRadioItem
-                            key={e}
-                            value={e}
-                            disabled={sending || effortLocked}
-                            title={effortLocked ? "对话开始后不可更改思考强度" : undefined}
-                            className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
-                          >
-                            <span className={cn("truncate", e === selectedEffort && "font-semibold")}>{effortLabel(e)}</span>
-                            {e === selectedEffort && (
-                              <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
-                            )}
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                    </>
-                  )}
+                      </DropdownMenuRadioItem>
+                    )}
+                    {modelEfforts.map((e) => (
+                      <DropdownMenuRadioItem
+                        key={e}
+                        value={e}
+                        disabled={sending || effortLocked}
+                        title={effortLocked ? "对话开始后不可更改思考强度" : undefined}
+                        className="px-2.5 text-[13px] [&>span:first-of-type]:hidden"
+                      >
+                        <span className={cn("truncate", e === selectedEffort && "font-semibold")}>{effortLabel(e)}</span>
+                        {e === selectedEffort && (
+                          <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
+                        )}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
               {busy && !draft.trim() ? (

@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { formatNumber } from "@/lib/format"
+import { REASONING_EFFORT_OPTIONS } from "@/lib/types"
 import type { Model, ModelCapabilities, Provider } from "@/lib/types"
 
 type CapabilityFlag = "tools" | "reasoning" | "vision" | "streaming"
@@ -44,8 +45,6 @@ const CAPABILITY_LABELS: Array<{ key: CapabilityFlag; label: string }> = [
   { key: "vision", label: "视觉" },
   { key: "streaming", label: "流式" },
 ]
-
-const REASONING_EFFORT_OPTIONS = ["minimal", "low", "medium", "high", "max"]
 
 export default function ModelsPage() {
   const [models, setModels] = useState<Model[] | null>(null)
@@ -367,7 +366,7 @@ function ModelDialog({
                           setCapabilities((prev) => {
                             const current = prev.reasoning_efforts ?? []
                             const efforts = e.target.checked
-                              ? [...current, effort]
+                              ? REASONING_EFFORT_OPTIONS.filter((v) => v === effort || current.includes(v))
                               : current.filter((v) => v !== effort)
                             return {
                               ...prev,
@@ -400,7 +399,7 @@ function ModelDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__provider__">提供方默认</SelectItem>
-                      {(capabilities.reasoning_efforts ?? []).map((effort) => (
+                      {REASONING_EFFORT_OPTIONS.filter((effort) => capabilities.reasoning_efforts?.includes(effort)).map((effort) => (
                         <SelectItem key={effort} value={effort}>
                           {effort}
                         </SelectItem>

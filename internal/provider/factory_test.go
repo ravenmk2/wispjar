@@ -81,13 +81,13 @@ func TestApplyParams(t *testing.T) {
 			t.Fatalf("max_tokens not mapped: %+v", cfg)
 		}
 	})
-	t.Run("reasoning_effort passthrough", func(t *testing.T) {
+	t.Run("deepseek reasoning effort enables thinking", func(t *testing.T) {
 		cfg := apply("deepseek", map[string]any{"reasoning_effort": "max"})
 		if cfg.ReasoningEffort != openai.ReasoningEffortLevel("max") {
 			t.Fatalf("want passthrough, got %q", cfg.ReasoningEffort)
 		}
-		if len(cfg.ExtraFields) != 0 {
-			t.Fatalf("non-qwen must not use ExtraFields, got %v", cfg.ExtraFields)
+		if cfg.ExtraFields["thinking"].(map[string]any)["type"] != "enabled" {
+			t.Fatalf("thinking must be enabled, got %v", cfg.ExtraFields)
 		}
 	})
 	t.Run("qwen thinking mapping", func(t *testing.T) {
@@ -96,11 +96,13 @@ func TestApplyParams(t *testing.T) {
 			enabled bool
 			budget  int
 		}{
-			{"minimal", false, 0},
+			{"none", false, 0},
+			{"minimal", true, 128},
 			{"low", true, 1024},
 			{"medium", true, 8192},
-			{"high", true, 32768},
-			{"max", true, 32768},
+			{"high", true, 16384},
+			{"xhigh", true, 32768},
+			{"max", true, 0},
 		}
 		for _, tc := range cases {
 			cfg := apply("qwen", map[string]any{"reasoning_effort": tc.effort})
@@ -111,13 +113,13 @@ func TestApplyParams(t *testing.T) {
 			if !ok || en != tc.enabled {
 				t.Fatalf("%s: enable_thinking want %v, got %v", tc.effort, tc.enabled, cfg.ExtraFields["enable_thinking"])
 			}
-			if tc.enabled {
+			if tc.budget > 0 {
 				b, ok := cfg.ExtraFields["thinking_budget"].(int)
 				if !ok || b != tc.budget {
 					t.Fatalf("%s: thinking_budget want %d, got %v", tc.effort, tc.budget, cfg.ExtraFields["thinking_budget"])
 				}
 			} else if _, ok := cfg.ExtraFields["thinking_budget"]; ok {
-				t.Fatalf("%s: minimal must not set thinking_budget", tc.effort)
+				t.Fatalf("%s: must not set thinking_budget", tc.effort)
 			}
 		}
 	})

@@ -102,7 +102,7 @@ CREATE TABLE model (
   model_code     VARCHAR(128) NOT NULL,                 -- 调 API 的模型名：deepseek-chat / doubao-pro-32k / qwen-max
   display_name   VARCHAR(128) NOT NULL,
   capabilities   JSON         NOT NULL,                 -- {"tools":true,"reasoning":true,"vision":false,"streaming":true,
-                                                        --  "reasoning_efforts":["low","medium","high"],"reasoning_effort_default":"medium"}（后两个可选；空 = 不支持选档）
+                                                        --  "reasoning_efforts":["low","medium","high"],"reasoning_effort_default":"medium"}（后两个可选；档位从 none/minimal/low/medium/high/xhigh/max 多选；空 = 不支持选档）
   context_size   INT          NOT NULL DEFAULT 64000,   -- tokens
   default_params JSON         NULL,                     -- {"temperature":0.7,"max_tokens":4096,...}
   status         VARCHAR(16)  NOT NULL DEFAULT 'active',

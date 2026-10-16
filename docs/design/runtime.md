@@ -76,10 +76,24 @@ type ChatModelFactory interface {
   - `NormalizeUsage(raw)`：原始 usage 归一化（见下）。
 - 参数映射（白名单，未识别键忽略）：
   - `temperature/top_p/max_tokens` → 组件对应字段（各家通用）；
-  - `reasoning_effort`（string）→ `cfg.ReasoningEffort`，任意值透传（OpenAI 兼容顶层标准字段；`capabilities.reasoning=true` 且组件支持时开启 reasoning 输出）；
-  - `provider_type=="qwen"` 特化：千问无枚举档位，`enable_thinking`/`thinking_budget` 为非标准顶层参数，按固定映射进 `ExtraFields`——`minimal`→`{"enable_thinking":false}`；`low/medium/high`→`{"enable_thinking":true,"thinking_budget":1024/8192/32768}`；`max`→32768；未识别值忽略不透传；
+  - `reasoning_effort` 是平台统一档位 `none/minimal/low/medium/high/xhigh/max`，保存值不变，仅调用边界转换，具体见下表；缺省或非法值不额外注入思考参数；
   - `prompt_cache_key`（string）→ `cfg.ExtraFields`，**仅 ark 放行**：ark 上下文缓存的路由亲和参数，上下文连续的请求用同一取值（builder 对 ark 供应商注入 `sessionID`，同 key 流量 ≤15 rpm）；其余各家（含 openai_compat）不放行。
-- 模型能力声明 `capabilities.reasoning_efforts`（可选档位列表）+ `reasoning_effort_default`（缺省档）由平台逐模型录入；空 = 不支持选档。
+- 模型能力声明 `capabilities.reasoning_efforts`（上述七档的可选子集）+ `reasoning_effort_default`（必须属于已选集合）由平台逐模型录入；空 = 不支持选档。供应商/模型不支持关闭思考或不支持某档位时，配置中不应勾选该档位；不因统一词表而推断所有模型均支持全部七档。
+
+推理等级调用映射（2026-10-16 核对官方文档）：
+
+| 供应商/模型 | none | minimal | low | medium | high | xhigh | max |
+|---|---|---|---|---|---|---|---|
+| DeepSeek Chat | `thinking.type=disabled`，不发 effort | low | low | high | high | high | max |
+| 方舟 ark | 原值 | 原值 | 原值 | 原值 | 原值 | 原值 | 原值 |
+| Qwen3.8-* | `enable_thinking=false` | low | low | medium | xhigh | xhigh | xhigh |
+| 较早 Qwen（预算模式） | `enable_thinking=false` | 128 | 1024 | 8192 | 16384 | 32768 | 不设预算，使用模型最大值 |
+| OpenAI compatible | 原值 | 原值 | 原值 | 原值 | 原值 | 原值 | 原值 |
+
+- DeepSeek 的非 none 档位同时发送 `thinking.type=enabled`，表中值发到顶层 `reasoning_effort`。依据：[DeepSeek Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)。
+- 方舟支持选档的模型接受全部七档并按模型版本执行官方兼容映射，例如豆包 `none→minimal`、`xhigh/max→high`；DeepSeek/GLM 的规则不同，`ep-*` 接入点又不暴露真实模型，因此保留原值交由方舟转换，不能全局压到 high。`minimal` 在部分方舟模型上也会关闭思考。依据：[方舟深度思考](https://docs.volcengine.com/docs/ark/deep-thinking)。
+- Qwen 非 none 档位发送 `enable_thinking=true`。Qwen3.8-* 用顶层 `reasoning_effort`，不发 `thinking_budget`，二者互斥；较早 Qwen 表中的数字是平台约定的思考 token 预算，通过顶层 `thinking_budget` 传入（`ExtraFields`），并非阿里云官方枚举或官方档位等价表；max 省略预算，按官方默认使用该模型最大思维链长度。依据：[百炼 Chat Completions 参数](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions/)、[思考预算说明](https://www.alibabacloud.com/help/en/model-studio/deep-thinking)。
+- OpenAI compatible 是开放集合，按模型实际支持情况配置可选子集，原值传入顶层 `reasoning_effort`，不猜测第三方兼容服务的私有映射。依据：[OpenAI reasoning effort](https://developers.openai.com/api/docs/guides/reasoning)。
 
 ### 3.1 usage 按供应商归一化（原始 usage 旁路抓取）
 

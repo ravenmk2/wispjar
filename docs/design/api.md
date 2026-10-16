@@ -305,6 +305,8 @@
 | `PUT /platform/models/{id}` | 更新/上下架（`status`） |
 | `DELETE /platform/models/{id}` | 删除；被智能体引用时 409 并列出 |
 
+`capabilities.reasoning_efforts` 可从 `none/minimal/low/medium/high/xhigh/max` 多选，非法值或重复值返回 400；可选 `reasoning_effort_default` 必须属于已选集合。此处与会话保存的都是平台档位，供应商实际请求参数按 runtime.md §3 转换，不回写为供应商枚举或 token 预算；字段缺省/空列表表示不提供选档。
+
 ### 平台设置与报表
 
 | 方法/路径 | 说明 |
