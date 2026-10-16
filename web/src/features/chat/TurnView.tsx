@@ -10,7 +10,7 @@ import { useChatDisclosure } from "@/stores/chatPresentation"
 export function TurnView({ segment, sessionId, latestTurn }: {
   segment: TurnSegment; sessionId: string; latestTurn: number
 }) {
-  const running = !segment.end
+  const running = segment.running
   const [open, setOpen] = useChatDisclosure(sessionId, `turn-${segment.turn}`, segment.turn === latestTurn)
   const expanded = open || segment.hasPendingApproval
   const [errorOpen, setErrorOpen] = useChatDisclosure(sessionId, `turn-error-${segment.turn}`)

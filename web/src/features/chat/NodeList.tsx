@@ -119,11 +119,12 @@ export function NodeList({
   sessionId: string
   depth?: number
 }) {
+  const running = useSessionStore((s) => s.header ? s.header.running || s.liveAttempt !== null : undefined)
   const latestTurn = useMemo(
     () => nodes.reduce((max, n) => Math.max(max, n.turn), 0),
     [nodes],
   )
-  const grouped = useMemo(() => (depth === 0 ? groupByTurn(nodes) : null), [nodes, depth])
+  const grouped = useMemo(() => (depth === 0 ? groupByTurn(nodes, running) : null), [nodes, depth, running])
   // 嵌套（depth>0）渲染时，只有最后一条带文本的 assistant 视为最终回复
   const nestedAnswerId = useMemo(() => {
     if (grouped) return null

@@ -66,6 +66,47 @@ test("running text is visible but is not yet a settled answer", () => {
   assert.equal(f.segment().parts[0].kind, "reply")
 })
 
+test("forked final reply survives a new turn and replay without an end event", () => {
+  const f = fixture(); f.message([thought("thinking"), text("forked final reply")])
+  const idle = groupByTurn(deriveConversationNodes(f.events, null), false).segments[0]
+  assert.ok(idle.answerId)
+  assert.equal(idle.running, false)
+  assert.equal(idle.end, undefined)
+  assert.equal(idle.durationMs, undefined)
+  assert.equal(idle.parts[0].kind === "process" && idle.parts[0].running, false)
+
+  f.add({ type: "user/message", data: { turn: 2, content: "continue", request_id: "next" } })
+  f.add({ type: "turn/start", data: { turn: 2, request_id: "next" } })
+  f.add({ type: "assistant/message", data: { turn: 2, step: 1, message: { role: "assistant", content: [text("new progress")] } } })
+  const replay = JSON.parse(JSON.stringify(f.events)) as SessionEvent[]
+  for (const events of [f.events, replay]) {
+    const [previous, current] = groupByTurn(deriveConversationNodes(events, null), true).segments
+    assert.equal(previous.answerId, idle.answerId)
+    assert.equal(previous.running, false)
+    assert.equal(previous.end, undefined)
+    assert.equal(previous.durationMs, undefined)
+    assert.equal(current.running, true)
+    assert.equal(current.answerId, undefined)
+  }
+})
+
+test("a later turn settles truncated history even when session status is unavailable", () => {
+  const f = fixture(); f.message([text("forked final reply")])
+  f.add({ type: "user/message", data: { turn: 2, content: "continue", request_id: "next" } })
+  const [previous, current] = groupByTurn(deriveConversationNodes(f.events, null)).segments
+  assert.ok(previous.answerId)
+  assert.equal(previous.running, false)
+  assert.equal(current.running, true)
+})
+
+test("idle truncated history ending in a tool does not promote progress to a final reply", () => {
+  const f = fixture(); f.message([text("progress"), tool("unfinished")])
+  const seg = groupByTurn(deriveConversationNodes(f.events, null), false).segments[0]
+  assert.equal(seg.running, false)
+  assert.equal(seg.answerId, undefined)
+  assert.equal(seg.end, undefined)
+})
+
 test("completed turn ending in a tool does not misidentify progress as the final answer", () => {
   const f = fixture(); f.message([text("progress"), tool("a")]); f.end()
   assert.equal(f.segment().answerId, undefined)

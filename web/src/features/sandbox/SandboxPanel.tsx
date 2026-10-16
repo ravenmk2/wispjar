@@ -14,7 +14,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { toast } from "sonner"
 import { errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatBytes } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -22,14 +21,7 @@ import type { SandboxFileItem, SandboxStatus } from "@/lib/types"
 import { useSessionStore } from "@/stores/session"
 import { FilePreview } from "./FilePreview"
 import { previewKind } from "./previewUtils"
-
-const STATUS_LABEL: Record<SandboxStatus, string> = {
-  none: "无云电脑",
-  creating: "创建中",
-  running: "运行中",
-  paused: "已暂停",
-  recycled: "已回收",
-}
+import { SandboxStatusIndicator } from "./SandboxStatusIndicator"
 
 const PANEL_W_KEY = "wispjar-sandbox-panel-w"
 const PANEL_DEFAULT_W = 420
@@ -280,13 +272,7 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
       <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
         <Box className="size-4 text-muted-foreground" />
         <span className="text-sm font-medium">云电脑</span>
-        <Badge
-          variant={status === "running" ? "default" : "secondary"}
-          className="text-[11px] font-normal"
-        >
-          {status === "creating" && <Loader2 className="mr-1 size-3 animate-spin" />}
-          {STATUS_LABEL[status]}
-        </Badge>
+        <SandboxStatusIndicator status={status} />
         <Button variant="ghost" size="icon" className="ml-auto size-7" onClick={onClose}>
           <X className="size-4" />
         </Button>

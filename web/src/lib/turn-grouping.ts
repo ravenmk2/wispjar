@@ -14,6 +14,7 @@ export type TurnPart = ProcessGroup | { kind: "reply"; node: AssistantNode }
 
 export interface TurnSegment {
   turn: number
+  running: boolean
   start?: BoundaryNode
   user?: UserNode | QuestionReplyNode
   parts: TurnPart[]
@@ -41,7 +42,7 @@ export function hasProcessError(nodes: ConversationNode[]): boolean {
 }
 
 // Split on visible text, never on stream frames. Reasoning and tools stay in original order.
-export function groupByTurn(nodes: ConversationNode[]): { segments: TurnSegment[]; loose: ConversationNode[] } {
+export function groupByTurn(nodes: ConversationNode[], sessionRunning?: boolean): { segments: TurnSegment[]; loose: ConversationNode[] } {
   const segments: TurnSegment[] = []
   const byTurn = new Map<number, TurnSegment>()
   const loose: ConversationNode[] = []
@@ -56,7 +57,7 @@ export function groupByTurn(nodes: ConversationNode[]): { segments: TurnSegment[
     if (node.turn <= 0) { loose.push(node); continue }
     let seg = byTurn.get(node.turn)
     if (!seg) {
-      seg = { turn: node.turn, parts: [], hasPendingApproval: false }
+      seg = { turn: node.turn, running: true, parts: [], hasPendingApproval: false }
       byTurn.set(node.turn, seg)
       segments.push(seg)
     }
@@ -81,18 +82,22 @@ export function groupByTurn(nodes: ConversationNode[]): { segments: TurnSegment[
     } else addProcess(seg, node)
   }
 
+  const latestTurn = segments.reduce((latest, seg) => Math.max(latest, seg.turn), 0)
   for (const seg of segments) {
+    // Forked history may end at an assistant message, before the original turn/end.
+    // An idle chat or a later turn settles it without inventing an end event.
+    seg.running = !seg.end && seg.turn === latestTurn && sessionRunning !== false
     for (const part of seg.parts) {
       if (part.kind !== "process") continue
-      part.running = !seg.end
-      part.hasPending = !seg.end && hasPendingApproval(part.nodes)
+      part.running = seg.running
+      part.hasPending = seg.running && hasPendingApproval(part.nodes)
       part.hasError = hasProcessError(part.nodes)
       seg.hasPendingApproval ||= part.hasPending
     }
-    if (seg.end) {
+    if (!seg.running) {
       const last = seg.parts[seg.parts.length - 1]
       if (last?.kind === "reply") seg.answerId = last.node.id
-      else if (seg.end.reason !== "completed") {
+      else if (seg.end && seg.end.reason !== "completed") {
         // Keep the last text of a stopped turn without treating it as a completed answer.
         for (let i = seg.parts.length - 1; i >= 0; i--) {
           const part = seg.parts[i]
