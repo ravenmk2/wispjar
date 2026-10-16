@@ -15,7 +15,7 @@
 | 思考摘要及详情、过程组与工具折叠行 | 16px / 26px | `text-chat`，以辅助色区分层级 |
 | 工具参数、输出、搜索结果、diff、代码块及行内代码 | 16px / 26px | 等宽字体，行内代码继承正文字号 |
 | 提问、选项及解释、已回答内容 | 16px / 26px | `text-chat` |
-| 侧栏“智能体”“会话”及聊天名称 | 14px / 22px | `text-sm leading-[22px]`，分组以字重、颜色与间距区分 |
+| 侧栏“智能体”“聊天”及聊天名称 | 14px / 22px | `text-sm leading-[22px]`，分组以字重、颜色与间距区分 |
 | 通用菜单、按钮、表单及管理表格 | 14px / 20px | `text-sm`，保留管理页密度 |
 | 时间、工具耗时、token 统计与状态徽标 | 12px / 18px | `text-meta` |
 | 辅助提示 | 13px / 20px | `text-xs` |
@@ -49,12 +49,16 @@ body 基准 16px；聊天统一使用 `--chat-font-size: 16px`、`--chat-line-he
 | `--primary-hover` | #2E76E8 | #3575D8 | 主按钮 hover |
 | `--primary-active` | #2668D2 | #2458AD | 主按钮按下 |
 | `--primary-foreground` | #FFFFFF | #FFFFFF | 主按钮内容 |
+| `--primary-soft` | #EAF2FF | #20334F | 信息徽章柔和蓝底，搭配 `text-link` |
 | `--link` | #2C67C5 | #83B5FF | 链接及文字强调，与实色按钮分开 |
 | `--ring-focus` | rgba(58,131,247,.2) | rgba(44,103,197,.2) | 焦点与文本选区 |
 | `--destructive` | 353 100% 61% | 354 100% 64% | 错误与危险 |
 | `--success` | #16C456 | #16C456 | 成功 |
 | `--warning` | #FF9500 | #FF9F0A | 警告 |
-| `--tooltip-bg` / `--toast-bg` | #2B2B2B | #404040 | 深底提示 |
+| `--tooltip-bg` | #FFFFFF | #2B2B2B | Tooltip 与默认 HoverCard，搭配主题正文／辅助色、边框和阴影 |
+| `--toast-bg` | #2B2B2B | #404040 | Toast 深底提示 |
+
+发送、机构管理、系统管理的主按钮统一使用 `primary`／`primary-hover`／`primary-active`，以启用态为基准，禁用态保留透明度区分。云电脑运行状态、已发布、管理员等信息徽章统一使用 `bg-primary-soft text-link border-primary/20`，不使用实心主按钮填充或无操作的 hover 反馈；成功、警告、危险等语义状态保持各自颜色。文字链接在深色主题使用更亮的同系蓝以保证可读性。Tooltip 与聊天列表悬浮信息卡随主题切换底色、文字、边框与阴影，内部时间／状态／空闲圆点使用主题辅助色，不固定白字。
 
 普通文字使用明确灰阶，避免继续通过低透明度削弱可读性。禁用控件及按需浮现的操作条仍保留禁用、hover、focus 状态。用户气泡必须配套使用 `text-bubble-foreground`；链接使用 `text-link`。
 

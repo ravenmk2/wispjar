@@ -12,6 +12,7 @@
     --primary: 216.82540 92.19512% 59.80392%;
     --primary-hover: #2e76e8;
     --primary-active: #2668d2;
+    --primary-soft: #eaf2ff;
     --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 96.1%;
     --muted: 0 0% 96.1%;
@@ -45,7 +46,7 @@
     --link: #2c67c5;
     --success: #16c456;
     --warning: #ff9500;
-    --tooltip-bg: #2b2b2b;
+    --tooltip-bg: #ffffff;
     --toast-bg: #2b2b2b;
   }
 
@@ -59,6 +60,7 @@
     --primary: 216.86275 63.48548% 47.25490%;
     --primary-hover: #3575d8;
     --primary-active: #2458ad;
+    --primary-soft: #20334f;
     --primary-foreground: 0 0% 100%;
     --secondary: 0 0% 16%;
     --muted: 0.00000 0.00000% 14.11765%;
@@ -81,7 +83,7 @@
     --link: #83b5ff;
     --success: #16c456;
     --warning: #ff9f0a;
-    --tooltip-bg: #404040;
+    --tooltip-bg: #2b2b2b;
     --toast-bg: #404040;
     --shadow-input: 0 5px 16px -4px rgba(0, 0, 0, 0.3);
     --shadow-input-focus: 0 5px 18px -4px rgba(0, 0, 0, 0.48);

@@ -20,8 +20,9 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
   const last = group.nodes[group.nodes.length - 1]
   const thinking = group.running && last?.kind === "assistant" ? last.content.find((b) => b.type === "reasoning" && b.streaming) : undefined
   const working = group.running && last?.kind === "tool-call" && !last.result ? last : undefined
-  let label = reasoning.length ? tools.length ? "思考与行动" : "思考" : "工具调用"
-  let detail = tools.length ? `${tools.length} 次${reasoning.length ? "工具调用" : ""}` : ""
+  const toolCount = `使用工具${tools.length}次`
+  let label = reasoning.length ? tools.length ? "思考与行动" : "思考" : tools.length ? toolCount : "工具调用"
+  let detail = tools.length && reasoning.length ? toolCount : ""
   if (!expanded && thinking?.type === "reasoning") {
     label = "思考中"
     detail = reasoningTail(thinking.text) || "正在思考…"

@@ -258,12 +258,12 @@ function SessionRow({
         </HoverCardTrigger>
         <HoverCardContent side="right" sideOffset={8}>
           <div className="text-[13px] font-medium leading-5">{item.title || "新聊天"}</div>
-          <div className="mt-1 text-white/60">{formatCompactTime(item.lastActiveAt)}</div>
-          <div className="mt-1.5 flex items-center gap-1.5 text-white/80">
+          <div className="mt-1 text-fg-tertiary">{formatCompactTime(item.lastActiveAt)}</div>
+          <div className="mt-1.5 flex items-center gap-1.5 text-fg-secondary">
             <span
               className={cn(
                 "size-1.5 rounded-full",
-                pending ? "bg-amber-500" : item.running ? "bg-primary" : "bg-white/40",
+                pending ? "bg-amber-500" : item.running ? "bg-primary" : "bg-fg-tertiary",
               )}
             />
             {pending === "approval" ? "待审批" : pending === "question" ? "待回答" : item.running ? "运行中" : "空闲"}
