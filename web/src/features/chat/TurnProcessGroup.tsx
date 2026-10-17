@@ -22,7 +22,7 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
   const thinking = activity?.kind === "assistant" ? activity.content.find((b) => b.type === "reasoning" && b.streaming) : undefined
   const working = activity?.kind === "tool-call" ? activity : undefined
   let label = tools.length ? "行动" : reasoning.length ? "思考" : "工具调用"
-  let detail = tools.length ? `使用 ${tools.length} 次工具` : ""
+  let detail = tools.length ? `${tools.length}次工具使用` : ""
   if (!expanded && thinking?.type === "reasoning") {
     label = "思考中"
     detail = reasoningTail(thinking.text) || "正在思考…"

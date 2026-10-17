@@ -5,6 +5,15 @@ import { CopyIconButton } from "@/components/CopyIconButton"
 import { highlightCode } from "@/lib/highlight"
 import { cn } from "@/lib/utils"
 
+function BlockHeader({ label, text, tooltip }: { label: string; text: string; tooltip: string }) {
+  return (
+    <div className="flex min-h-10 items-center gap-3 border-b bg-muted/60 py-0.5 pl-3 pr-1">
+      <span className="text-meta text-muted-foreground">{label}</span>
+      <CopyIconButton text={text} tooltip={tooltip} className="ml-auto size-8" />
+    </div>
+  )
+}
+
 export function CodeBlock({ lang, code, className }: { lang?: string; code: string; className?: string }) {
   const [html, setHtml] = useState<string | null>(null)
 
@@ -20,10 +29,7 @@ export function CodeBlock({ lang, code, className }: { lang?: string; code: stri
 
   return (
     <div className={cn("codeblock group relative my-2 overflow-hidden rounded-md border bg-muted/40", className)}>
-      <div className="flex items-center border-b bg-muted/60 py-0.5 pl-3 pr-1">
-        <span className="text-meta text-muted-foreground">{lang || "text"}</span>
-        <CopyIconButton text={code} className="ml-auto size-6" />
-      </div>
+      <BlockHeader label={lang || "text"} text={code} tooltip="复制代码" />
       {html ? (
         <div
           className="overflow-x-auto p-3 text-chat [&_pre]:!bg-transparent [&_code]:!bg-transparent"
@@ -60,11 +66,26 @@ export const Markdown = memo(function Markdown({ content, className }: { content
               {children}
             </a>
           ),
-          table: ({ children }) => (
-            <div className="my-2 overflow-x-auto rounded-lg border">
-              <table>{children}</table>
-            </div>
-          ),
+          table: ({ children, node }) => {
+            const start = node?.position?.start.offset
+            const end = node?.position?.end.offset
+            // Strip container prefixes so tables inside quotes/lists paste independently.
+            const source = start !== undefined && end !== undefined
+              ? content.slice(start, end)
+                .split(/\r?\n/)
+                .map((line) => line.replace(/^[ \t]*(?:>[ \t]*)+/, "").trimStart())
+                .join("\n")
+              : ""
+
+            return (
+              <div className="my-2 overflow-hidden rounded-lg border">
+                <BlockHeader label="表格" text={source} tooltip="复制表格" />
+                <div className="overflow-x-auto">
+                  <table>{children}</table>
+                </div>
+              </div>
+            )
+          },
         }}
       >
         {content}
