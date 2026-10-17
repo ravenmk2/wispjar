@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
 export function TurnProcessGroup({ group, sessionId, latestTurn }: {
   group: ProcessGroup; sessionId: string; latestTurn: number
 }) {
-  const [open, setOpen] = useChatDisclosure(sessionId, group.id, group.hasError)
+  const [open, setOpen] = useChatDisclosure(sessionId, group.id)
   const expanded = open || group.hasPending
   const tools = group.nodes.filter((n) => n.kind === "tool-call")
   const reasoning = group.nodes.filter((n) => n.kind === "assistant")
@@ -21,9 +21,8 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
   const activity = activeProcessNode(group)
   const thinking = activity?.kind === "assistant" ? activity.content.find((b) => b.type === "reasoning" && b.streaming) : undefined
   const working = activity?.kind === "tool-call" ? activity : undefined
-  const toolCount = `使用工具${tools.length}次`
-  let label = reasoning.length ? tools.length ? "思考与行动" : "思考" : tools.length ? toolCount : "工具调用"
-  let detail = tools.length && reasoning.length ? toolCount : ""
+  let label = tools.length ? "行动" : reasoning.length ? "思考" : "工具调用"
+  let detail = tools.length ? `使用 ${tools.length} 次工具` : ""
   if (!expanded && thinking?.type === "reasoning") {
     label = "思考中"
     detail = reasoningTail(thinking.text) || "正在思考…"
