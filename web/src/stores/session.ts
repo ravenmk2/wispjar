@@ -133,7 +133,7 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
     reconcileOptimistic(records)
     set({
       sessionId,
-      header,
+      header: { ...header, modelSettingsLocked: header.modelSettingsLocked || records.some((e) => e.type === "user/message") },
       events: records,
       hasMore,
       liveAttempt: assistantStream
@@ -168,6 +168,9 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
       events.push(e)
       applied.push(e)
       lastSeq = e.seq
+      if (e.type === "user/message" && header) {
+        header = { ...header, modelSettingsLocked: true }
+      }
       if (e.type === "approval/asked") {
         pendingApprovals[e.data.call_id] = {
           callId: e.data.call_id,

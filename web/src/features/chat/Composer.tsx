@@ -1,5 +1,5 @@
 import { ArrowUp, Check, ChevronDown, ImageOff, Loader2, Paperclip, RotateCw, Shield, ShieldCheck, ShieldOff, Square, X } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useNavigate } from "react-router"
 import { toast } from "sonner"
 import { attachmentsApi } from "@/api/attachments"
@@ -60,7 +60,6 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   const navigate = useNavigate()
   const header = useSessionStore((s) => s.header)
   const liveAttempt = useSessionStore((s) => s.liveAttempt)
-  const lastSeq = useSessionStore((s) => s.lastSeq)
   const draft = useComposerStore((s) => s.draft)
   const sending = useComposerStore((s) => s.sending)
   const approvalMode = useComposerStore((s) => s.approvalMode)
@@ -73,6 +72,8 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   const [models, setModels] = useState<OrgModel[]>([])
   const [modelOverride, setModelOverride] = useState<string | null>(null)
   const [modelQuery, setModelQuery] = useState("")
+  const [promptAccepted, setPromptAccepted] = useState(false)
+  const [detailLocked, setDetailLocked] = useState<boolean | null>(null)
   const [effort, setEffort] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -85,7 +86,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   const running = header?.running ?? false
   const busy = running || liveAttempt !== null
   const modelId = modelOverride ?? header?.modelId ?? draftAgent?.model_id ?? ""
-  const effortLocked = !draftAgent && lastSeq > 0
+  const effortLocked = !draftAgent && (promptAccepted || (header?.modelSettingsLocked ?? detailLocked ?? true))
 
   useEffect(() => {
     if (header?.approvalMode) setApprovalMode(header.approvalMode)
@@ -97,12 +98,15 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
 
   useEffect(() => {
     setEffort(null)
+    setPromptAccepted(false)
+    setDetailLocked(null)
     if (draftAgent || !sessionId) return
     let active = true
     sessionsApi
       .detail(sessionId)
       .then((d) => {
         if (!active) return
+        setDetailLocked(d.model_settings_locked ?? d.effort_locked ?? true)
         const v = d.model_params?.reasoning_effort
         setEffort(typeof v === "string" && v ? v : null)
       })
@@ -248,6 +252,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
         if (!currentOrg) throw new Error("当前机构不可用")
         const session = await sessionsApi.create(currentOrg.id, {
           agent_id: draftAgent.id,
+          model_id: modelId,
           ...(effort ? { reasoning_effort: effort } : {}),
         })
         targetSessionId = session.id
@@ -277,6 +282,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
         request_id: requestId,
         ...(refs.length ? { attachments: refs.map((r) => r.id) } : {}),
       })
+      setPromptAccepted(true)
       setDraft("")
       setImages([])
       uploadsRef.current.clear()
@@ -309,20 +315,21 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   }
 
   async function changeModel(next: string) {
-    if (draftAgent || !sessionId || !next || next === modelId) return
+    if (sending || effortLocked || (!draftAgent && !sessionId) || !next || next === modelId) return
     const prevEffort = effort
     const nextModel = models.find((m) => m.id === next)
     const nextDefault = nextModel?.capabilities.reasoning_effort_default ?? ""
     setModelOverride(next)
-    if (!effortLocked) setEffort(nextDefault || null)
+    setEffort(nextDefault || null)
+    if (draftAgent) return
     try {
       // 未锁定换模型时重置为新模型默认档；空串清除之前的聊天档位覆盖。
       const res = await sessionsApi.update(sessionId, {
         model_id: next,
-        ...(!effortLocked ? { reasoning_effort: nextDefault } : {}),
+        reasoning_effort: nextDefault,
       })
       const v = res.model_params?.reasoning_effort
-      if (!effortLocked) setEffort(typeof v === "string" && v ? v : null)
+      setEffort(typeof v === "string" && v ? v : null)
     } catch (e) {
       toast.error(errorMessage(e))
       setModelOverride(null)
@@ -432,7 +439,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
             }}
             rows={2}
             placeholder={busy ? "聊天运行中，可点击右侧按钮停止…" : "输入消息，Enter 发送，Shift+Enter 换行"}
-            className="block w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-chat outline-none placeholder:text-fg-caption"
+            className="block w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-chat outline-none placeholder:text-fg-composer-placeholder"
           />
           <input
             ref={fileInputRef}
@@ -494,112 +501,124 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
             </DropdownMenu>
             <div className="ml-auto flex min-w-0 items-center gap-1.5">
               <ContextRing contextSize={currentModel?.context_size} />
-              <DropdownMenu onOpenChange={(open) => {
-                if (!open) setModelQuery("")
-              }}>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="选择模型"
-                    disabled={sending || !!draftAgent || !sessionId}
-                    title={draftAgent ? "发送首条消息后可切换模型" : undefined}
-                    className="group flex h-7 min-w-0 max-w-48 items-center gap-1 rounded-md px-2 text-sm font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
-                  >
-                    <span className="truncate">{(modelName ?? modelId) || "选择模型"}</span>
-                    <ChevronDown className="size-3 shrink-0 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent side="top" align="end" sideOffset={8} className="w-64">
-                  {models.length > 4 && (
-                    <div className="px-1 pb-1">
-                      <Input
-                        autoFocus
-                        value={modelQuery}
-                        onChange={(e) => setModelQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key !== "Escape" && e.key !== "ArrowDown" && e.key !== "ArrowUp") {
-                            e.stopPropagation()
-                          }
-                        }}
-                        placeholder="搜索模型…"
-                        className="h-8 px-2.5 text-xs shadow-none"
-                      />
-                    </div>
-                  )}
-                  <DropdownMenuRadioGroup value={modelId} onValueChange={(v) => void changeModel(v)}>
-                    {modelGroups.map((group) => (
-                      <div key={group.provider}>
-                        <DropdownMenuLabel className="px-2.5 pb-1 pt-1.5 text-xs font-normal text-fg-caption">
-                          {group.provider}
-                        </DropdownMenuLabel>
-                        {group.items.map((m) => (
-                          <DropdownMenuRadioItem
-                            key={m.id}
-                            value={m.id}
-                            className="px-2.5 text-sm [&>span:first-of-type]:hidden"
-                          >
-                            <span className={cn("truncate", m.id === modelId && "font-semibold")}>
-                              {m.display_name}
-                            </span>
-                            {m.id === modelId && (
-                              <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
-                            )}
-                          </DropdownMenuRadioItem>
-                        ))}
+              {effortLocked ? (
+                <LockedSetting label={`模型：${(modelName ?? modelId) || "未配置"}`}>
+                  {(modelName ?? modelId) || "未配置模型"}
+                </LockedSetting>
+              ) : (
+                <DropdownMenu onOpenChange={(open) => {
+                  if (!open) setModelQuery("")
+                }}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="选择模型"
+                      disabled={sending || (!draftAgent && !sessionId)}
+                      title="选择模型"
+                      className="group flex h-7 min-w-0 max-w-48 items-center gap-1 rounded-md px-2 text-sm font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
+                    >
+                      <span className="truncate">{(modelName ?? modelId) || "选择模型"}</span>
+                      <ChevronDown className="size-3 shrink-0 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="top" align="end" sideOffset={8} className="w-64">
+                    {models.length > 4 && (
+                      <div className="px-1 pb-1">
+                        <Input
+                          autoFocus
+                          value={modelQuery}
+                          onChange={(e) => setModelQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Escape" && e.key !== "ArrowDown" && e.key !== "ArrowUp") {
+                              e.stopPropagation()
+                            }
+                          }}
+                          placeholder="搜索模型…"
+                          className="h-8 px-2.5 text-xs shadow-none"
+                        />
                       </div>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                  {filteredModels.length === 0 && (
-                    <div className="px-2.5 py-2 text-xs text-fg-caption">无匹配模型</div>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="选择推理等级"
-                    disabled={sending || effortLocked || !supportsEffort || (!draftAgent && !sessionId)}
-                    title={effortLocked ? "聊天开始后不可更改思考强度" : !supportsEffort ? "当前模型不支持选择推理等级" : "推理等级"}
-                    className="group flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-sm font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
-                  >
-                    <span>{selectedEffort ? effortLabel(selectedEffort) : supportsEffort ? "默认" : "推理等级"}</span>
-                    <ChevronDown className="size-3 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent side="top" align="end" sideOffset={8} className="w-40">
-                  <DropdownMenuLabel className="px-2.5 text-xs font-normal text-fg-caption">推理等级</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup value={selectedEffort ?? ""} onValueChange={(v) => void changeEffort(v)}>
-                    {!modelEffortDefault && (
-                      <DropdownMenuRadioItem
-                        value=""
-                        disabled={sending || effortLocked}
-                        title={effortLocked ? "聊天开始后不可更改思考强度" : undefined}
-                        className="px-2.5 text-sm [&>span:first-of-type]:hidden"
-                      >
-                        <span className={cn("truncate", selectedEffort === null && "font-semibold")}>默认</span>
-                        {selectedEffort === null && (
-                          <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
-                        )}
-                      </DropdownMenuRadioItem>
                     )}
-                    {modelEfforts.map((e) => (
-                      <DropdownMenuRadioItem
-                        key={e}
-                        value={e}
-                        disabled={sending || effortLocked}
-                        title={effortLocked ? "聊天开始后不可更改思考强度" : undefined}
-                        className="px-2.5 text-sm [&>span:first-of-type]:hidden"
-                      >
-                        <span className={cn("truncate", e === selectedEffort && "font-semibold")}>{effortLabel(e)}</span>
-                        {e === selectedEffort && (
-                          <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
-                        )}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <DropdownMenuRadioGroup value={modelId} onValueChange={(v) => void changeModel(v)}>
+                      {modelGroups.map((group) => (
+                        <div key={group.provider}>
+                          <DropdownMenuLabel className="px-2.5 pb-1 pt-1.5 text-xs font-normal text-fg-caption">
+                            {group.provider}
+                          </DropdownMenuLabel>
+                          {group.items.map((m) => (
+                            <DropdownMenuRadioItem
+                              key={m.id}
+                              value={m.id}
+                              className="px-2.5 text-sm [&>span:first-of-type]:hidden"
+                            >
+                              <span className={cn("truncate", m.id === modelId && "font-semibold")}>
+                                {m.display_name}
+                              </span>
+                              {m.id === modelId && (
+                                <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
+                              )}
+                            </DropdownMenuRadioItem>
+                          ))}
+                        </div>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                    {filteredModels.length === 0 && (
+                      <div className="px-2.5 py-2 text-xs text-fg-caption">无匹配模型</div>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {effortLocked ? (
+                <LockedSetting label={`推理等级：${selectedEffort ? effortLabel(selectedEffort) : "默认"}`}>
+                  {selectedEffort ? effortLabel(selectedEffort) : "默认"}
+                </LockedSetting>
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="选择推理等级"
+                      disabled={sending || effortLocked || !supportsEffort || (!draftAgent && !sessionId)}
+                      title={effortLocked ? "聊天开始后不可更改思考强度" : !supportsEffort ? "当前模型不支持选择推理等级" : "推理等级"}
+                      className="group flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-sm font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
+                    >
+                      <span>{selectedEffort ? effortLabel(selectedEffort) : supportsEffort ? "默认" : "推理等级"}</span>
+                      <ChevronDown className="size-3 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="top" align="end" sideOffset={8} className="w-40">
+                    <DropdownMenuLabel className="px-2.5 text-xs font-normal text-fg-caption">推理等级</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup value={selectedEffort ?? ""} onValueChange={(v) => void changeEffort(v)}>
+                      {!modelEffortDefault && (
+                        <DropdownMenuRadioItem
+                          value=""
+                          disabled={sending || effortLocked}
+                          title={effortLocked ? "聊天开始后不可更改思考强度" : undefined}
+                          className="px-2.5 text-sm [&>span:first-of-type]:hidden"
+                        >
+                          <span className={cn("truncate", selectedEffort === null && "font-semibold")}>默认</span>
+                          {selectedEffort === null && (
+                            <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
+                          )}
+                        </DropdownMenuRadioItem>
+                      )}
+                      {modelEfforts.map((e) => (
+                        <DropdownMenuRadioItem
+                          key={e}
+                          value={e}
+                          disabled={sending || effortLocked}
+                          title={effortLocked ? "聊天开始后不可更改思考强度" : undefined}
+                          className="px-2.5 text-sm [&>span:first-of-type]:hidden"
+                        >
+                          <span className={cn("truncate", e === selectedEffort && "font-semibold")}>{effortLabel(e)}</span>
+                          {e === selectedEffort && (
+                            <Check className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2" />
+                          )}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               {busy && !draft.trim() ? (
                 <button
                   type="button"
@@ -625,5 +644,18 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
         </div>
       </div>
     </div>
+  )
+}
+
+function LockedSetting({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span tabIndex={0} aria-label={label} className="flex h-7 min-w-0 max-w-48 items-center truncate rounded-md px-2 text-sm font-medium text-fg-secondary">
+          <span className="truncate">{children}</span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>对话开始后不可更改，请新建对话</TooltipContent>
+    </Tooltip>
   )
 }

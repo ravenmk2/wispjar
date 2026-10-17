@@ -2,6 +2,8 @@ package session
 
 import (
 	"encoding/json"
+	"errors"
+	"net/http"
 	"testing"
 )
 
@@ -57,5 +59,21 @@ func TestAddUsage(t *testing.T) {
 	}
 	if u.InputTokens != 12 || u.OutputTokens != 5 || u.CacheReadTokens != 7 || u.ReasoningTokens != 1 {
 		t.Fatalf("usage accumulation mismatch: %+v", u)
+	}
+}
+
+func TestFirstPromptSequenceGuard(t *testing.T) {
+	expected := int64(4)
+	inputs := []EventInput{{Type: EventUserMessage, ExpectedLastSeq: &expected}, {Type: EventTurnStart}}
+	if err := validateEventSequence(4, inputs); err != nil {
+		t.Fatal(err)
+	}
+	err := validateEventSequence(5, inputs)
+	var se *Error
+	if !errors.As(err, &se) || se.Status != http.StatusConflict || se.Code != "session/config_changed" {
+		t.Fatalf("concurrent PATCH must reject stale first prompt: %v", err)
+	}
+	if err := validateEventSequence(5, []EventInput{{Type: EventToolCall}}); err != nil {
+		t.Fatal("ordinary event append must remain unaffected")
 	}
 }

@@ -75,6 +75,10 @@ func (s *fakeEventStore) TailEvents(_ context.Context, sessionID string, n int) 
 	return append([]store.SessionEvent{}, s.events[len(s.events)-n:]...), nil
 }
 
+func (s *fakeEventStore) HasUserMessage(_ context.Context, _ string) (bool, error) {
+	return len(s.byType(session.EventUserMessage)) > 0, nil
+}
+
 func (s *fakeEventStore) FindUserMessageByRequestID(_ context.Context, sessionID, requestID string) (*store.SessionEvent, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -483,5 +487,45 @@ func textChunks(text string, usage *schema.TokenUsage) []*schema.Message {
 			FinishReason: "stop",
 			Usage:        usage,
 		}},
+	}
+}
+
+func TestFollowModelSettingsLockAcrossHistoryWindow(t *testing.T) {
+	env := newTestEnv(t, session.ApprovalAuto, nil)
+	_, err := env.es.AppendBatch(context.Background(), "sess-1", []session.EventInput{{Type: session.EventSessionTitle, Data: session.SessionTitleData{Title: "empty"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, _, unsub, err := env.orch.Follow("sess-1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsub()
+	if snapshot.Header.ModelSettingsLocked {
+		t.Fatal("settings-only history must not lock")
+	}
+	_, err = env.es.AppendBatch(context.Background(), "sess-1", []session.EventInput{{Type: session.EventUserMessage, Data: session.UserMessageData{Content: "first"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < snapshotWindow+5; i++ {
+		if _, err := env.es.AppendBatch(context.Background(), "sess-1", []session.EventInput{{Type: session.EventSessionTitle, Data: session.SessionTitleData{Title: "history"}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, after := range []int64{0, 200} {
+		snapshot, _, unsub, err = env.orch.Follow("sess-1", after)
+		if err != nil {
+			t.Fatal(err)
+		}
+		unsub()
+		if !snapshot.Header.ModelSettingsLocked {
+			t.Fatal("history outside snapshot must keep settings locked")
+		}
+		for _, event := range snapshot.Records {
+			if event.Type == session.EventUserMessage {
+				t.Fatal("fixture must exclude first message from snapshot")
+			}
+		}
 	}
 }

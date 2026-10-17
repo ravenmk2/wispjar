@@ -52,7 +52,7 @@ function ApprovalParams({ name, args }: { name: string; args: string }) {
           : null
     return (
       <div>
-        {path && <div className="mb-1 font-mono text-chat text-muted-foreground">{path}</div>}
+        {path && <div className="mb-1 font-sans tabular-nums text-chat text-muted-foreground">{path}</div>}
         {diff ? (
           <DiffBlock diff={diff} className="max-h-60 overflow-y-auto" />
         ) : (
@@ -125,7 +125,7 @@ export function ApprovalCard({ node, sessionId }: { node: ApprovalNode; sessionI
         >
           {node.risk === "high" ? "高风险" : "中风险"}
         </Badge>
-        <span className="ml-auto flex items-center gap-1 font-mono text-xs text-amber-700 dark:text-amber-400">
+        <span className="ml-auto flex items-center gap-1 font-sans tabular-nums text-xs text-amber-700 dark:text-amber-400">
           <AlertTriangle className="size-3" />
           {formatRemaining(remaining)}
         </span>
@@ -205,7 +205,7 @@ export function ApprovalTakeover({
           <div className="flex items-center gap-2 bg-warning/10 px-4 py-2.5 text-[13px] font-medium text-warning">
             <span className="size-2 rounded-full bg-warning" />
             等待审批
-            <span className="ml-auto font-mono text-xs font-normal">{formatRemaining(remaining)}</span>
+            <span className="ml-auto font-sans tabular-nums text-xs font-normal">{formatRemaining(remaining)}</span>
           </div>
           <div
             ref={bodyRef}

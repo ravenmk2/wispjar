@@ -200,6 +200,9 @@ func (h *Handler) beginTurn(c *gin.Context, sess *session.Detail, content, reque
 		session.EventInput{Type: session.EventTurnStart, Data: session.TurnStartData{Turn: turn, RequestID: requestID}},
 		session.EventInput{Type: session.EventRequestHeader, Data: headerData},
 	)
+	if turn == 1 {
+		inputs[len(pre)].ExpectedLastSeq = &sess.LastSeq
+	}
 	events, err := h.events.AppendBatch(ctx, sess.ID, inputs)
 	if err != nil {
 		return 0, err

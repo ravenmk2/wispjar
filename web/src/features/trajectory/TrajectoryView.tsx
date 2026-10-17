@@ -105,7 +105,7 @@ function formatDuration(start?: number, end?: number): string | null {
 }
 
 function Meta({ children }: { children: ReactNode }) {
-  return <span className="flex items-center gap-1 font-mono text-[11px] text-muted-foreground">{children}</span>
+  return <span className="flex items-center gap-1 font-sans tabular-nums text-[11px] text-muted-foreground">{children}</span>
 }
 
 function CollapsibleBody({

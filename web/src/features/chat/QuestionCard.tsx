@@ -291,7 +291,7 @@ export function QuestionTakeover({
                       value={currentAnswer.custom}
                       onChange={(e) => setCustom(e.target.value)}
                       placeholder="其他（填写自定义回答）"
-                      className="w-full bg-transparent text-chat outline-none placeholder:text-fg-caption"
+                      className="w-full bg-transparent text-chat outline-none placeholder:text-fg-placeholder"
                     />
                   </div>
                 </div>
@@ -308,7 +308,7 @@ export function QuestionTakeover({
                   }}
                   rows={3}
                   placeholder="输入回答，Enter 提交，Shift+Enter 换行"
-                  className="block w-full resize-none rounded-xl border border-black/10 bg-transparent px-3 py-2 text-chat outline-none placeholder:text-fg-caption focus:border-primary/50 dark:border-white/10"
+                  className="block w-full resize-none rounded-xl border border-black/10 bg-transparent px-3 py-2 text-chat outline-none placeholder:text-fg-placeholder focus:border-primary/50 dark:border-white/10"
                 />
               )}
             </div>

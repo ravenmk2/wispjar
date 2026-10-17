@@ -3,7 +3,8 @@ import { useEffect, useId, useRef, useState } from "react"
 import { CopyIconButton } from "@/components/CopyIconButton"
 import { NodeView } from "@/features/chat/NodeList"
 import { TurnProcessGroup } from "@/features/chat/TurnProcessGroup"
-import { formatTurnDuration, type TurnSegment } from "@/lib/turn-grouping"
+import { ActivityIcon } from "@/features/chat/ActivityIcon"
+import { activeProcessNode, formatTurnDuration, type TurnSegment } from "@/lib/turn-grouping"
 import { cn } from "@/lib/utils"
 import { useChatDisclosure } from "@/stores/chatPresentation"
 
@@ -29,6 +30,9 @@ export function TurnView({ segment, sessionId, latestTurn }: {
   const label = running ? "工作中" : reason === "interrupted" ? "已停止" : reason === "failed" ? "运行出错" : "已工作"
   const timeText = duration === undefined ? label : `${label}${reason === "completed" ? " " : " · "}${formatTurnDuration(duration)}`
   const answer = segment.parts.find((p) => p.kind === "reply" && p.node.id === segment.answerId)
+  const activity = !expanded && running
+    ? segment.parts.slice().reverse().map((part) => part.kind === "process" ? activeProcessNode(part) : undefined).find((node) => node !== undefined)
+    : undefined
   const toggle = () => {
     const el = headerRef.current
     const scroll = el?.closest<HTMLElement>("[data-chat-scroll]")
@@ -47,8 +51,9 @@ export function TurnView({ segment, sessionId, latestTurn }: {
           ref={headerRef} type="button" data-turn-header={segment.turn} aria-expanded={expanded}
           aria-label={`${expanded ? "收起" : "展开"}第 ${segment.turn} 轮：${timeText}`}
           disabled={segment.hasPendingApproval} onClick={toggle}
-          className="flex min-h-9 min-w-0 items-center gap-1.5 rounded-md text-left text-chat text-fg-secondary hover:bg-accent/50 disabled:cursor-default"
+          className="chat-process-trigger flex min-h-9 min-w-0 items-center gap-1.5 rounded-md text-left text-chat text-fg-process hover:bg-accent/50 disabled:cursor-default"
         >
+          {activity && <ActivityIcon name={activity.kind === "assistant" ? "reasoning" : activity.name} active />}
           <span className={cn("truncate tabular-nums", running && "text-shimmer")}>{timeText}</span>
           {expanded ? <ChevronDown className="chat-disclosure-icon" /> : <ChevronRight className="chat-disclosure-icon" />}
         </button>
@@ -56,16 +61,16 @@ export function TurnView({ segment, sessionId, latestTurn }: {
         {reason === "failed" && segment.end?.error && <button type="button"
           aria-expanded={expanded && errorOpen} aria-controls={errorId}
           onClick={() => { setErrorOpen(!(expanded && errorOpen)); if (!expanded) setOpen(true) }}
-          className="shrink-0 rounded px-1 py-1 text-meta text-fg-secondary hover:bg-accent hover:text-foreground">
+          className="shrink-0 rounded px-1 py-1 text-meta text-fg-process hover:bg-accent hover:text-foreground">
           {expanded && errorOpen ? "收起详情" : "查看详情"}
         </button>}
       </div>
       {expanded && errorOpen && reason === "failed" && segment.end?.error && <div id={errorId} className="rounded-lg bg-muted/50 px-3 py-2">
-        <div className="mb-1 flex items-center justify-between gap-2 text-meta text-fg-secondary">
+        <div className="mb-1 flex items-center justify-between gap-2 text-meta text-fg-process">
           <span>错误详情</span>
           <CopyIconButton text={segment.end.error} tooltip="复制错误详情" />
         </div>
-        <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-fg-secondary">{segment.end.error}</pre>
+        <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-sans tabular-nums text-xs text-fg-process">{segment.end.error}</pre>
       </div>}
       {expanded ? segment.parts.map((part) => part.kind === "reply" ? (
         <NodeView key={part.node.id} node={part.node} sessionId={sessionId} depth={0} latestTurn={latestTurn} isAnswer={part.node.id === segment.answerId} />

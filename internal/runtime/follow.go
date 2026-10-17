@@ -18,19 +18,20 @@ type Snapshot struct {
 }
 
 type SnapshotHeader struct {
-	SessionID     string        `json:"sessionId"`
-	Title         string        `json:"title"`
-	TitlePinned   bool          `json:"titlePinned"`
-	AgentID       string        `json:"agentId"`
-	AgentName     string        `json:"agentName"`
-	AgentAvatar   string        `json:"agentAvatar"`
-	ModelID       string        `json:"modelId"`
-	ApprovalMode  string        `json:"approvalMode"`
-	SandboxStatus string        `json:"sandboxStatus"`
-	Running       bool          `json:"running"`
-	LastSeq       int64         `json:"lastSeq"`
-	UsageTotal    session.Usage `json:"usageTotal"`
-	CreatedAt     time.Time     `json:"createdAt"`
+	ModelSettingsLocked bool          `json:"modelSettingsLocked"`
+	SessionID           string        `json:"sessionId"`
+	Title               string        `json:"title"`
+	TitlePinned         bool          `json:"titlePinned"`
+	AgentID             string        `json:"agentId"`
+	AgentName           string        `json:"agentName"`
+	AgentAvatar         string        `json:"agentAvatar"`
+	ModelID             string        `json:"modelId"`
+	ApprovalMode        string        `json:"approvalMode"`
+	SandboxStatus       string        `json:"sandboxStatus"`
+	Running             bool          `json:"running"`
+	LastSeq             int64         `json:"lastSeq"`
+	UsageTotal          session.Usage `json:"usageTotal"`
+	CreatedAt           time.Time     `json:"createdAt"`
 }
 
 type SnapshotStream struct {
@@ -49,6 +50,10 @@ func (o *orchestrator) Follow(sessionID string, afterSeq int64) (*Snapshot, <-ch
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	sess, err := o.deps.Sessions.SessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	started, err := o.deps.Events.HasUserMessage(ctx, sessionID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -80,19 +85,20 @@ func (o *orchestrator) Follow(sessionID string, afterSeq int64) (*Snapshot, <-ch
 
 	snapshot := &Snapshot{
 		Header: SnapshotHeader{
-			SessionID:     sess.ID,
-			Title:         sess.Title,
-			TitlePinned:   sess.TitlePinned,
-			AgentID:       sess.AgentID,
-			AgentName:     snap.Name,
-			AgentAvatar:   snap.Avatar,
-			ModelID:       sess.ModelID,
-			ApprovalMode:  sess.ApprovalMode,
-			SandboxStatus: sb.Status,
-			Running:       sess.Running,
-			LastSeq:       sess.LastSeq,
-			UsageTotal:    usage,
-			CreatedAt:     sess.CreatedAt,
+			ModelSettingsLocked: started,
+			SessionID:           sess.ID,
+			Title:               sess.Title,
+			TitlePinned:         sess.TitlePinned,
+			AgentID:             sess.AgentID,
+			AgentName:           snap.Name,
+			AgentAvatar:         snap.Avatar,
+			ModelID:             sess.ModelID,
+			ApprovalMode:        sess.ApprovalMode,
+			SandboxStatus:       sb.Status,
+			Running:             sess.Running,
+			LastSeq:             sess.LastSeq,
+			UsageTotal:          usage,
+			CreatedAt:           sess.CreatedAt,
 		},
 		Records: rows,
 		HasMore: hasMore,

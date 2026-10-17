@@ -28,7 +28,7 @@ function BoundaryView({ node }: { node: Extract<ConversationNode, { kind: "bound
           </summary>
           {node.error && <div className="mt-2 rounded-lg bg-muted/50 p-3">
             <div className="flex items-center justify-between"><span>错误详情</span><CopyIconButton text={node.error} /></div>
-            <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-mono">{node.error}</pre>
+            <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-sans tabular-nums">{node.error}</pre>
           </div>}
         </details>
       )}

@@ -67,7 +67,7 @@
     "agentId": "...", "agentName": "...", "agentAvatar": "",
     "modelId": "...", "approvalMode": "default",
     "sandboxStatus": "running", "running": true,
-    "lastSeq": 87, "usageTotal": { "input_tokens": 1234, "output_tokens": 567,
+    "modelSettingsLocked": true, "lastSeq": 87, "usageTotal": { "input_tokens": 1234, "output_tokens": 567,
       "cache_read_tokens": 0, "cache_write_tokens": 0, "reasoning_tokens": 0 },
     "createdAt": "..." },
   "records": [ /* SessionEvent[]，seq 升序的尾部窗口（默认最近 200 条或 afterSeq 之后全部） */ ],
@@ -271,3 +271,5 @@ Agent 调用 question → append question/asked（持久帧广播，问题文本
 ```
 
 迟到答复不新增事件类型：settled 判定即"asked 存在且 answered 存在"。turn 取消/中断/重启后未答的提问保持可补答（runtime.md §5.3）。
+
+`session.follow` 快照头 `modelSettingsLocked` 按完整历史是否存在 `user/message` 计算；首条消息被接受后为 true，历史分页、重连及分叉不解除。客户端收到 `user/message` 同步置 true，配置事件不触发锁定。

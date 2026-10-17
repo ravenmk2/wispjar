@@ -29,6 +29,7 @@ func fail(c *gin.Context, err error) {
 }
 
 type createSessionRequest struct {
+	ModelID         string `json:"model_id"`
 	AgentID         string `json:"agent_id" binding:"required"`
 	Title           string `json:"title"`
 	ReasoningEffort string `json:"reasoning_effort"`

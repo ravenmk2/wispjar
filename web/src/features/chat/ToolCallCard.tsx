@@ -1,19 +1,6 @@
-import {
-  Bot,
-  ChevronDown,
-  ChevronRight,
-  FilePen,
-  FileText,
-  Image,
-  Loader2,
-  MessageCircleQuestion,
-  Puzzle,
-  Search,
-  SquareTerminal,
-  Wrench,
-  X,
-} from "lucide-react"
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { ChevronDown, ChevronRight, X } from "lucide-react"
+import { ActivityIcon } from "@/features/chat/ActivityIcon"
+import { useLayoutEffect, useRef, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { CopyIconButton } from "@/components/CopyIconButton"
 import { DiffBlock } from "@/components/Markdown"
@@ -28,21 +15,6 @@ import { cn } from "@/lib/utils"
 import { useChatDisclosure } from "@/stores/chatPresentation"
 import type { ToolCallNode } from "@/lib/conversation"
 import type { ToolRender } from "@/lib/types"
-
-const TOOL_ICONS: Record<string, ReactNode> = {
-  exec: <SquareTerminal className="size-3.5" />,
-  read: <FileText className="size-3.5" />,
-  write: <FilePen className="size-3.5" />,
-  edit: <FilePen className="size-3.5" />,
-  glob: <Search className="size-3.5" />,
-  grep: <Search className="size-3.5" />,
-  task: <Bot className="size-3.5" />,
-  skill: <Puzzle className="size-3.5" />,
-  activate_skill: <Puzzle className="size-3.5" />,
-  question: <MessageCircleQuestion className="size-3.5" />,
-  ask_user_question: <MessageCircleQuestion className="size-3.5" />,
-  read_media: <Image className="size-3.5" />,
-}
 
 function defaultRender(name: string): ToolRender {
   switch (name) {
@@ -75,18 +47,18 @@ function diffStats(diff?: string): { added: number; removed: number } | null {
 
 function StatusBadge({ node }: { node: ToolCallNode }) {
   if (toolCancelled(node) || (!node.result && node.endReason)) {
-    return <span className="shrink-0 text-meta text-fg-caption">已中止</span>
+    return <span className="shrink-0 text-meta text-fg-process-muted">已中止</span>
   }
   const failure = toolFailure(node)
   if (failure) {
     return <span className="shrink-0" title={`调用失败 · ${failure}`}><X className="size-3.5 text-destructive" strokeWidth={2.5} aria-label={`调用失败 · ${failure}`} /></span>
   }
   if (!node.result) {
-    return <Loader2 className="size-3.5 shrink-0 animate-spin text-fg-tertiary" />
+    return null
   }
   const duration = node.result.meta?.duration_ms
   if (duration !== undefined) {
-    return <span className="shrink-0 text-meta text-fg-caption">{(duration / 1000).toFixed(1)}s</span>
+    return <span className="shrink-0 text-meta text-fg-process-muted">{(duration / 1000).toFixed(1)}s</span>
   }
   return null
 }
@@ -110,20 +82,20 @@ function TerminalSection({ label, content, running = false }: { label: string; c
   }, [content, expanded, running])
   return (
     <div className="border-t px-3 py-2">
-      <div className="mb-1 flex items-center justify-between gap-2 text-meta text-fg-caption">
+      <div className="mb-1 flex items-center justify-between gap-2 text-meta text-fg-process-muted">
         <span>{label}</span>
         <CopyIconButton text={content} tooltip={`复制${label}`} className="size-6" />
       </div>
       <pre ref={bodyRef} onScroll={() => {
         const el = bodyRef.current
         if (el && expanded) followRef.current = el.scrollHeight - el.clientHeight - el.scrollTop < 24
-      }} className={cn("overflow-x-auto whitespace-pre font-mono text-chat text-foreground", expanded ? "max-h-96 overflow-y-auto" : "max-h-[calc(8*var(--chat-line-height))] overflow-y-hidden")}>
+      }} className={cn("overflow-x-auto whitespace-pre font-sans tabular-nums text-chat text-fg-process", label === "命令" && "font-mono", expanded ? "max-h-96 overflow-y-auto" : "max-h-[calc(8*var(--chat-line-height))] overflow-y-hidden")}>
         {content}
       </pre>
       {(overflowing || expanded) && <button type="button" aria-expanded={expanded} onClick={() => {
         setExpanded((value) => !value)
         followRef.current = true
-      }} className="mt-2 rounded px-1 text-meta text-fg-secondary hover:bg-accent hover:text-foreground">
+      }} className="mt-2 rounded px-1 text-meta text-fg-process hover:bg-accent hover:text-foreground">
         {expanded ? "收起" : "展开全部"}
       </button>}
     </div>
@@ -141,11 +113,11 @@ function TerminalBody({ node, liveOutput }: { node: ToolCallNode; liveOutput?: T
   const duration = node.result?.meta?.duration_ms
   return (
     <div className="min-w-0 overflow-hidden rounded-lg bg-muted/50">
-      <div className="flex min-w-0 items-center gap-2 px-3 py-2 text-meta text-fg-caption">
-        <span className="min-w-0 flex-1 truncate font-mono" title={cwd}>{cwd}</span>
+      <div className="flex min-w-0 items-center gap-2 px-3 py-2 text-meta text-fg-process-muted">
+        <span className="min-w-0 flex-1 truncate font-sans tabular-nums" title={cwd}>{cwd}</span>
         {duration !== undefined && <span className="shrink-0 tabular-nums">{(duration / 1000).toFixed(1)}s</span>}
         {duration !== undefined && output.exitCode !== null && <span>·</span>}
-        {output.exitCode !== null && <span className="shrink-0 font-mono">exit {output.exitCode}</span>}
+        {output.exitCode !== null && <span className="shrink-0 font-sans tabular-nums">exit {output.exitCode}</span>}
         {running && <span className="shrink-0">运行中</span>}
         {cancelled && <span className="shrink-0">已中止</span>}
         {failure && <X className="size-3.5 shrink-0 text-destructive" strokeWidth={2.5} aria-label="执行失败" />}
@@ -154,8 +126,8 @@ function TerminalBody({ node, liveOutput }: { node: ToolCallNode; liveOutput?: T
       {output.stdout && <TerminalSection label="stdout" content={output.stdout} running={running} />}
       {output.stderr && <TerminalSection label="stderr" content={output.stderr} running={running} />}
       {output.error && <TerminalSection label={cancelled ? "中止信息" : "错误详情"} content={output.error} />}
-      {!output.stdout && !output.stderr && !output.error && !cancelled && <div className="border-t px-3 py-2 text-meta text-fg-caption">{running ? "等待输出…" : "无输出"}</div>}
-      {output.truncated && <div className="border-t px-3 py-2 text-meta text-fg-caption">输出已达到服务端保留上限，早期内容已截断</div>}
+      {!output.stdout && !output.stderr && !output.error && !cancelled && <div className="border-t px-3 py-2 text-meta text-fg-process-muted">{running ? "等待输出…" : "无输出"}</div>}
+      {output.truncated && <div className="border-t px-3 py-2 text-meta text-fg-process-muted">输出已达到服务端保留上限，早期内容已截断</div>}
     </div>
   )
 }
@@ -166,11 +138,11 @@ function DiffBody({ node }: { node: ToolCallNode }) {
   const diff = node.result?.meta?.diff
   return (
     <div className="rounded-lg bg-muted/50 p-3">
-      {path && <div className="mb-1 font-mono text-chat text-fg-secondary">{path}</div>}
+      {path && <div className="mb-1 font-sans tabular-nums text-chat text-fg-process">{path}</div>}
       {diff ? (
         <DiffBlock diff={diff} className="max-h-80 overflow-y-auto bg-background" />
       ) : node.result ? (
-        <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-mono text-chat">
+        <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-sans tabular-nums text-chat">
           {node.result.error ?? node.result.content}
         </pre>
       ) : null}
@@ -184,18 +156,18 @@ function SearchBody({ node }: { node: ToolCallNode }) {
   const lines = (node.result?.content ?? "").split("\n").filter(Boolean)
   return (
     <div className="rounded-lg bg-muted/50 p-3">
-      {query && <div className="mb-1 font-mono text-chat text-fg-secondary">/{query}/</div>}
+      {query && <div className="mb-1 font-sans tabular-nums text-chat text-fg-process">/{query}/</div>}
       {node.result ? (
         lines.length > 0 ? (
           <div className="max-h-72 overflow-y-auto rounded-md border bg-background">
             {lines.map((line, i) => (
-              <div key={i} className="border-b px-3 py-1 font-mono text-chat last:border-b-0 hover:bg-accent">
+              <div key={i} className="border-b px-3 py-1 font-sans tabular-nums text-chat last:border-b-0 hover:bg-accent">
                 {line}
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-chat text-fg-secondary">无匹配结果</div>
+          <div className="text-chat text-fg-process">无匹配结果</div>
         )
       ) : null}
     </div>
@@ -207,12 +179,12 @@ function ReadBody({ node }: { node: ToolCallNode }) {
   const path = typeof args?.path === "string" ? args.path : undefined
   return (
     <div className="rounded-lg bg-muted/50 p-3">
-      {path && <div className="mb-1 font-mono text-chat text-fg-secondary">{path}</div>}
+      {path && <div className="mb-1 font-sans tabular-nums text-chat text-fg-process">{path}</div>}
       {node.result?.attachments && node.result.attachments.length > 0 && (
         <MessageImages attachments={node.result.attachments} className="mb-2" />
       )}
       {node.result && (
-        <pre className="max-h-80 overflow-auto whitespace-pre font-mono text-chat">
+        <pre className="max-h-80 overflow-auto whitespace-pre font-sans tabular-nums text-chat">
           {node.result.error ?? node.result.content}
         </pre>
       )}
@@ -227,7 +199,7 @@ function GenericBody({ node }: { node: ToolCallNode }) {
         <pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-chat">{node.arguments}</pre>
       )}
       {node.result && (
-        <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-mono text-chat">
+        <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-sans tabular-nums text-chat">
           {node.result.error ?? node.result.content}
         </pre>
       )}
@@ -243,7 +215,7 @@ function QuestionBody({ node }: { node: ToolCallNode }) {
     <div className="rounded-lg bg-muted/50 p-3">
       <QuestionAnswerList questions={q.questions} answers={q.answers} />
       {continued && (
-        <div className="mt-2 text-xs text-fg-caption">等待超时，问题保持可补答，可在下方提问卡继续作答</div>
+        <div className="mt-2 text-xs text-fg-process-muted">等待超时，问题保持可补答，可在下方提问卡继续作答</div>
       )}
     </div>
   )
@@ -288,23 +260,23 @@ export function ToolCallCard({
   const stats = node.name === "write" || node.name === "edit" ? diffStats(node.result?.meta?.diff) : null
 
   return (
-    <div>
+    <div className="text-fg-process">
       <button
         type="button"
         aria-expanded={expanded}
         title={summary || undefined}
         onClick={() => setOpen(!open)}
-        className="flex min-h-9 w-full items-center gap-1.5 rounded-md text-left hover:bg-accent/50"
+        className="chat-process-trigger flex min-h-9 w-full items-center gap-1.5 rounded-md text-left hover:bg-accent/50"
       >
-        <span aria-hidden="true" className="chat-disclosure-icon text-fg-tertiary">{TOOL_ICONS[node.name] ?? <Wrench className="size-3.5" />}</span>
-        <span className="shrink-0 text-chat font-medium text-fg-secondary" title={node.name}>
+        <ActivityIcon name={node.name} active={running && !pendingApproval && !pendingQuestion} />
+        <span className="shrink-0 text-chat text-fg-process" title={node.name}>
           {toolDisplayName(node.name)}
         </span>
         {summary ? (
           <span
             className={cn(
-              "min-w-0 flex-1 truncate font-mono text-chat text-fg-secondary",
-              running && "text-shimmer",
+              "min-w-0 flex-1 truncate font-sans tabular-nums text-chat text-fg-process",
+              running && !pendingApproval && !pendingQuestion && "text-shimmer",
             )}
           >
             · {summary}
@@ -313,7 +285,7 @@ export function ToolCallCard({
           <span className="flex-1" />
         )}
         {stats && (
-          <span className="shrink-0 font-mono text-meta">
+          <span className="shrink-0 font-sans tabular-nums text-meta">
             {stats.added > 0 && <span className="text-success">+{stats.added}</span>}
             {stats.added > 0 && stats.removed > 0 && " "}
             {stats.removed > 0 && <span className="text-destructive">-{stats.removed}</span>}
@@ -321,7 +293,6 @@ export function ToolCallCard({
         )}
         {pendingApproval && (
           <Badge variant="outline" className="shrink-0 gap-1 border-amber-500/50 text-meta font-normal text-amber-600 dark:text-amber-400">
-            <Loader2 className="size-3 animate-spin" />
             待审批
           </Badge>
         )}
@@ -332,9 +303,9 @@ export function ToolCallCard({
         )}
         <StatusBadge node={node} />
         {expanded ? (
-          <ChevronDown className="size-3.5 shrink-0 text-fg-tertiary" />
+          <ChevronDown className="size-3.5 shrink-0 text-fg-process-muted" />
         ) : (
-          <ChevronRight className="size-3.5 shrink-0 text-fg-tertiary" />
+          <ChevronRight className="size-3.5 shrink-0 text-fg-process-muted" />
         )}
       </button>
       {expanded && (
@@ -353,7 +324,7 @@ export function ToolCallCard({
         </div>
       )}
       {!expanded && node.children.length > 0 && (
-        <div className="py-0.5 text-meta text-fg-caption">{node.children.length} 条嵌套轨迹</div>
+        <div className="py-0.5 text-meta text-fg-process-muted">{node.children.length} 条嵌套轨迹</div>
       )}
     </div>
   )

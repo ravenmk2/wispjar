@@ -13,6 +13,7 @@ import (
 
 // EventStore 是 session.Store 的子集接口，便于测试替换。
 type EventStore interface {
+	HasUserMessage(ctx context.Context, sessionID string) (bool, error)
 	AppendBatch(ctx context.Context, sessionID string, inputs []session.EventInput) ([]store.SessionEvent, error)
 	Events(ctx context.Context, sessionID string, afterSeq int64, limit int) ([]store.SessionEvent, error)
 	TailEvents(ctx context.Context, sessionID string, n int) ([]store.SessionEvent, error)

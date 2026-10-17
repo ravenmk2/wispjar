@@ -28,12 +28,14 @@
 | 404 | `*/not_found` | 资源不存在或无权访问（不区分，防枚举） |
 | 409 | `*/conflict` | 唯一性冲突（username、skill name 等） |
 | 409 | `session/running` | 会话有进行中的 turn，冲突操作（如重复 prompt 未走队列） |
-| 409 | `session/effort_locked` | 对话已开始（`last_seq > 0`），思考强度不可再改（details 含当前值） |
+| 409 | `session/effort_locked` | 首条用户消息已被接受，推理等级不可再改（details 含当前值） |
 | 409 | `approval/not_pending` | 审批已决定或已过期 |
 | 410 | `approval/expired` | 审批超时 |
 | 404 | `question/not_found` | 提问不存在（无对应 `question/asked`） |
 | 409 | `question/not_pending` | 提问已作答 |
 | 400 | `question/bad_answer` | 提问答案校验失败（每题恰好一条；details.reason 含原因） |
+| 409 | `session/model_locked` | 首条用户消息已被接受，不能修改模型 |
+| 409 | `session/config_changed` | 首条消息提交期间配置发生变化，刷新配置后重新发送 |
 | 409 | `session/vision_locked` | 会话历史包含图片，不能切换到非视觉模型（PATCH model_id） |
 | 422 | `model/not_vision` | 带图 prompt 命中不支持视觉的模型，需换模型 |
 | 404 | `attachment/not_found` | 附件不存在或无权访问（不区分，防枚举） |
@@ -90,12 +92,13 @@
 创建会话。请求：
 
 ```json
-{ "agent_id": "...", "title": "可选，默认空（首条 prompt 后自动生成）", "reasoning_effort": "可选，思考强度档位" }
+{ "agent_id": "...", "model_id": "可选，缺省使用智能体模型", "title": "可选，默认空（首条 prompt 后自动生成）", "reasoning_effort": "可选，思考强度档位" }
 ```
 
 - 校验 agent 属于该机构且 `status=published`。
+- `model_id` 可选，必须为已上架（active）模型；选择与推理档位在创建时一并保存。
 - `reasoning_effort` 必须在目标模型 `capabilities.reasoning_efforts` 内，否则 400；缺省 = 模型的 `reasoning_effort_default`，模型未配默认则不注入。生效值写入 `session.model_params`（如 `{"reasoning_effort":"high"}`）。
-- 服务端：写 `session`（`agent_snapshot` 为创建时刻 Agent 全量配置 + 解析后的 skills/subagents 清单；`model_id=agent.model_id`）→ 201 返回会话对象。
+- 服务端：写 `session`（`agent_snapshot` 为创建时刻 Agent 全量配置 + 解析后的 skills/subagents 清单；`model_id` 使用所选模型，缺省 `agent.model_id`）→ 201 返回会话对象。
 
 ### GET /api/v1/orgs/{orgId}/sessions
 
@@ -104,14 +107,15 @@
 
 ### GET /api/v1/sessions/{id}
 
-会话详情（owner）：会话对象全字段（含 `model_params`）+ `agent`（快照中的名称/描述/头像）+ 派生 `effort_locked`（`last_seq > 0`，思考强度是否已锁定）。
+会话详情（owner）：会话对象全字段（含 `model_params`）+ `agent`（快照中的名称/描述/头像）+ 派生 `model_settings_locked`（完整历史存在 `user/message` 时为 true，模型及推理等级已锁定），`effort_locked` 保留同义兼容。
 
 ### PATCH /api/v1/sessions/{id}
 
 请求（均可选）：`{ "title": "...(改名并 title_pinned=1)", "approval_mode": "strict|default|auto", "status": "active|archived", "model_id": "...(会话级切换模型)", "reasoning_effort": "...(思考强度档位)" }`
 - 改 `approval_mode` 追加 `session/approval-mode` 事件；改 `model_id` 追加 `model/selection` 事件；改 `reasoning_effort` 追加 `session/effort` 事件（事件词表见 protocol.md §6）。
-- 改 `model_id`：若目标模型 `capabilities.vision=false` 且会话历史已含图片附件（任一 `user/message` 带 `attachments`），返回 409 `session/vision_locked`（否则历史投影要从图片变占位文本，前缀从此处失效）。
-- `reasoning_effort` 仅当 `last_seq = 0`（对话未开始）可设置；`last_seq > 0` 返回 409 `session/effort_locked`（details 带当前值）。值必须在目标模型 `capabilities.reasoning_efforts` 内，否则 400（同请求改 `model_id` 时按新模型校验）。
+- `model_id` 与 `reasoning_effort` 仅首条 `user/message` 被服务端接受前可设置；锁定判断与配置更新使用同一会话行锁事务，与消息追加互斥。开始后改模型返回 409 `session/model_locked`；改档位（含重置默认）返回 409 `session/effort_locked`，details 带当前值。标题、审批及其它配置事件不触发锁定。历史及包含用户消息的分叉会话保持锁定；详情返回 `model_settings_locked`，`effort_locked` 保留同义兼容。首条消息提交时若配置读取后事件版本变化，返回 409 `session/config_changed`，不追加消息。
+- 改 `model_id`：同时重置为新模型默认推理档位，显式传 `reasoning_effort` 则以显式值为准；若目标模型 `capabilities.vision=false` 且会话历史已含图片附件（任一 `user/message` 带 `attachments`），返回 409 `session/vision_locked`（否则历史投影要从图片变占位文本，前缀从此处失效）。
+- `reasoning_effort` 值必须在目标模型 `capabilities.reasoning_efforts` 内，否则 400（同请求改 `model_id` 时按新模型校验）。
 - 显式传 `reasoning_effort: ""` 表示恢复默认：目标模型配置了默认档则恢复该档，否则移除会话级 `reasoning_effort` 覆盖，按既有 Agent/模型参数及提供方默认规则执行；保留其它 `model_params`，空对象写为 NULL。重置同样受锁档规则约束，省略字段表示不修改。
 
 ### DELETE /api/v1/sessions/{id}

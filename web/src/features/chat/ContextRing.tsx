@@ -69,7 +69,7 @@ const CIRCUMFERENCE = 2 * Math.PI * R
 function levelColor(ratio: number): { ring: string; bar: string; text: string } {
   if (ratio >= 0.9) return { ring: "stroke-destructive", bar: "bg-destructive", text: "text-destructive" }
   if (ratio >= 0.7) return { ring: "stroke-amber-500", bar: "bg-amber-500", text: "text-amber-600 dark:text-amber-400" }
-  return { ring: "stroke-primary", bar: "bg-primary", text: "text-foreground" }
+  return { ring: "stroke-link", bar: "bg-link", text: "text-foreground" }
 }
 
 function StatRow({ label, value }: { label: string; value: string }) {
@@ -104,7 +104,7 @@ export function ContextRing({ contextSize }: { contextSize?: number }) {
           className="flex size-7 items-center justify-center rounded-md text-fg-tertiary transition-colors hover:bg-accent"
         >
           <svg viewBox="0 0 20 20" className="size-[18px] -rotate-90">
-            <circle cx="10" cy="10" r={R} fill="none" strokeWidth="2.5" className="stroke-border" />
+            <circle cx="10" cy="10" r={R} fill="none" strokeWidth="2.5" className="stroke-context-track" />
             {ratio > 0 && (
               <circle
                 cx="10"
@@ -137,7 +137,7 @@ export function ContextRing({ contextSize }: { contextSize?: number }) {
             : "模型未配置上下文上限"}
         </div>
         {hasLimit && (
-          <div className="mt-2 h-1 overflow-hidden rounded-full bg-border">
+          <div className="mt-2 h-1 overflow-hidden rounded-full bg-context-track">
             <div
               className={cn("h-full rounded-full transition-[width] duration-300", color.bar)}
               style={{ width: `${Math.max(ratio * 100, 0.5)}%` }}

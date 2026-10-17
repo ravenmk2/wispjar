@@ -44,7 +44,8 @@ func TestPlanEffortUpdate(t *testing.T) {
 
 	t.Run("locked after conversation started", func(t *testing.T) {
 		sess := &store.Session{LastSeq: 5, ModelParams: json.RawMessage(`{"reasoning_effort":"low"}`)}
-		_, err := planEffortUpdate(sess, caps, "high")
+		effort := "high"
+		err := validateModelSettingsUpdate(sess, true, UpdateInput{ReasoningEffort: &effort})
 		var se *Error
 		if !errors.As(err, &se) {
 			t.Fatalf("want *Error, got %v", err)
@@ -124,7 +125,8 @@ func TestPlanEffortUpdate(t *testing.T) {
 		}
 	})
 	t.Run("cannot reset locked effort", func(t *testing.T) {
-		_, err := planEffortUpdate(&store.Session{LastSeq: 1}, caps, "")
+		effort := ""
+		err := validateModelSettingsUpdate(&store.Session{LastSeq: 1}, true, UpdateInput{ReasoningEffort: &effort})
 		var se *Error
 		if !errors.As(err, &se) || se.Code != "session/effort_locked" {
 			t.Fatalf("want effort_locked for reset, got %v", err)
@@ -132,11 +134,37 @@ func TestPlanEffortUpdate(t *testing.T) {
 	})
 }
 
-func TestDetailEffortLocked(t *testing.T) {
-	if detailOf(&store.Session{LastSeq: 0}).EffortLocked {
-		t.Fatal("last_seq=0 must not be locked")
+func TestModelSettingsLock(t *testing.T) {
+	model, effort := "model-2", "high"
+	sess := &store.Session{LastSeq: 7, ModelID: "model-1"}
+	for _, started := range []bool{false, true} {
+		detail := detailOf(sess, started)
+		if detail.EffortLocked != started || detail.ModelSettingsLocked != started {
+			t.Fatal("detail must use message history, not last_seq")
+		}
+		for _, input := range []UpdateInput{{ModelID: &model}, {ReasoningEffort: &effort}, {ModelID: &model, ReasoningEffort: &effort}} {
+			err := validateModelSettingsUpdate(sess, started, input)
+			if !started && err != nil {
+				t.Fatalf("settings events must not lock an empty conversation: %v", err)
+			}
+			if started {
+				var se *Error
+				if !errors.As(err, &se) || se.Status != http.StatusConflict {
+					t.Fatalf("started conversations must reject changes: %v", err)
+				}
+				if input.ModelID != nil && se.Code != "session/model_locked" {
+					t.Fatalf("want model_locked, got %v", err)
+				}
+			}
+		}
+		title := "new title"
+		if err := validateModelSettingsUpdate(sess, started, UpdateInput{Title: &title}); err != nil {
+			t.Fatal("title must remain editable")
+		}
 	}
-	if !detailOf(&store.Session{LastSeq: 3}).EffortLocked {
-		t.Fatal("last_seq>0 must be locked")
+	// Repeated effort selection before the first message is allowed despite settings events.
+	raw, err := planEffortUpdate(sess, capabilities{ReasoningEfforts: []string{"high"}}, effort)
+	if err != nil || currentEffort(raw) != effort {
+		t.Fatalf("empty conversation effort update: %s %v", raw, err)
 	}
 }

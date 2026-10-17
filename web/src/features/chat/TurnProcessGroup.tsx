@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { NodeView } from "@/features/chat/NodeList"
-import { reasoningTail, type ProcessGroup } from "@/lib/turn-grouping"
+import { ActivityIcon } from "@/features/chat/ActivityIcon"
+import { activeProcessNode, reasoningTail, type ProcessGroup } from "@/lib/turn-grouping"
 import { safeParseJson } from "@/lib/format"
 import { toolDisplayName } from "@/lib/tool-names"
 import { useChatDisclosure } from "@/stores/chatPresentation"
@@ -17,9 +18,9 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
     return <NodeView node={reasoning[0]} sessionId={sessionId} depth={0} latestTurn={latestTurn} />
   }
 
-  const last = group.nodes[group.nodes.length - 1]
-  const thinking = group.running && last?.kind === "assistant" ? last.content.find((b) => b.type === "reasoning" && b.streaming) : undefined
-  const working = group.running && last?.kind === "tool-call" && !last.result ? last : undefined
+  const activity = activeProcessNode(group)
+  const thinking = activity?.kind === "assistant" ? activity.content.find((b) => b.type === "reasoning" && b.streaming) : undefined
+  const working = activity?.kind === "tool-call" ? activity : undefined
   const toolCount = `使用工具${tools.length}次`
   let label = reasoning.length ? tools.length ? "思考与行动" : "思考" : tools.length ? toolCount : "工具调用"
   let detail = tools.length && reasoning.length ? toolCount : ""
@@ -37,7 +38,8 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
     <div data-process-group={group.id}>
       <button type="button" onClick={() => setOpen(!expanded)} disabled={group.hasPending}
         aria-expanded={expanded} aria-label={`${expanded ? "收起" : "展开"}${label}${detail ? ` · ${detail}` : ""}`}
-        className="flex min-h-9 w-full items-center gap-1.5 rounded-md text-left text-chat text-fg-secondary hover:bg-accent/50 disabled:cursor-default">
+        className="chat-process-trigger flex min-h-9 w-full items-center gap-1.5 rounded-md text-left text-chat text-fg-process hover:bg-accent/50 disabled:cursor-default">
+        {!expanded && activity && <ActivityIcon name={activity.kind === "assistant" ? "reasoning" : activity.name} active />}
         <span className={cn("shrink-0", active && "text-shimmer")}>{label}</span>
         {detail && <>
           <span className="shrink-0">·</span>

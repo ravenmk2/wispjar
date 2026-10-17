@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/ravenmk2/wispjar/internal/agent"
 	"github.com/ravenmk2/wispjar/internal/gateway/respond"
@@ -75,12 +76,13 @@ type AgentRef struct {
 
 type Detail struct {
 	store.Session
-	Agent        AgentRef `json:"agent"`
-	EffortLocked bool     `json:"effort_locked"`
+	Agent               AgentRef `json:"agent"`
+	EffortLocked        bool     `json:"effort_locked"`
+	ModelSettingsLocked bool     `json:"model_settings_locked"`
 }
 
-func detailOf(sess *store.Session) *Detail {
-	d := &Detail{Session: *sess, EffortLocked: sess.LastSeq > 0}
+func detailOf(sess *store.Session, started bool) *Detail {
+	d := &Detail{Session: *sess, EffortLocked: started, ModelSettingsLocked: started}
 	var snap struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
@@ -92,6 +94,7 @@ func detailOf(sess *store.Session) *Detail {
 }
 
 type CreateInput struct {
+	ModelID         string
 	AgentID         string
 	Title           string
 	ReasoningEffort string
@@ -124,7 +127,18 @@ func (s *Service) Create(ctx context.Context, actorID, orgID string, in CreateIn
 	if err != nil {
 		return nil, err
 	}
-	modelParams, err := s.createModelParams(ctx, a.ModelID, in.ReasoningEffort)
+	modelID := a.ModelID
+	if selected := strings.TrimSpace(in.ModelID); selected != "" {
+		var m store.Model
+		if err := s.db.WithContext(ctx).Where("id = ? AND status = ?", selected, StatusActive).First(&m).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, errInvalid("model_id 对应的模型不存在或未上架（active）", map[string]any{"field": "model_id"})
+			}
+			return nil, err
+		}
+		modelID = m.ID
+	}
+	modelParams, err := s.createModelParams(ctx, modelID, in.ReasoningEffort)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +151,7 @@ func (s *Service) Create(ctx context.Context, actorID, orgID string, in CreateIn
 		Title:         title,
 		TitlePinned:   title != "",
 		ApprovalMode:  ApprovalAuto,
-		ModelID:       a.ModelID,
+		ModelID:       modelID,
 		ModelParams:   modelParams,
 		Sandbox:       defaultSandbox,
 		UsageTotal:    zeroUsage(),
@@ -147,7 +161,7 @@ func (s *Service) Create(ctx context.Context, actorID, orgID string, in CreateIn
 	if err := s.db.WithContext(ctx).Create(&sess).Error; err != nil {
 		return nil, err
 	}
-	return detailOf(&sess), nil
+	return detailOf(&sess, false), nil
 }
 
 // capabilities 是会话域关心的 model.capabilities 子集（思考强度档位声明、视觉能力）。
@@ -210,16 +224,8 @@ func currentEffort(raw json.RawMessage) string {
 	return s
 }
 
-// planEffortUpdate 校验并计算一次 effort 改档（api.md §3）：
-// last_seq > 0 锁档返回 409 session/effort_locked；值须在目标模型
-// capabilities.reasoning_efforts 内；空串恢复模型默认档（无默认档则删除覆盖）；
-// 保留既有 model_params 的其它键。
+// planEffortUpdate 校验目标模型档位并合并参数；锁定校验由事务内的更新入口完成。
 func planEffortUpdate(sess *store.Session, caps capabilities, effort string) (json.RawMessage, error) {
-	if sess.LastSeq > 0 {
-		return nil, &Error{Status: http.StatusConflict, Code: "session/effort_locked",
-			Message: "对话开始后不可更改思考强度",
-			Details: map[string]any{"reasoning_effort": currentEffort(sess.ModelParams)}}
-	}
 	effort = strings.TrimSpace(effort)
 	if effort == "" {
 		effort = caps.ReasoningEffortDefault
@@ -343,7 +349,11 @@ func (s *Service) Get(ctx context.Context, uid, sessionID string) (*Detail, erro
 	if err != nil {
 		return nil, err
 	}
-	return detailOf(sess), nil
+	started, err := hasUserMessage(s.db.WithContext(ctx), sess.ID)
+	if err != nil {
+		return nil, err
+	}
+	return detailOf(sess, started), nil
 }
 
 type UpdateInput struct {
@@ -354,17 +364,76 @@ type UpdateInput struct {
 	ReasoningEffort *string
 }
 
+func validateModelSettingsUpdate(sess *store.Session, started bool, in UpdateInput) error {
+	if !started {
+		return nil
+	}
+	if in.ModelID != nil {
+		return &Error{Status: http.StatusConflict, Code: "session/model_locked", Message: "对话开始后不可更改模型，请新建对话", Details: map[string]any{"model_id": sess.ModelID}}
+	}
+	if in.ReasoningEffort != nil {
+		return &Error{Status: http.StatusConflict, Code: "session/effort_locked", Message: "对话开始后不可更改推理等级，请新建对话", Details: map[string]any{"reasoning_effort": currentEffort(sess.ModelParams)}}
+	}
+	return nil
+}
+
 func (s *Service) Update(ctx context.Context, uid, sessionID string, in UpdateInput) (*Detail, error) {
-	sess, err := s.ownedSession(ctx, uid, sessionID)
+	var committed []store.SessionEvent
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var sess store.Session
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&sess, "id = ?", sessionID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errNotFound("会话不存在或无权访问")
+			}
+			return err
+		}
+		if sess.UserID != uid || sess.Status == StatusDeleted {
+			return errNotFound("会话不存在或无权访问")
+		}
+		started, err := hasUserMessage(tx, sessionID)
+		if err != nil {
+			return err
+		}
+		if err := validateModelSettingsUpdate(&sess, started, in); err != nil {
+			return err
+		}
+		planner := *s
+		planner.db = tx
+		updates, events, err := planner.planUpdate(ctx, uid, &sess, in)
+		if err != nil {
+			return err
+		}
+		if len(updates) == 0 {
+			return nil
+		}
+		if err := tx.Model(&store.Session{}).Where("id = ?", sess.ID).Updates(updates).Error; err != nil {
+			return err
+		}
+		if len(events) > 0 {
+			committed, err = appendEventsTx(tx, sess.ID, events)
+		}
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
+	if s.AfterEvents != nil && len(committed) > 0 {
+		evs := make([]Event, 0, len(committed))
+		for _, e := range committed {
+			evs = append(evs, Event{Seq: e.Seq, Type: e.Type, Time: e.TimeMs, Data: e.Data})
+		}
+		s.AfterEvents(sessionID, evs)
+	}
+	return s.Get(ctx, uid, sessionID)
+}
+
+func (s *Service) planUpdate(ctx context.Context, uid string, sess *store.Session, in UpdateInput) (map[string]any, []EventInput, error) {
 	updates := map[string]any{}
 	events := []EventInput{}
 	if in.Title != nil {
 		title := strings.TrimSpace(*in.Title)
 		if len(title) > 256 {
-			return nil, errInvalid("title 不超过 256 字符", map[string]any{"field": "title"})
+			return nil, nil, errInvalid("title 不超过 256 字符", map[string]any{"field": "title"})
 		}
 		updates["title"] = title
 		updates["title_pinned"] = true
@@ -373,7 +442,7 @@ func (s *Service) Update(ctx context.Context, uid, sessionID string, in UpdateIn
 	if in.ApprovalMode != nil {
 		mode := strings.TrimSpace(*in.ApprovalMode)
 		if mode != ApprovalStrict && mode != ApprovalDefault && mode != ApprovalAuto {
-			return nil, errInvalid("approval_mode 仅支持 strict|default|auto", map[string]any{"field": "approval_mode"})
+			return nil, nil, errInvalid("approval_mode 仅支持 strict|default|auto", map[string]any{"field": "approval_mode"})
 		}
 		updates["approval_mode"] = mode
 		events = append(events, EventInput{Type: EventSessionApprovalMode, Data: ApprovalModeData{Mode: mode, ChangedBy: uid}})
@@ -381,7 +450,7 @@ func (s *Service) Update(ctx context.Context, uid, sessionID string, in UpdateIn
 	if in.Status != nil {
 		status := strings.TrimSpace(*in.Status)
 		if status != StatusActive && status != StatusArchived {
-			return nil, errInvalid("status 仅支持 active|archived", map[string]any{"field": "status"})
+			return nil, nil, errInvalid("status 仅支持 active|archived", map[string]any{"field": "status"})
 		}
 		updates["status"] = status
 	}
@@ -392,19 +461,19 @@ func (s *Service) Update(ctx context.Context, uid, sessionID string, in UpdateIn
 			Where("id = ? AND status = ?", modelID, StatusActive).
 			First(&m).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, errInvalid("model_id 对应的模型不存在或未上架（active）", map[string]any{"field": "model_id"})
+				return nil, nil, errInvalid("model_id 对应的模型不存在或未上架（active）", map[string]any{"field": "model_id"})
 			}
-			return nil, err
+			return nil, nil, err
 		}
 		caps := capabilities{}
 		_ = json.Unmarshal(m.Capabilities, &caps)
 		if !caps.Vision {
 			has, err := s.hasImageHistory(ctx, sess.ID)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if has {
-				return nil, &Error{Status: http.StatusConflict, Code: "session/vision_locked",
+				return nil, nil, &Error{Status: http.StatusConflict, Code: "session/vision_locked",
 					Message: "会话历史包含图片，不能切换到不支持视觉的模型",
 					Details: map[string]any{"model_id": modelID}}
 			}
@@ -412,50 +481,27 @@ func (s *Service) Update(ctx context.Context, uid, sessionID string, in UpdateIn
 		updates["model_id"] = modelID
 		events = append(events, EventInput{Type: EventModelSelection, Data: ModelSelectionData{ModelID: modelID, ChangedBy: uid}})
 	}
-	if in.ReasoningEffort != nil {
+	if in.ReasoningEffort != nil || in.ModelID != nil {
 		modelID := sess.ModelID
 		if in.ModelID != nil {
 			modelID = strings.TrimSpace(*in.ModelID)
 		}
 		caps, err := s.modelCapabilities(ctx, modelID)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		raw, err := planEffortUpdate(sess, caps, *in.ReasoningEffort)
+		effort := ""
+		if in.ReasoningEffort != nil {
+			effort = *in.ReasoningEffort
+		}
+		raw, err := planEffortUpdate(sess, caps, effort)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		updates["model_params"] = raw
 		events = append(events, EventInput{Type: EventSessionEffort, Data: SessionEffortData{Effort: currentEffort(raw), ChangedBy: uid}})
 	}
-	if len(updates) == 0 {
-		return detailOf(sess), nil
-	}
-	var committed []store.SessionEvent
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&store.Session{}).Where("id = ?", sess.ID).Updates(updates).Error; err != nil {
-			return err
-		}
-		if len(events) > 0 {
-			evs, err := appendEventsTx(tx, sess.ID, events)
-			if err != nil {
-				return err
-			}
-			committed = evs
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	if s.AfterEvents != nil {
-		evs := make([]Event, 0, len(committed))
-		for _, e := range committed {
-			evs = append(evs, Event{Seq: e.Seq, Type: e.Type, Time: e.TimeMs, Data: e.Data})
-		}
-		s.AfterEvents(sess.ID, evs)
-	}
-	return s.Get(ctx, uid, sessionID)
+	return updates, events, nil
 }
 
 // hasImageHistory 判断会话历史是否包含图片附件（PATCH 换模型的 vision 门控用）。

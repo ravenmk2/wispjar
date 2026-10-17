@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"gorm.io/gorm"
@@ -25,8 +26,10 @@ func NewStore(db *gorm.DB) *Store {
 }
 
 type EventInput struct {
-	Type string
-	Data any
+	// ExpectedLastSeq guards first-prompt configuration against concurrent PATCH requests.
+	ExpectedLastSeq *int64
+	Type            string
+	Data            any
 }
 
 func (s *Store) Append(ctx context.Context, sessionID, eventType string, data any) (*store.SessionEvent, error) {
@@ -64,6 +67,9 @@ func appendEventsTx(tx *gorm.DB, sessionID string, inputs []EventInput) ([]store
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 		Select("id", "last_seq", "running", "usage_total").
 		First(&sess, "id = ?", sessionID).Error; err != nil {
+		return nil, err
+	}
+	if err := validateEventSequence(sess.LastSeq, inputs); err != nil {
 		return nil, err
 	}
 	seq := sess.LastSeq
@@ -222,4 +228,24 @@ func addUsage(total json.RawMessage, delta Usage) json.RawMessage {
 		return total
 	}
 	return b
+}
+
+func validateEventSequence(lastSeq int64, inputs []EventInput) error {
+	for _, in := range inputs {
+		if in.ExpectedLastSeq != nil && *in.ExpectedLastSeq != lastSeq {
+			return &Error{Status: http.StatusConflict, Code: "session/config_changed", Message: "对话配置已更新，请重新发送消息"}
+		}
+	}
+	return nil
+}
+
+func hasUserMessage(db *gorm.DB, sessionID string) (bool, error) {
+	var events []store.SessionEvent
+	err := db.Select("seq").Where("session_id = ? AND type = ?", sessionID, EventUserMessage).Limit(1).Find(&events).Error
+	return len(events) > 0, err
+}
+
+// HasUserMessage examines the full history, including messages outside a follow snapshot window.
+func (s *Store) HasUserMessage(ctx context.Context, sessionID string) (bool, error) {
+	return hasUserMessage(s.db.WithContext(ctx), sessionID)
 }

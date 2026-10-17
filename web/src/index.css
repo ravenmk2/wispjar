@@ -31,16 +31,22 @@
     --shadow-input: 0 5px 16px -4px rgba(0, 0, 0, 0.07);
     --shadow-input-focus: 0 5px 18px -4px rgba(0, 0, 0, 0.13);
     --scrollbar-color: #a3a3a3;
-    --shimmer-base: #555555;
-    --shimmer-highlight: #111111;
+    --shimmer-base: #666666;
+    --shimmer-highlight: #555555;
     --shadow-menu: 0 12px 24px rgba(15, 23, 42, 0.12);
 
     /* 语义色与字号规范见 docs/design/theme.md。 */
     --sidebar: #f8f8f8;
     --composer: #ffffff;
+    --composer-placeholder: #a3a3a3;
+    --context-track: #c9c9c9;
     --text-secondary: #666666;
     --text-tertiary: #707070;
     --text-caption: #707070;
+    --text-process: #666666;
+    --text-process-hover: #3d3d3d;
+    --text-process-muted: #858585;
+    --text-placeholder: #858585;
     --bubble: #e8f2ff;
     --bubble-foreground: #18375d;
     --link: #2c67c5;
@@ -75,9 +81,15 @@
     --ring-focus: rgba(44, 103, 197, 0.2);
     --sidebar: #1d1d1d;
     --composer: #363636;
+    --composer-placeholder: #747474;
+    --context-track: #858585;
     --text-secondary: #ababab;
     --text-tertiary: #999999;
     --text-caption: #999999;
+    --text-process: #929292;
+    --text-process-hover: #c8c8c8;
+    --text-process-muted: #858585;
+    --text-placeholder: #8e8e8e;
     --bubble: #1d4077;
     --bubble-foreground: #f1f6ff;
     --link: #83b5ff;
@@ -88,8 +100,8 @@
     --shadow-input: 0 5px 16px -4px rgba(0, 0, 0, 0.3);
     --shadow-input-focus: 0 5px 18px -4px rgba(0, 0, 0, 0.48);
     --scrollbar-color: #737373;
-    --shimmer-base: #b5b5b5;
-    --shimmer-highlight: #ffffff;
+    --shimmer-base: #929292;
+    --shimmer-highlight: #b0b0b0;
     --shadow-menu: 0 12px 24px rgba(0, 0, 0, 0.4);
   }
 }
@@ -128,6 +140,21 @@
   }
 }
 
+@keyframes activity-breathe {
+  0%, 100% { opacity: .4; transform: scale(.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+@keyframes activity-twinkle {
+  0%, 100% { opacity: .2; transform: scale(.7); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+
+@keyframes activity-fade {
+  0%, 100% { opacity: .45; }
+  50% { opacity: 1; }
+}
+
 @property --scrollbar-thumb {
   syntax: "<color>";
   inherits: false;
@@ -163,7 +190,7 @@
     .text-shimmer {
       animation: none;
       background: none;
-      color: var(--foreground);
+      color: var(--text-process);
     }
     .overflow-auto,
     .overflow-y-auto,
@@ -185,8 +212,38 @@
     border-color: #4b4b4b;
   }
   /* 折叠标记作为行内首项与正文共用左边界，不额外叠加缩进。 */
+  .chat-process-trigger {
+    color: var(--text-process);
+  }
+  .chat-process-trigger:is(:hover, :focus-visible):not(:disabled) {
+    --text-process: var(--text-process-hover);
+    --text-process-muted: var(--text-process-hover);
+    --shimmer-base: var(--text-process-hover);
+    --shimmer-highlight: var(--text-process-hover);
+  }
+  .chat-activity-icon {
+    @apply size-[18px] shrink-0 text-fg-process;
+    transform-origin: center;
+  }
+  .chat-activity-icon.is-running {
+    animation: activity-breathe 1.5s ease-in-out infinite;
+  }
+  .chat-activity-skill.is-running {
+    animation: none;
+  }
+  .chat-activity-skill.is-running .activity-star {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: activity-twinkle 1.8s ease-in-out infinite;
+  }
+  .chat-activity-skill .activity-star:nth-of-type(2) { animation-delay: .6s; }
+  .chat-activity-skill .activity-star:nth-of-type(3) { animation-delay: 1.2s; }
   .chat-disclosure-icon {
     @apply size-3.5 shrink-0;
+  }
+  .codeblock pre,
+  .codeblock code {
+    @apply font-mono;
   }
   .markdown-body > *:first-child {
     margin-top: 0;
@@ -248,4 +305,10 @@
   .dark .markdown-body .shiki span {
     color: var(--shiki-dark) !important;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-activity-icon.is-running { animation: activity-fade 2.4s ease-in-out infinite; }
+  .chat-activity-skill.is-running { animation: none; }
+  .chat-activity-skill.is-running .activity-star { animation: activity-fade 2.4s ease-in-out infinite; }
 }

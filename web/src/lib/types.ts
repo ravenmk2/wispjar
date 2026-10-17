@@ -383,6 +383,7 @@ export type SessionEventType = SessionEvent["type"]
 // ============ protocol.md §4：session.follow 帧 ============
 
 export interface SessionHeader {
+  modelSettingsLocked: boolean
   sessionId: string
   title: string
   titlePinned: boolean
@@ -492,9 +493,11 @@ export interface SessionDetail extends SessionSummary {
   agent?: SessionAgentInfo
   model_params?: Record<string, unknown> | null
   effort_locked?: boolean
+  model_settings_locked?: boolean
 }
 
 export interface CreateSessionRequest {
+  model_id?: string
   agent_id: string
   title?: string
   reasoning_effort?: string

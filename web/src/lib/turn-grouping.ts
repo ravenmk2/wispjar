@@ -1,4 +1,4 @@
-import type { AssistantNode, BoundaryNode, ConversationNode, QuestionReplyNode, UserNode } from "@/lib/conversation"
+import type { AssistantNode, BoundaryNode, ConversationNode, QuestionReplyNode, ToolCallNode, UserNode } from "@/lib/conversation"
 import { toolFailure } from "./tool-output"
 
 export interface ProcessGroup {
@@ -30,6 +30,17 @@ export function hasPendingApproval(nodes: ConversationNode[]): boolean {
     if (n.kind === "tool-call") return !!(n.question && !n.question.answers) || hasPendingApproval(n.children)
     return false
   })
+}
+
+// The visible collapsed header must carry activity while its child icons are unmounted.
+export function activeProcessNode(group: ProcessGroup): AssistantNode | ToolCallNode | undefined {
+  if (!group.running || group.hasPending) return undefined
+  for (let i = group.nodes.length - 1; i >= 0; i--) {
+    const node = group.nodes[i]
+    if (node.kind === "assistant" && node.live && node.content.some((b) => b.type === "reasoning" && b.streaming)) return node
+    if (node.kind === "tool-call" && !node.result && !node.endReason &&
+      !hasPendingApproval(node.children) && !(node.question && !node.question.answers)) return node
+  }
 }
 
 export function hasProcessError(nodes: ConversationNode[]): boolean {

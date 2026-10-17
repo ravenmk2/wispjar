@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { deriveConversationNodes } from "./conversation"
-import { groupByTurn, reasoningTail } from "./turn-grouping"
+import { activeProcessNode, groupByTurn, reasoningTail } from "./turn-grouping"
 import type { ContentBlock, SessionEvent, StreamChunk, TurnEndReason } from "./types"
 import { useChatPresentationStore } from "../stores/chatPresentation"
 import { useSessionStore } from "../stores/session"
@@ -281,4 +281,43 @@ test("manual disclosure survives remount/reconnect; switching sessions resets it
   assert.equal(useChatPresentationStore.getState().expanded["tool-a"], true)
   s.enterSession("b")
   assert.deepEqual(useChatPresentationStore.getState().expanded, {})
+})
+
+
+test("collapsed activity finds a running tool even when a later parallel tool finished", () => {
+  const f = fixture()
+  f.message([tool("first"), tool("second")])
+  f.add({ type: "tool/result", data: { turn: 1, step: 1, call_id: "second", name: "read", content: "done" } })
+  const part = f.segment().parts[0]
+  assert.equal(part.kind, "process")
+  if (part.kind !== "process") return
+  const active = activeProcessNode(part)
+  assert.equal(active?.kind, "tool-call")
+  if (active?.kind === "tool-call") assert.equal(active.callId, "first")
+  f.end("interrupted")
+  const ended = f.segment().parts[0]
+  if (ended.kind === "process") assert.equal(activeProcessNode(ended), undefined)
+})
+
+test("pending approval suppresses collapsed running activity", () => {
+  const f = fixture()
+  f.message([tool("approval")])
+  f.add({ type: "approval/asked", data: { turn: 1, step: 1, call_id: "approval", name: "read", arguments: "{}", risk: "high" } })
+  const part = f.segment().parts[0]
+  if (part.kind !== "process") throw new Error("missing process")
+  assert.equal(part.hasPending, true)
+  assert.equal(activeProcessNode(part), undefined)
+})
+
+test("collapsed thinking activity requires a live streaming reasoning block", () => {
+  const f = fixture()
+  f.message([thought("thinking")])
+  const part = f.segment().parts[0]
+  if (part.kind !== "process" || part.nodes[0].kind !== "assistant") throw new Error("missing reasoning")
+  assert.equal(activeProcessNode(part), undefined)
+  part.nodes[0].live = true
+  part.nodes[0].content = [{type: "reasoning", text: "thinking", streaming: true}]
+  assert.equal(activeProcessNode(part), part.nodes[0])
+  part.hasPending = true
+  assert.equal(activeProcessNode(part), undefined)
 })

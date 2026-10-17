@@ -1,5 +1,6 @@
-import { ChevronDown, ChevronRight, OctagonX, Sparkles } from "lucide-react"
+import { ChevronDown, ChevronRight, OctagonX } from "lucide-react"
 import { useLayoutEffect, useRef } from "react"
+import { ActivityIcon } from "@/features/chat/ActivityIcon"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { CopyIconButton } from "@/components/CopyIconButton"
@@ -24,11 +25,11 @@ export function TokenBadge({ usage, className }: { usage: Usage; className?: str
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={cn("cursor-default font-mono text-meta tabular-nums text-fg-caption", className)}>
+        <span className={cn("cursor-default font-sans tabular-nums text-meta tabular-nums text-fg-caption", className)}>
           ↑{formatNumber(usage.input_tokens)} ↓{formatNumber(usage.output_tokens)}
         </span>
       </TooltipTrigger>
-      <TooltipContent className="font-mono text-xs">
+      <TooltipContent className="font-sans tabular-nums text-xs">
         <div>输入 {formatNumber(usage.input_tokens)}</div>
         <div>输出 {formatNumber(usage.output_tokens)}</div>
         <div>缓存读 {formatNumber(usage.cache_read_tokens)}</div>
@@ -69,25 +70,25 @@ export function ReasoningBlock({
         aria-expanded={open}
         aria-label={`${open ? "收起" : "展开"}${streaming ? "思考中" : "思考"}`}
         onClick={() => { followRef.current = true; setOpen(!open) }}
-        className="flex min-h-9 w-full items-center gap-1.5 rounded-md text-left text-chat hover:bg-accent/50"
+        className="chat-process-trigger flex min-h-9 w-full items-center gap-1.5 rounded-md text-left text-chat hover:bg-accent/50"
       >
-        <Sparkles className="chat-disclosure-icon text-fg-tertiary" />
-        <span className={cn("shrink-0 font-medium text-fg-secondary", streaming && "text-shimmer")}>{streaming ? "思考中" : "思考"}</span>
-        <span className="shrink-0 text-fg-tertiary">{detail && "·"}</span>
-        <span className={cn("min-w-0 flex-1 overflow-hidden whitespace-nowrap text-fg-tertiary", streaming && !open ? "[direction:rtl] [text-overflow:ellipsis] text-left" : "text-ellipsis")} title={detail}>
+        <ActivityIcon name="reasoning" active={streaming} />
+        <span className={cn("shrink-0 text-fg-process", streaming && "text-shimmer")}>{streaming ? "思考中" : "思考"}</span>
+        <span className="shrink-0 text-fg-process-muted">{detail && "·"}</span>
+        <span className={cn("min-w-0 flex-1 overflow-hidden whitespace-nowrap text-fg-process-muted", streaming && !open ? "[direction:rtl] [text-overflow:ellipsis] text-left" : "text-ellipsis")} title={detail}>
           <bdi>{detail}</bdi>
         </span>
         {open ? (
-          <ChevronDown className="size-3.5 shrink-0 text-fg-tertiary" />
+          <ChevronDown className="size-3.5 shrink-0 text-fg-process-muted" />
         ) : (
-          <ChevronRight className="size-3.5 shrink-0 text-fg-tertiary" />
+          <ChevronRight className="size-3.5 shrink-0 text-fg-process-muted" />
         )}
       </button>
       {open && (
         <div ref={bodyRef} data-reasoning-body onScroll={() => {
           const el = bodyRef.current
           if (el) followRef.current = el.scrollHeight - el.clientHeight - el.scrollTop < 24
-        }} className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words py-1 text-chat text-fg-secondary">
+        }} className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words py-1 text-chat text-fg-process">
           {text}
         </div>
       )}
