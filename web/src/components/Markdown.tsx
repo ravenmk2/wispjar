@@ -1,9 +1,26 @@
-import { memo, useEffect, useState } from "react"
+import { createContext, memo, useContext, useEffect, useState, type ComponentProps } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { CopyIconButton } from "@/components/CopyIconButton"
 import { highlightCode } from "@/lib/highlight"
 import { cn } from "@/lib/utils"
+
+const TableCopyContext = createContext<{ source: string; headerEnd?: number } | null>(null)
+
+function TableHeaderCell({ sourceEnd, children, ...props }: ComponentProps<"th"> & { sourceEnd?: number }) {
+  const table = useContext(TableCopyContext)
+  const hasCopy = sourceEnd !== undefined && sourceEnd === table?.headerEnd
+  return (
+    <th {...props}>
+      {hasCopy ? (
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex-1">{children}</span>
+          <CopyIconButton text={table!.source} tooltip="复制表格" className="size-8" />
+        </div>
+      ) : children}
+    </th>
+  )
+}
 
 function BlockHeader({ label, text, tooltip }: { label: string; text: string; tooltip: string }) {
   return (
@@ -69,6 +86,7 @@ export const Markdown = memo(function Markdown({ content, className }: { content
           table: ({ children, node }) => {
             const start = node?.position?.start.offset
             const end = node?.position?.end.offset
+            const headerEnd = node?.children.find((child) => child.type === "element" && child.tagName === "thead")?.position?.end.offset
             // Strip container prefixes so tables inside quotes/lists paste independently.
             const source = start !== undefined && end !== undefined
               ? content.slice(start, end)
@@ -78,14 +96,14 @@ export const Markdown = memo(function Markdown({ content, className }: { content
               : ""
 
             return (
-              <div className="my-2 overflow-hidden rounded-lg border">
-                <BlockHeader label="表格" text={source} tooltip="复制表格" />
-                <div className="overflow-x-auto">
+              <TableCopyContext.Provider value={{ source, headerEnd }}>
+                <div className="markdown-table my-2 overflow-x-auto rounded-lg border">
                   <table>{children}</table>
                 </div>
-              </div>
+              </TableCopyContext.Provider>
             )
           },
+          th: ({ node, ...props }) => <TableHeaderCell {...props} sourceEnd={node?.position?.end.offset} />,
         }}
       >
         {content}

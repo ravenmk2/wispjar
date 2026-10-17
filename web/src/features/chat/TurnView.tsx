@@ -1,6 +1,7 @@
-import { ChevronDown, ChevronRight, X } from "lucide-react"
-import { useEffect, useId, useRef, useState } from "react"
+import { X } from "lucide-react"
+import { useEffect, useId, useState } from "react"
 import { CopyIconButton } from "@/components/CopyIconButton"
+import { DisclosureChevron, DisclosureContent, useDisclosureMotion } from "@/components/DisclosureMotion"
 import { NodeView } from "@/features/chat/NodeList"
 import { TurnProcessGroup } from "@/features/chat/TurnProcessGroup"
 import { ActivityIcon } from "@/features/chat/ActivityIcon"
@@ -16,7 +17,8 @@ export function TurnView({ segment, sessionId, latestTurn }: {
   const expanded = open || segment.hasPendingApproval
   const [errorOpen, setErrorOpen] = useChatDisclosure(sessionId, `turn-error-${segment.turn}`)
   const errorId = useId()
-  const headerRef = useRef<HTMLButtonElement>(null)
+  const motion = useDisclosureMotion()
+  const errorMotion = useDisclosureMotion()
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
     if (!running || !segment.start) return
@@ -33,51 +35,50 @@ export function TurnView({ segment, sessionId, latestTurn }: {
   const activity = !expanded && running
     ? segment.parts.slice().reverse().map((part) => part.kind === "process" ? activeProcessNode(part) : undefined).find((node) => node !== undefined)
     : undefined
-  const toggle = () => {
-    const el = headerRef.current
-    const scroll = el?.closest<HTMLElement>("[data-chat-scroll]")
-    const top = el?.getBoundingClientRect().top
-    setOpen(!expanded)
-    if (el && scroll && top !== undefined) requestAnimationFrame(() => {
-      scroll.scrollTop += el.getBoundingClientRect().top - top
-    })
-  }
-
   return (
     <section className="space-y-4" data-turn={segment.turn}>
       {segment.user && <NodeView node={segment.user} sessionId={sessionId} depth={0} latestTurn={latestTurn} />}
       <div className="flex min-w-0 items-center gap-2">
         <button
-          ref={headerRef} type="button" data-turn-header={segment.turn} aria-expanded={expanded}
+          type="button" data-turn-header={segment.turn} aria-expanded={expanded}
           aria-label={`${expanded ? "收起" : "展开"}第 ${segment.turn} 轮：${timeText}`}
-          disabled={segment.hasPendingApproval} onClick={toggle}
+          disabled={segment.hasPendingApproval} onClick={(event) => motion.toggle(event, () => setOpen(!expanded))}
           className="chat-process-trigger flex min-h-9 min-w-0 items-center gap-1.5 rounded-md text-left text-chat text-fg-process hover:bg-accent/50 disabled:cursor-default"
         >
           {activity && <ActivityIcon name={activity.kind === "assistant" ? "reasoning" : activity.name} active />}
           <span className={cn("truncate tabular-nums", running && "text-shimmer")}>{timeText}</span>
-          {expanded ? <ChevronDown className="chat-disclosure-icon" /> : <ChevronRight className="chat-disclosure-icon" />}
+          <DisclosureChevron open={expanded} revision={motion.revision} />
         </button>
         {reason === "failed" && <X className="size-3.5 shrink-0 text-destructive" strokeWidth={2.5} aria-label="运行出错" />}
         {reason === "failed" && segment.end?.error && <button type="button"
           aria-expanded={expanded && errorOpen} aria-controls={errorId}
-          onClick={() => { setErrorOpen(!(expanded && errorOpen)); if (!expanded) setOpen(true) }}
+          onClick={(event) => errorMotion.toggle(event, () => { setErrorOpen(!(expanded && errorOpen)); if (!expanded) setOpen(true) })}
           className="shrink-0 rounded px-1 py-1 text-meta text-fg-process hover:bg-accent hover:text-foreground">
           {expanded && errorOpen ? "收起详情" : "查看详情"}
         </button>}
       </div>
-      {expanded && errorOpen && reason === "failed" && segment.end?.error && <div id={errorId} className="rounded-lg bg-muted/50 px-3 py-2">
-        <div className="mb-1 flex items-center justify-between gap-2 text-meta text-fg-process">
-          <span>错误详情</span>
-          <CopyIconButton text={segment.end.error} tooltip="复制错误详情" />
-        </div>
-        <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-sans tabular-nums text-xs text-fg-process">{segment.end.error}</pre>
-      </div>}
-      {expanded ? segment.parts.map((part) => part.kind === "reply" ? (
-        <NodeView key={part.node.id} node={part.node} sessionId={sessionId} depth={0} latestTurn={latestTurn} isAnswer={part.node.id === segment.answerId} />
-      ) : <TurnProcessGroup key={part.id} group={part} sessionId={sessionId} latestTurn={latestTurn} />) : (
-        answer?.kind === "reply" && <NodeView node={answer.node} sessionId={sessionId} depth={0} latestTurn={latestTurn} isAnswer />
-      )}
-      {!expanded && !answer && reason === "completed" && <div className="text-xs text-fg-caption">本轮未生成最终回复</div>}
+      <div className="!mt-0">
+        {reason === "failed" && segment.end?.error && <DisclosureContent open={expanded && errorOpen} revision={errorMotion.revision}>
+          <div className="pt-4"><div id={errorId} className="rounded-lg bg-muted/50 px-3 py-2">
+            <div className="mb-1 flex items-center justify-between gap-2 text-meta text-fg-process">
+              <span>错误详情</span>
+              <CopyIconButton text={segment.end.error} tooltip="复制错误详情" />
+            </div>
+            <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-sans tabular-nums text-xs text-fg-process">{segment.end.error}</pre>
+          </div></div>
+        </DisclosureContent>}
+        {segment.parts.map((part) => {
+          const isAnswer = part.kind === "reply" && part.node.id === segment.answerId
+          const content = <div className="pt-4">{part.kind === "reply" ? (
+            <NodeView node={part.node} sessionId={sessionId} depth={0} latestTurn={latestTurn} isAnswer={isAnswer} />
+          ) : <TurnProcessGroup group={part} sessionId={sessionId} latestTurn={latestTurn} />}</div>
+          const key = part.kind === "reply" ? part.node.id : part.id
+          return isAnswer ? <div key={key}>{content}</div> : (
+            <DisclosureContent key={key} open={expanded} revision={motion.revision}>{content}</DisclosureContent>
+          )
+        })}
+        {!expanded && !answer && reason === "completed" && <div className="pt-4 text-xs text-fg-caption">本轮未生成最终回复</div>}
+      </div>
     </section>
   )
 }

@@ -35,6 +35,9 @@ export default function ChatView() {
   const currentOrg = useCurrentOrg()
   const header = useSessionStore((s) => s.header)
   const followStatus = useSessionStore((s) => s.followStatus)
+  const hasMore = useSessionStore((s) => s.hasMore)
+  const historyStatus = useSessionStore((s) => s.historyStatus)
+  const loadHistory = useSessionStore((s) => s.loadHistory)
   const pendingApprovals = useSessionStore((s) => s.pendingApprovals)
   const pendingQuestions = useSessionStore((s) => s.pendingQuestions)
   const composerReset = useComposerStore((s) => s.reset)
@@ -141,6 +144,18 @@ export default function ChatView() {
             <PanelRight className="size-4" />
           </Button>
         </div>
+        {hasMore && (
+          <div role="status" className="flex shrink-0 items-center justify-center gap-2 px-4 py-2 text-xs text-fg-secondary">
+            {historyStatus === "loading" ? "正在加载更早的消息…" : (
+              <>
+                <span>更早的消息{historyStatus === "error" ? "加载失败" : "尚未加载"}</span>
+                <button type="button" onClick={() => void loadHistory()} className="rounded px-1 py-0.5 text-foreground hover:bg-accent">
+                  {historyStatus === "error" ? "重试" : "加载"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {followStatus === "connecting" && !header ? (
           <div className="mx-auto w-full max-w-chat flex-1 px-4 py-6">
             <TableSkeleton rows={4} />

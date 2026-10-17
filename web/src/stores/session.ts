@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { sessionsApi } from "@/api/sessions"
 import type {
   AssistantStreamFrame,
   AssistantStreamSnapshot,
@@ -45,6 +46,7 @@ interface SessionState {
   header: SessionHeader | null
   events: SessionEvent[]
   hasMore: boolean
+  historyStatus: "idle" | "loading" | "error"
   liveAttempt: LiveAttempt | null
   pendingApprovals: Record<string, PendingApproval>
   pendingQuestions: Record<string, PendingQuestion>
@@ -59,6 +61,7 @@ interface SessionState {
     assistantStream?: AssistantStreamSnapshot,
   ) => void
   appendEvents: (events: SessionEvent[]) => void
+  loadHistory: () => Promise<void>
   applyStreamFrame: (frame: AssistantStreamFrame) => void
   appendToolOutput: (callId: string, stream: keyof ToolOutput, delta: string) => void
   settlePendingQuestion: (callId: string) => void
@@ -117,11 +120,15 @@ function reconcileOptimistic(events: SessionEvent[]) {
   }
 }
 
+// A snapshot replaces the event window; responses for its predecessor must be ignored.
+let historyGeneration = 0
+
 export const useSessionStore = create<SessionState>()((set, get) => ({
   sessionId: null,
   header: null,
   events: [],
   hasMore: false,
+  historyStatus: "idle",
   liveAttempt: null,
   pendingApprovals: {},
   pendingQuestions: {},
@@ -130,12 +137,14 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
   lastSeq: 0,
 
   applySnapshot: (sessionId, header, records, hasMore, assistantStream) => {
+    historyGeneration++
     reconcileOptimistic(records)
     set({
       sessionId,
       header: { ...header, modelSettingsLocked: header.modelSettingsLocked || records.some((e) => e.type === "user/message") },
       events: records,
       hasMore,
+      historyStatus: "idle",
       liveAttempt: assistantStream
         ? {
             attemptId: assistantStream.attemptId,
@@ -152,6 +161,42 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
       followStatus: "live",
       lastSeq: records.length > 0 ? records[records.length - 1].seq : header.lastSeq,
     })
+  },
+
+  loadHistory: async () => {
+    const initial = get()
+    if (!initial.sessionId || !initial.hasMore || initial.historyStatus === "loading") return
+    const generation = historyGeneration
+    const firstSeq = initial.events[0]?.seq
+    set({ historyStatus: "loading" })
+    try {
+      if (!firstSeq) throw new Error("Missing snapshot history boundary")
+      const history: SessionEvent[] = []
+      let afterSeq = 0
+      while (afterSeq < firstSeq - 1) {
+        const page = await sessionsApi.events(initial.sessionId, afterSeq, Math.min(500, firstSeq - 1 - afterSeq))
+        if (generation !== historyGeneration) return
+        // Do not turn a partial response into a silently incomplete conversation.
+        if (!page.items.length) throw new Error("Incomplete session history")
+        for (const event of page.items) {
+          if (event.seq !== afterSeq + 1 || event.seq >= firstSeq) throw new Error("Unexpected history sequence")
+          history.push(event)
+          afterSeq = event.seq
+        }
+      }
+      const current = get()
+      const events = [...history, ...current.events]
+      // Replay against the latest tail so an old asked event cannot resurrect a decided approval.
+      set({
+        events,
+        hasMore: false,
+        historyStatus: "idle",
+        pendingApprovals: derivePendingApprovals(events),
+        pendingQuestions: derivePendingQuestions(events),
+      })
+    } catch {
+      if (generation === historyGeneration) set({ historyStatus: "error" })
+    }
   },
 
   appendEvents: (incoming) => {
@@ -261,17 +306,20 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
 
   setFollowStatus: (followStatus) => set({ followStatus }),
 
-  reset: () =>
+  reset: () => {
+    historyGeneration++
     set({
       sessionId: null,
       header: null,
       events: [],
       hasMore: false,
+      historyStatus: "idle",
       liveAttempt: null,
       pendingApprovals: {},
       pendingQuestions: {},
       toolOutputs: {},
       followStatus: "connecting",
       lastSeq: 0,
-    }),
+    })
+  },
 }))

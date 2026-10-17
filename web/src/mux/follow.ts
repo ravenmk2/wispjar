@@ -39,6 +39,7 @@ export function followSession(orgId: string, sessionId: string): FollowHandle {
     const frame = value as FollowFrame
     if (frame.type === "snapshot") {
       store.getState().applySnapshot(sessionId, frame.header, frame.records, frame.hasMore, frame.assistantStream)
+      void store.getState().loadHistory()
       return
     }
     if (frame.type === "event") {

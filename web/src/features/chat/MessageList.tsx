@@ -1,4 +1,5 @@
 import { ChevronDown } from "lucide-react"
+import { cancelDisclosureScrollAnchor, MANUAL_DISCLOSURE_EVENT } from "@/components/DisclosureMotion"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { NodeList, OptimisticBubble } from "@/features/chat/NodeList"
 import { deriveConversationNodes } from "@/lib/conversation"
@@ -20,6 +21,17 @@ export function MessageList({ sessionId }: { sessionId: string }) {
 
   const running = (header?.running ?? false) || liveAttempt !== null
 
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const pauseFollowing = () => {
+      atBottomRef.current = false
+      setAtBottom(false)
+    }
+    el.addEventListener(MANUAL_DISCLOSURE_EVENT, pauseFollowing)
+    return () => el.removeEventListener(MANUAL_DISCLOSURE_EVENT, pauseFollowing)
+  }, [])
+
   // 吸底跟随：已在底部或自己刚发消息时跟随新内容；上翻阅读时不拉底
   useEffect(() => {
     const el = containerRef.current
@@ -30,7 +42,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   function handleScroll() {
     const el = containerRef.current
     if (!el) return
-    const at = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD
+    const at = !el.dataset.disclosureMoving && el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD
     atBottomRef.current = at
     setAtBottom(at)
   }
@@ -38,6 +50,9 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   function scrollToBottom() {
     const el = containerRef.current
     if (!el) return
+    cancelDisclosureScrollAnchor(el)
+    atBottomRef.current = true
+    setAtBottom(true)
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" })
   }
 

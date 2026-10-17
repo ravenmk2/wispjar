@@ -1,9 +1,10 @@
-import { ChevronDown, ChevronRight, OctagonX } from "lucide-react"
+import { OctagonX } from "lucide-react"
 import { useLayoutEffect, useRef } from "react"
 import { ActivityIcon } from "@/features/chat/ActivityIcon"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { CopyIconButton } from "@/components/CopyIconButton"
+import { DisclosureChevron, DisclosureContent, useDisclosureMotion } from "@/components/DisclosureMotion"
 import { Markdown } from "@/components/Markdown"
 import { ForkButton } from "@/features/chat/ForkButton"
 import { formatMessageTime, formatNumber } from "@/lib/format"
@@ -55,6 +56,7 @@ export function ReasoningBlock({
   disclosureKey?: string
 }) {
   const [open, setOpen] = useChatDisclosure(sessionId, disclosureKey)
+  const motion = useDisclosureMotion()
   const bodyRef = useRef<HTMLDivElement>(null)
   const followRef = useRef(true)
   useLayoutEffect(() => {
@@ -69,7 +71,7 @@ export function ReasoningBlock({
         type="button"
         aria-expanded={open}
         aria-label={`${open ? "收起" : "展开"}${streaming ? "思考中" : "思考"}`}
-        onClick={() => { followRef.current = true; setOpen(!open) }}
+        onClick={(event) => motion.toggle(event, () => { followRef.current = true; setOpen(!open) })}
         className="chat-process-trigger flex min-h-9 w-full items-center gap-1.5 rounded-md text-left text-chat hover:bg-accent/50"
       >
         <ActivityIcon name="reasoning" active={streaming} />
@@ -78,20 +80,16 @@ export function ReasoningBlock({
         <span className={cn("min-w-0 flex-1 overflow-hidden whitespace-nowrap text-fg-process-muted", streaming && !open ? "[direction:rtl] [text-overflow:ellipsis] text-left" : "text-ellipsis")} title={detail}>
           <bdi>{detail}</bdi>
         </span>
-        {open ? (
-          <ChevronDown className="size-3.5 shrink-0 text-fg-process-muted" />
-        ) : (
-          <ChevronRight className="size-3.5 shrink-0 text-fg-process-muted" />
-        )}
+        <DisclosureChevron open={open} revision={motion.revision} className="text-fg-process-muted" />
       </button>
-      {open && (
+      <DisclosureContent open={open} revision={motion.revision}>
         <div ref={bodyRef} data-reasoning-body onScroll={() => {
           const el = bodyRef.current
           if (el) followRef.current = el.scrollHeight - el.clientHeight - el.scrollTop < 24
         }} className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words py-1 text-chat text-fg-process">
           {text}
         </div>
-      )}
+      </DisclosureContent>
     </div>
   )
 }

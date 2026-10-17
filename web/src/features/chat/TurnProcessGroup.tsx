@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from "lucide-react"
+import { DisclosureChevron, DisclosureContent, useDisclosureMotion } from "@/components/DisclosureMotion"
 import { NodeView } from "@/features/chat/NodeList"
 import { ActivityIcon } from "@/features/chat/ActivityIcon"
 import { activeProcessNode, reasoningTail, type ProcessGroup } from "@/lib/turn-grouping"
@@ -12,6 +12,7 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
 }) {
   const [open, setOpen] = useChatDisclosure(sessionId, group.id)
   const expanded = open || group.hasPending
+  const motion = useDisclosureMotion()
   const tools = group.nodes.filter((n) => n.kind === "tool-call")
   const reasoning = group.nodes.filter((n) => n.kind === "assistant")
   if (group.nodes.length === 1 && reasoning.length === 1) {
@@ -35,7 +36,7 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
 
   return (
     <div data-process-group={group.id}>
-      <button type="button" onClick={() => setOpen(!expanded)} disabled={group.hasPending}
+      <button type="button" onClick={(event) => motion.toggle(event, () => setOpen(!expanded))} disabled={group.hasPending}
         aria-expanded={expanded} aria-label={`${expanded ? "收起" : "展开"}${label}${detail ? ` · ${detail}` : ""}`}
         className="chat-process-trigger flex min-h-9 w-full items-center gap-1.5 rounded-md text-left text-chat text-fg-process hover:bg-accent/50 disabled:cursor-default">
         {!expanded && activity && <ActivityIcon name={activity.kind === "assistant" ? "reasoning" : activity.name} active />}
@@ -44,11 +45,11 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
           <span className="shrink-0">·</span>
           <span className={cn("min-w-0 overflow-hidden whitespace-nowrap text-ellipsis", !expanded && thinking && "[direction:rtl] text-left")} title={detail}><bdi>{detail}</bdi></span>
         </>}
-        {expanded ? <ChevronDown className="chat-disclosure-icon" /> : <ChevronRight className="chat-disclosure-icon" />}
+        <DisclosureChevron open={expanded} revision={motion.revision} />
       </button>
-      {expanded && <div className="space-y-1 py-1 pl-4">
+      <DisclosureContent open={expanded} revision={motion.revision}><div className="space-y-1 py-1 pl-4">
         {group.nodes.map((node) => <NodeView key={node.id} node={node} sessionId={sessionId} depth={0} latestTurn={latestTurn} />)}
-      </div>}
+      </div></DisclosureContent>
     </div>
   )
 }

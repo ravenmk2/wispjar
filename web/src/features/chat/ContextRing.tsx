@@ -74,9 +74,9 @@ function levelColor(ratio: number): { ring: string; bar: string; text: string } 
 
 function StatRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-4">
-      <span className="text-fg-tertiary">{label}</span>
-      <span className="tabular-nums text-foreground">{value}</span>
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-4">
+      <span className="whitespace-nowrap text-fg-tertiary">{label}</span>
+      <span className="whitespace-nowrap text-right tabular-nums text-foreground">{value}</span>
     </div>
   )
 }
@@ -125,7 +125,8 @@ export function ContextRing({ contextSize }: { contextSize?: number }) {
         side="top"
         align="end"
         sideOffset={8}
-        className="w-56 rounded-lg border bg-popover p-3 text-popover-foreground shadow-menu popper-blur"
+        collisionPadding={8}
+        className="w-64 max-w-[calc(100vw-1rem)] rounded-lg border bg-popover p-3 text-popover-foreground shadow-menu popper-blur"
       >
         <div className="flex items-baseline justify-between">
           <span className="text-xs text-fg-tertiary">上下文</span>
@@ -152,7 +153,8 @@ export function ContextRing({ contextSize }: { contextSize?: number }) {
             label="缓存命中"
             value={stats.cacheHit !== null ? `${stats.cacheHit}%` : stats.cacheUnreported ? "—" : "0%"}
           />
-          <StatRow label="输入 / 输出" value={`${formatNumber(stats.input)} / ${formatNumber(stats.output)}`} />
+          <StatRow label="输入" value={formatNumber(stats.input)} />
+          <StatRow label="输出" value={formatNumber(stats.output)} />
         </div>
       </HoverCardContent>
     </HoverCard>

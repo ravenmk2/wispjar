@@ -1,8 +1,9 @@
-import { ChevronDown, ChevronRight, X } from "lucide-react"
+import { X } from "lucide-react"
 import { ActivityIcon } from "@/features/chat/ActivityIcon"
 import { useLayoutEffect, useRef, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { CopyIconButton } from "@/components/CopyIconButton"
+import { DisclosureChevron, DisclosureContent, useDisclosureMotion } from "@/components/DisclosureMotion"
 import { DiffBlock } from "@/components/Markdown"
 import { NodeList } from "@/features/chat/NodeList"
 import { MessageImages } from "@/features/chat/MessageImages"
@@ -239,6 +240,7 @@ export function ToolCallCard({
   const pendingApproval = !node.endReason && hasPendingApproval(node.children)
   const pendingQuestion = !node.endReason && !!node.question && !node.question.answers
   const expanded = open || pendingApproval || pendingQuestion
+  const motion = useDisclosureMotion()
   const running = !node.result && !node.endReason
   const args = safeParseJson(node.arguments)
   const taskTarget =
@@ -265,7 +267,7 @@ export function ToolCallCard({
         type="button"
         aria-expanded={expanded}
         title={summary || undefined}
-        onClick={() => setOpen(!open)}
+        onClick={(event) => motion.toggle(event, () => setOpen(!open))}
         className="chat-process-trigger flex min-h-9 w-full items-center gap-1.5 rounded-md text-left hover:bg-accent/50"
       >
         <ActivityIcon name={node.name} active={running && !pendingApproval && !pendingQuestion} />
@@ -302,13 +304,9 @@ export function ToolCallCard({
           </Badge>
         )}
         <StatusBadge node={node} />
-        {expanded ? (
-          <ChevronDown className="size-3.5 shrink-0 text-fg-process-muted" />
-        ) : (
-          <ChevronRight className="size-3.5 shrink-0 text-fg-process-muted" />
-        )}
+        <DisclosureChevron open={expanded} revision={motion.revision} className="text-fg-process-muted" />
       </button>
-      {expanded && (
+      <DisclosureContent open={expanded} revision={motion.revision}>
         <div className="py-1">
           {isQuestion && <QuestionBody node={node} />}
           {!isQuestion && render === "terminal" && <TerminalBody node={node} liveOutput={liveOutput} />}
@@ -322,7 +320,7 @@ export function ToolCallCard({
             </div>
           )}
         </div>
-      )}
+      </DisclosureContent>
       {!expanded && node.children.length > 0 && (
         <div className="py-0.5 text-meta text-fg-process-muted">{node.children.length} 条嵌套轨迹</div>
       )}

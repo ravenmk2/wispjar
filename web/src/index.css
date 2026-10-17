@@ -295,6 +295,9 @@
   .markdown-body th {
     @apply bg-muted/50 font-medium;
   }
+  .markdown-table th {
+    @apply whitespace-nowrap py-1;
+  }
   .markdown-body thead tr {
     @apply border-b;
   }
