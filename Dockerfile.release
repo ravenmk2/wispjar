@@ -2,10 +2,11 @@
 
 # goreleaser release image: the binary is prebuilt by goreleaser (with the
 # web/dist frontend embedded via go:embed), and the build context contains
-# only this Dockerfile and the wispjar binary.
+# only this Dockerfile and the binaries under linux/<arch>/.
 # For building images from source (local/server builds), use the multi-stage
 # Dockerfile at the repository root instead.
 FROM alpine:3
 RUN apk add --no-cache ca-certificates
-COPY wispjar /usr/local/bin/wispjar
+ARG TARGETPLATFORM
+COPY ${TARGETPLATFORM}/wispjar /usr/local/bin/wispjar
 ENTRYPOINT ["wispjar"]

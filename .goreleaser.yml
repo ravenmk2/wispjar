@@ -21,35 +21,33 @@ archives:
 checksum:
   name_template: checksums.txt
 
-dockers:
-  - id: wispjar-amd64
-    goarch: amd64
-    use: buildx
+dockers_v2:
+  - id: wispjar
+    ids: [wispjar]
     dockerfile: Dockerfile.release
-    image_templates:
-      - ghcr.io/ravenmk2/wispjar:{{ .Version }}-amd64
-    build_flag_templates:
-      - --platform=linux/amd64
-      - --label=org.opencontainers.image.source=https://github.com/ravenmk2/wispjar
-  - id: wispjar-arm64
-    goarch: arm64
-    use: buildx
-    dockerfile: Dockerfile.release
-    image_templates:
-      - ghcr.io/ravenmk2/wispjar:{{ .Version }}-arm64
-    build_flag_templates:
-      - --platform=linux/arm64
-      - --label=org.opencontainers.image.source=https://github.com/ravenmk2/wispjar
+    images: [ghcr.io/ravenmk2/wispjar]
+    tags: ["{{ .Version }}", latest]
+    platforms: [linux/amd64, linux/arm64]
+    labels:
+      org.opencontainers.image.source: https://github.com/ravenmk2/wispjar
 
-docker_manifests:
-  - name_template: ghcr.io/ravenmk2/wispjar:{{ .Version }}
-    image_templates:
-      - ghcr.io/ravenmk2/wispjar:{{ .Version }}-amd64
-      - ghcr.io/ravenmk2/wispjar:{{ .Version }}-arm64
-  - name_template: ghcr.io/ravenmk2/wispjar:latest
-    image_templates:
-      - ghcr.io/ravenmk2/wispjar:{{ .Version }}-amd64
-      - ghcr.io/ravenmk2/wispjar:{{ .Version }}-arm64
+  # Keep the existing architecture-specific tags for clients that pin them.
+  - id: wispjar-amd64
+    ids: [wispjar]
+    dockerfile: Dockerfile.release
+    images: [ghcr.io/ravenmk2/wispjar]
+    tags: ["{{ .Version }}-amd64"]
+    platforms: [linux/amd64]
+    labels:
+      org.opencontainers.image.source: https://github.com/ravenmk2/wispjar
+  - id: wispjar-arm64
+    ids: [wispjar]
+    dockerfile: Dockerfile.release
+    images: [ghcr.io/ravenmk2/wispjar]
+    tags: ["{{ .Version }}-arm64"]
+    platforms: [linux/arm64]
+    labels:
+      org.opencontainers.image.source: https://github.com/ravenmk2/wispjar
 
 changelog:
   sort: asc
