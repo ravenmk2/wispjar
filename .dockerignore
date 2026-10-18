@@ -1,6 +1,9 @@
 .git
 .agents
 .github
+config.yaml
+.env
+.env.*
 data
 docs
 scripts

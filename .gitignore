@@ -2,6 +2,11 @@
 .idea/
 .agents/
 
+/config.yaml
+/.env
+/.env.*
+!/.env.example
+
 /dist/
 /web/dist/
 .playwright-cli/

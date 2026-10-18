@@ -35,3 +35,8 @@ wispjar/
 - goreleaser release images use **`Dockerfile.release`** at the repo root (runtime-only: alpine + prebuilt binary), because goreleaser dockers build with a minimal context containing only the Dockerfile and the binary — the multi-stage source Dockerfile cannot be used there; release.yml builds the real web/dist before goreleaser (embedded via go:embed), do not revert to the placeholder
 - `web/dist/` 整体忽略，本地编译前需 `mkdir -p web/dist && touch web/dist/index.html`（`scripts/build.sh` 已内置该逻辑）
 - changelog 由 goreleaser 从 Conventional Commits 生成，不维护 CHANGELOG.md
+
+## 环境信息边界
+
+- 入库的代码、文档、示例配置和发布文件保持环境无关，不包含实际部署主机名、IP、SSH 别名、部署路径或凭据；示例使用 localhost、回环地址或占位值。
+- 实际环境资料、部署技能和操作记录集中在被 Git 与 Docker 构建上下文排除的 `.agents/` 中。运行配置使用被忽略的 `config.yaml`、本地 `.env` 文件或环境变量，不强制加入版本控制或发布产物。
