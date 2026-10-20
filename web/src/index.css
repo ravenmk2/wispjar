@@ -6,9 +6,10 @@
   :root {
     color-scheme: light;
     --background: 0 0% 100%;
-    --foreground: #252525;
+    --foreground: rgba(0, 0, 0, 0.9);
+    --text-body: rgba(0, 0, 0, 0.9);
     --card: 0 0% 100%;
-    --popover: rgba(255, 255, 255, 0.95);
+    --popover: #ffffff;
     --primary: 216.82540 92.19512% 59.80392%;
     --primary-hover: #2e76e8;
     --primary-active: #2668d2;
@@ -17,36 +18,37 @@
     --secondary: 0 0% 96.1%;
     --muted: 0 0% 96.1%;
     --accent: #f0f0f0;
-    --selected: #eaeaea;
+    --selected: rgba(0, 0, 0, 0.05);
     --destructive: 353 100% 61%;
     --destructive-foreground: 0 0% 100%;
-    --border: #e7e7e7;
-    --divider: #eeeeee;
+    --border: rgba(0, 0, 0, 0.09);
+    --divider: rgba(0, 0, 0, 0.09);
     --input: 0 0% 90%;
     --ring: 216.82540 92.19512% 59.80392%;
     --ring-focus: rgba(58, 131, 247, 0.2);
     --chat-font-size: 16px;
     --chat-line-height: 26px;
     --radius: 0.75rem;
-    --shadow-input: 0 5px 16px -4px rgba(0, 0, 0, 0.07);
+    --shadow-input: 0 4px 12px rgba(0, 0, 0, 0.03), 0 5px 16px -4px rgba(0, 0, 0, 0.07);
     --shadow-input-focus: 0 5px 18px -4px rgba(0, 0, 0, 0.13);
     --scrollbar-color: #a3a3a3;
     --shimmer-base: #666666;
-    --shimmer-highlight: #555555;
-    --shadow-menu: 0 12px 24px rgba(15, 23, 42, 0.12);
+    --shimmer-highlight: #404040;
+    --shadow-menu: inset 0 0 0 0.5px rgba(0, 0, 0, 0.13), 0 4px 16px rgba(0, 0, 0, 0.1);
 
     /* 语义色与字号规范见 docs/design/theme.md。 */
-    --sidebar: #f8f8f8;
+    --sidebar: #fbfaf9;
     --composer: #ffffff;
-    --composer-placeholder: #a3a3a3;
+    --composer-border: rgba(0, 0, 0, 0.09);
+    --composer-placeholder: rgba(0, 0, 0, 0.45);
     --context-track: #c9c9c9;
-    --text-secondary: #666666;
-    --text-tertiary: #707070;
-    --text-caption: #707070;
-    --text-process: #666666;
-    --text-process-hover: #3d3d3d;
-    --text-process-muted: #858585;
-    --text-placeholder: #858585;
+    --text-secondary: rgba(0, 0, 0, 0.6);
+    --text-tertiary: rgba(0, 0, 0, 0.45);
+    --text-caption: rgba(0, 0, 0, 0.45);
+    --text-process: rgba(0, 0, 0, 0.6);
+    --text-process-hover: rgba(0, 0, 0, 0.9);
+    --text-process-muted: rgba(0, 0, 0, 0.45);
+    --text-placeholder: rgba(0, 0, 0, 0.45);
     --bubble: #e8f2ff;
     --bubble-foreground: #18375d;
     --link: #2c67c5;
@@ -56,53 +58,55 @@
     --toast-bg: #2b2b2b;
   }
 
-  /* 深色：主区 / 侧栏 / 卡片 / 输入框分别分层，辅助文字保持可读对比度。 */
+  /* 深色界面按参考灰阶分层；助手正文和用户气泡保留项目既有配色。 */
   .dark {
     color-scheme: dark;
-    --background: 0.00000 0.00000% 9.41176%;
-    --foreground: #eeeeee;
-    --card: 0.00000 0.00000% 14.11765%;
-    --popover: rgba(36, 36, 36, 0.97);
+    --background: 0 0% 7.05882%;
+    --foreground: rgba(255, 255, 255, 0.84);
+    --text-body: #eeeeee;
+    --card: 0 0% 16.07843%;
+    --popover: #292929;
     --primary: 216.86275 63.48548% 47.25490%;
     --primary-hover: #3575d8;
     --primary-active: #2458ad;
     --primary-soft: #20334f;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 16%;
-    --muted: 0.00000 0.00000% 14.11765%;
-    --accent: #292929;
-    --selected: #303030;
+    --secondary: 0 0% 12.15686%;
+    --muted: 0 0% 12.15686%;
+    --accent: rgba(255, 255, 255, 0.05);
+    --selected: rgba(255, 255, 255, 0.1);
     --destructive: 354 100% 64%;
     --destructive-foreground: 0 0% 100%;
-    --border: #353535;
-    --divider: #2c2c2c;
+    --border: rgba(255, 255, 255, 0.1);
+    --divider: rgba(255, 255, 255, 0.1);
     --input: 0 0% 20%;
     --ring: 216.86275 63.48548% 47.25490%;
     --ring-focus: rgba(44, 103, 197, 0.2);
-    --sidebar: #1d1d1d;
-    --composer: #363636;
-    --composer-placeholder: #747474;
+    --sidebar: #181817;
+    --composer: #1f1f1f;
+    --composer-border: rgba(255, 255, 255, 0.06);
+    --composer-placeholder: rgba(255, 255, 255, 0.42);
     --context-track: #858585;
-    --text-secondary: #ababab;
-    --text-tertiary: #999999;
-    --text-caption: #999999;
-    --text-process: #929292;
-    --text-process-hover: #c8c8c8;
-    --text-process-muted: #858585;
-    --text-placeholder: #8e8e8e;
+    --text-secondary: rgba(255, 255, 255, 0.56);
+    --text-tertiary: rgba(255, 255, 255, 0.42);
+    --text-caption: rgba(255, 255, 255, 0.42);
+    --text-process: rgba(255, 255, 255, 0.56);
+    --text-process-hover: rgba(255, 255, 255, 0.84);
+    --text-process-muted: rgba(255, 255, 255, 0.42);
+    --text-placeholder: rgba(255, 255, 255, 0.42);
     --bubble: #1d4077;
     --bubble-foreground: #f1f6ff;
     --link: #83b5ff;
     --success: #16c456;
     --warning: #ff9f0a;
-    --tooltip-bg: #2b2b2b;
+    --tooltip-bg: #292929;
     --toast-bg: #404040;
-    --shadow-input: 0 5px 16px -4px rgba(0, 0, 0, 0.3);
-    --shadow-input-focus: 0 5px 18px -4px rgba(0, 0, 0, 0.48);
+    --shadow-input: 0 5px 16px -4px rgba(0, 0, 0, 0.07);
+    --shadow-input-focus: 0 5px 18px -4px rgba(0, 0, 0, 0.13);
     --scrollbar-color: #737373;
-    --shimmer-base: #929292;
+    --shimmer-base: rgba(255, 255, 255, 0.56);
     --shimmer-highlight: #b0b0b0;
-    --shadow-menu: 0 12px 24px rgba(0, 0, 0, 0.4);
+    --shadow-menu: inset 0 0 0 0.5px rgba(255, 255, 255, 0.12), 0 4px 16px rgba(0, 0, 0, 0.1);
   }
 }
 
@@ -111,7 +115,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background font-sans text-base text-foreground antialiased;
+    @apply bg-background font-sans text-sm text-foreground;
   }
   *:focus-visible {
     outline: none;
@@ -123,11 +127,6 @@
   }
   ::selection {
     background: var(--ring-focus);
-  }
-  /* 弹层毛玻璃（bg-popover 为 0.95 透明底）：只加在显式标记的弹层上；
-     注意 backdrop-filter 会形成包含块，嵌套子菜单必须走 Portal（见 dropdown-menu.tsx） */
-  .popper-blur {
-    backdrop-filter: blur(24px) saturate(1.8);
   }
 }
 
@@ -234,6 +233,7 @@
 
 @layer components {
   .chat-composer {
+    border-color: var(--composer-border);
     box-shadow: var(--shadow-input);
     transition: box-shadow 150ms ease-out, border-color 150ms ease-out;
   }
@@ -241,7 +241,15 @@
     box-shadow: var(--shadow-input-focus);
   }
   .dark .chat-composer:focus-within {
-    border-color: #4b4b4b;
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .assistant-body {
+    color: var(--text-body);
+  }
+  .chat-user-bubble {
+    max-width: 85%;
+    border-radius: 16px;
+    padding: 10px 16px;
   }
   /* 折叠标记作为行内首项与正文共用左边界，不额外叠加缩进。 */
   .chat-process-trigger {
@@ -325,21 +333,26 @@
     margin-bottom: 0;
   }
   .markdown-body p {
-    @apply my-3;
+    @apply my-4;
+  }
+  .markdown-body strong {
+    @apply font-semibold;
   }
   .markdown-body h1,
   .markdown-body h2,
   .markdown-body h3,
   .markdown-body h4 {
-    @apply mb-2 mt-4 font-semibold;
+    @apply mb-4 mt-6 font-semibold;
   }
   .markdown-body h1 {
-    @apply text-xl;
+    @apply text-2xl leading-9;
   }
   .markdown-body h2 {
-    @apply text-lg;
+    @apply text-xl leading-8;
   }
-  .markdown-body h3,
+  .markdown-body h3 {
+    @apply text-lg leading-7;
+  }
   .markdown-body h4 {
     @apply text-chat;
   }

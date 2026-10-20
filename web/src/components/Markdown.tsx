@@ -75,7 +75,7 @@ export const Markdown = memo(function Markdown({ content, className }: { content
               return <CodeBlock lang={match?.[1]} code={text} />
             }
             return (
-              <code className="rounded bg-muted px-1 py-0.5 font-mono text-[1em]">{text}</code>
+              <code className="mx-1 rounded-lg bg-muted px-1.5 py-0.5 font-sans text-[1em]">{text}</code>
             )
           },
           a: ({ href, children }) => (

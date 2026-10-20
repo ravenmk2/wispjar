@@ -126,7 +126,7 @@ export function ContextRing({ contextSize }: { contextSize?: number }) {
         align="end"
         sideOffset={8}
         collisionPadding={8}
-        className="w-64 max-w-[calc(100vw-1rem)] rounded-lg border bg-popover p-3 text-popover-foreground shadow-menu popper-blur"
+        className="w-64 max-w-[calc(100vw-1rem)] rounded-2xl bg-popover p-3 text-popover-foreground shadow-menu"
       >
         <div className="flex items-baseline justify-between">
           <span className="text-xs text-fg-tertiary">上下文</span>

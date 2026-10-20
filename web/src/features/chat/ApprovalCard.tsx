@@ -200,7 +200,7 @@ export function ApprovalTakeover({
         <div
           aria-busy={acting !== null}
           onKeyDown={onKeyDown}
-          className="overflow-hidden rounded-[28px] border border-warning bg-composer shadow-input"
+          className="overflow-hidden rounded-[24px] border border-warning bg-composer shadow-input"
         >
           <div className="flex items-center gap-2 bg-warning/10 px-4 py-2.5 text-[13px] font-medium text-warning">
             <span className="size-2 rounded-full bg-warning" />

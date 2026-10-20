@@ -96,9 +96,9 @@ export default function ChatView() {
   return (
     <div className="flex h-full min-w-0 flex-1">
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+        <div className="flex h-12 shrink-0 items-center gap-2 px-4">
           <Bot className="size-4 shrink-0 text-muted-foreground" />
-          <span className="truncate text-base font-medium">{header?.title || "新聊天"}</span>
+          <span className="truncate text-base font-normal">{header?.title || "新聊天"}</span>
           {header?.agentName && (
             <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-meta text-muted-foreground">
               {header.agentName}

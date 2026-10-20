@@ -59,7 +59,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   return (
     <div className="relative min-h-0 flex-1">
       <div ref={containerRef} data-chat-scroll onScroll={handleScroll} className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-chat space-y-5 px-4 py-6">
+        <div className="mx-auto max-w-chat-body space-y-6 px-4 py-6">
           <NodeList nodes={nodes} sessionId={sessionId} />
           {optimistic && <OptimisticBubble content={optimistic.content} attachments={optimistic.attachments} />}
         </div>

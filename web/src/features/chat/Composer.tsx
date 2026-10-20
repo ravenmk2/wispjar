@@ -379,7 +379,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
             addFiles([...e.dataTransfer.files])
           }}
           className={cn(
-            "chat-composer rounded-[28px] border bg-composer",
+            "chat-composer rounded-[24px] border bg-composer",
             dragging && "border-primary ring-2 ring-primary/30",
           )}
         >
@@ -439,7 +439,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
             }}
             rows={2}
             placeholder={busy ? "聊天运行中，可点击右侧按钮停止…" : "输入消息，Enter 发送，Shift+Enter 换行"}
-            className="block w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-chat outline-none placeholder:text-fg-composer-placeholder"
+            className="block w-full resize-none bg-transparent px-4 pb-1 pt-3.5 text-chat leading-6 outline-none placeholder:text-fg-composer-placeholder"
           />
           <input
             ref={fileInputRef}

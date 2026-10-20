@@ -33,11 +33,11 @@ export default function WorkspaceLayout() {
   }
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen bg-sidebar">
       <aside
         className={cn(
-          "flex shrink-0 flex-col border-r bg-sidebar transition-[width] duration-200",
-          collapsed ? "w-12" : "w-[280px]",
+          "flex shrink-0 flex-col bg-sidebar transition-[width] duration-200",
+          collapsed ? "w-12" : "w-[240px]",
         )}
       >
         {collapsed ? (
@@ -56,7 +56,7 @@ export default function WorkspaceLayout() {
           </>
         ) : (
           <>
-            <div className="flex h-14 shrink-0 items-center gap-2.5 px-4 text-base font-semibold tracking-wider">
+            <div className="flex h-14 shrink-0 items-center gap-2 px-4 text-base font-semibold">
               <img src={logoSrc} alt="" className="size-6" />
               WISPJAR
               <Button
@@ -69,31 +69,29 @@ export default function WorkspaceLayout() {
                 <PanelLeftClose className="size-4" />
               </Button>
             </div>
-            <Separator />
             <div className="min-h-0 flex-1 space-y-6 overflow-y-auto py-4">
-              <div className="px-3">
-                <div className="mb-2 flex items-center gap-2 px-1 text-sm leading-[22px] font-medium text-muted-foreground">
+              <div className="px-2">
+                <div className="mb-2 flex items-center gap-2 px-2 text-sm leading-5 text-fg-tertiary">
                   <Bot className="size-4" />
                   智能体
                 </div>
                 <AgentPicker />
               </div>
-              <div className="px-3">
-                <div className="mb-2 flex items-center gap-2 px-1 text-sm leading-[22px] font-medium text-muted-foreground">
+              <div className="px-2">
+                <div className="mb-2 flex items-center gap-2 px-2 text-sm leading-5 text-fg-tertiary">
                   <MessagesSquare className="size-4" />
                   聊天
                 </div>
                 <SessionList />
               </div>
             </div>
-            <Separator />
             <div className="shrink-0 p-2">
               <UserMenu variant="sidebar" />
             </div>
           </>
         )}
       </aside>
-      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-background">
         <Outlet />
       </main>
     </div>

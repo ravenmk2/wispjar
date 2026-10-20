@@ -236,8 +236,8 @@ function SessionRow({
           <NavLink
             to={`/c/${item.id}`}
             className={cn(
-              "flex h-9 items-center gap-2 rounded-lg px-2 pr-7 text-sm leading-[22px] text-foreground hover:bg-accent",
-              active && "bg-selected font-medium",
+              "flex h-9 items-center gap-2 rounded-xl px-2 pr-7 text-sm leading-5 text-foreground hover:bg-accent",
+              active && "bg-selected",
             )}
           >
             <span

@@ -60,6 +60,7 @@ export default {
         success: "var(--success)",
         warning: "var(--warning)",
         "fg-secondary": "var(--text-secondary)",
+
         "fg-tertiary": "var(--text-tertiary)",
         "fg-caption": "var(--text-caption)",
         "fg-process": "var(--text-process)",
@@ -73,7 +74,8 @@ export default {
         menu: "var(--shadow-menu)",
       },
       maxWidth: {
-        chat: "864px",
+        chat: "800px",
+        "chat-body": "752px",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -82,18 +84,22 @@ export default {
       },
       fontFamily: {
         sans: [
-          "PingFang SC",
-          "Microsoft YaHei UI",
-          "Microsoft YaHei",
-          "Noto Sans CJK SC",
-          "Source Han Sans SC",
           "-apple-system",
           "BlinkMacSystemFont",
           "Segoe UI",
           "system-ui",
+          "Roboto",
+          "Noto Sans",
+          "Ubuntu",
+          "Cantarell",
           "Helvetica Neue",
-          "Arial",
           "sans-serif",
+          "Arial",
+          "PingFang SC",
+          "Source Han Sans SC",
+          "Microsoft YaHei UI",
+          "Microsoft YaHei",
+          "Noto Sans CJK SC",
         ],
         mono: [
           "SFMono-Regular", "Consolas", "Menlo", "Liberation Mono",

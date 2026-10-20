@@ -58,7 +58,7 @@ export function NodeView({
     case "user":
       return (
         <div className={cn("group flex flex-col gap-1", depth === 0 && "items-end")}>
-          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-bubble px-4 py-2.5 text-chat text-bubble-foreground">
+          <div className="chat-user-bubble whitespace-pre-wrap break-words bg-bubble text-chat text-bubble-foreground">
             {node.attachments && node.attachments.length > 0 && (
               <MessageImages attachments={node.attachments} className={cn(node.content && "mb-1.5")} />
             )}
@@ -171,7 +171,7 @@ export function OptimisticBubble({
 }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[85%] rounded-2xl bg-bubble px-4 py-2.5 text-chat text-bubble-foreground">
+      <div className="chat-user-bubble bg-bubble text-chat text-bubble-foreground">
         {attachments && attachments.length > 0 && (
           <div className={cn("flex flex-wrap gap-1", content && "mb-1.5")}>
             {attachments.map((a, i) => (

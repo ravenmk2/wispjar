@@ -154,7 +154,7 @@ export function AssistantMessage({
             if (block.type === "text") {
               return (
                 <div key={i}>
-                  <Markdown content={block.text} />
+                  <Markdown content={block.text} className="assistant-body" />
                   {node.live && i === node.content.length - 1 && (
                     <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70 align-text-bottom" />
                   )}

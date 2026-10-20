@@ -57,7 +57,7 @@ export function AgentPicker() {
           key={agent.id}
           type="button"
           onClick={() => navigate(`/c/new?agent=${agent.id}`)}
-          className="flex w-full items-center gap-2 min-h-9 rounded-md px-2 py-1.5 text-left text-sm leading-[22px] hover:bg-accent"
+          className="flex w-full items-center gap-2 min-h-9 rounded-[10px] px-2 py-1.5 text-left text-sm leading-5 hover:bg-accent"
         >
           <Avatar className="size-6 shrink-0">
             <AvatarFallback className="text-xs">
