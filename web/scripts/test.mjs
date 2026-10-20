@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process"
 
 const dir = await mkdtemp(join(tmpdir(), "wispjar-web-test-"))
 try {
-  const tests = ["conversation", "utils", "session-settings", "session-history"]
+  const tests = ["conversation", "utils", "session-settings", "session-history", "computers"]
   await build({ entryPoints: tests.map((name) => `src/lib/${name}.test.ts`), bundle: true, platform: "node", format: "cjs", outdir: dir, outExtension: { ".js": ".cjs" } })
   const result = spawnSync(process.execPath, ["--test", ...tests.map((name) => join(dir, `${name}.test.cjs`))], { stdio: "inherit" })
   process.exitCode = result.status ?? 1

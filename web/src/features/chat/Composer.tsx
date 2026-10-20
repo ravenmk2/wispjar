@@ -55,7 +55,7 @@ function effortLabel(effort: string): string {
   return effort.charAt(0).toUpperCase() + effort.slice(1)
 }
 
-export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAgent?: AgentSummary }) {
+export function Composer({ sessionId, draftAgent, draftComputerId }: { sessionId: string; draftAgent?: AgentSummary; draftComputerId?: string }) {
   const currentOrg = useCurrentOrg()
   const navigate = useNavigate()
   const header = useSessionStore((s) => s.header)
@@ -236,6 +236,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   async function send() {
     const content = draft.trim()
     if (sending || busy || (!draftAgent && !sessionId)) return
+    if (draftAgent && !draftComputerId) { toast.error("请先选择运行本会话的云电脑"); return }
     const pending = imagesRef.current
     if (!content && pending.length === 0) return
     if (pending.some((i) => i.status === "error")) {
@@ -252,6 +253,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
         if (!currentOrg) throw new Error("当前机构不可用")
         const session = await sessionsApi.create(currentOrg.id, {
           agent_id: draftAgent.id,
+          computer_id: draftComputerId,
           model_id: modelId,
           ...(effort ? { reasoning_effort: effort } : {}),
         })
@@ -633,7 +635,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
                   type="button"
                   title="发送"
                   onClick={() => void send()}
-                  disabled={(!draft.trim() && images.length === 0) || sending || busy}
+                  disabled={(!draft.trim() && images.length === 0) || sending || busy || (!!draftAgent && !draftComputerId)}
                   className="ml-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary-hover active:bg-primary-active disabled:opacity-40"
                 >
                   <ArrowUp className="size-5" />

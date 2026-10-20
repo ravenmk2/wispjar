@@ -1,6 +1,6 @@
-import { Bot, MessagesSquare, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { Bot, MessagesSquare, Monitor, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { useEffect, useState } from "react"
-import { Outlet } from "react-router"
+import { Link, Outlet } from "react-router"
 import { UserMenu } from "@/layouts/AdminLayout"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -48,6 +48,7 @@ export default function WorkspaceLayout() {
               </Button>
             </div>
             <Separator />
+            <Button variant="ghost" size="icon" asChild className="mx-auto my-2" title="我的云电脑"><Link to="/computers"><Monitor className="size-4" /></Link></Button>
             <div className="min-h-0 flex-1" />
             <Separator />
             <div className="flex shrink-0 justify-center p-2">
@@ -70,6 +71,7 @@ export default function WorkspaceLayout() {
               </Button>
             </div>
             <div className="min-h-0 flex-1 space-y-6 overflow-y-auto py-4">
+              <div className="px-3"><Button variant="ghost" className="w-full justify-start gap-2" asChild><Link to="/computers"><Monitor className="size-4" />我的云电脑</Link></Button></div>
               <div className="px-2">
                 <div className="mb-2 flex items-center gap-2 px-2 text-sm leading-5 text-fg-tertiary">
                   <Bot className="size-4" />

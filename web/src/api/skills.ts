@@ -1,4 +1,4 @@
-import { ApiError, api } from "./client"
+import { ApiError, api, apiRaw } from "./client"
 import { useIdentityStore } from "@/stores/identity"
 import type { ErrorEnvelope, List, SkillDetail, SkillFileEntry, SkillFileResponse, SkillReference, SkillSummary } from "@/lib/types"
 
@@ -34,6 +34,8 @@ function normalizeSkill(raw: unknown): SkillSummary {
     uploader_name: typeof uploader === "string" ? uploader : "-",
     created_at: typeof obj.created_at === "string" ? obj.created_at : "",
     referenced_by: normalizeReferences(obj.referenced_by),
+    revision: typeof obj.revision === "number" ? obj.revision : 1,
+    content_hash: typeof obj.content_hash === "string" ? obj.content_hash : undefined,
   }
 }
 
@@ -79,6 +81,12 @@ function parseErrorBody(status: number, text: string): ApiError {
 }
 
 export const adminSkillsApi = {
+  async replace(orgId: string, id: string, revision: number, file: File): Promise<SkillSummary> {
+    const body = new FormData()
+    body.append("file", file); body.append("expected_revision", String(revision))
+    const response = await apiRaw(`/orgs/${orgId}/admin/skills/${id}/package`, { method: "PUT", body })
+    return normalizeSkill(await response.json())
+  },
   async list(orgId: string): Promise<SkillSummary[]> {
     const data = await api<unknown>(`/orgs/${orgId}/admin/skills`)
     const items =

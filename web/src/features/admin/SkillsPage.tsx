@@ -42,6 +42,9 @@ export default function SkillsPage() {
   const [deleteTarget, setDeleteTarget] = useState<SkillSummary | null>(null)
   const [deleting, setDeleting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const replacementInput = useRef<HTMLInputElement>(null)
+  const [replacement, setReplacement] = useState<SkillSummary | null>(null)
+  const [replacing, setReplacing] = useState(false)
 
   const load = useCallback(async () => {
     if (!currentOrgId) return
@@ -57,6 +60,20 @@ export default function SkillsPage() {
     setSkills(null)
     load()
   }, [load])
+
+  async function replace(file?: File) {
+    if (!currentOrgId || !replacement || !file || replacing) return
+    if (!file.name.toLowerCase().endsWith(".zip") || file.size > 20 * 1024 * 1024) { toast.error("请选择不超过 20MB 的技能 zip 包"); return }
+    setReplacing(true)
+    try {
+      const result = await adminSkillsApi.replace(currentOrgId, replacement.id, replacement.revision, file)
+      toast.success(`「${result.name}」已更新为修订 ${result.revision}；已有任务结束后同步安装。`)
+      setReplacement(null); setDetailId(null); await load()
+    } catch (e) {
+      toast.error(e instanceof ApiError && e.status === 409 ? "技能已被其他操作更新，请刷新列表后重新选择文件。" : uploadErrorMessage(e))
+      await load()
+    } finally { setReplacing(false); if (replacementInput.current) replacementInput.current.value = "" }
+  }
 
   async function upload(file: File | undefined) {
     if (!currentOrgId || !file || uploading) return
@@ -109,6 +126,8 @@ export default function SkillsPage() {
           onChange={(e) => void upload(e.target.files?.[0])}
         />
       </PageHeader>
+      <input ref={replacementInput} type="file" accept=".zip,application/zip" className="hidden" onChange={(e) => void replace(e.target.files?.[0])} />
+      {replacing && <p role="status" className="mb-3 text-sm text-muted-foreground">正在校验并替换「{replacement?.name}」技能包…</p>}
 
       <div
         onDragOver={(e) => {
@@ -163,7 +182,7 @@ export default function SkillsPage() {
               <TableBody>
                 {skills.map((skill) => (
                   <TableRow key={skill.id}>
-                    <TableCell className="font-mono text-sm font-medium">{skill.name}</TableCell>
+                    <TableCell className="font-mono text-sm font-medium">{skill.name}<span className="ml-2 text-xs text-muted-foreground">r{skill.revision}</span></TableCell>
                     <TableCell className="max-w-72">
                       <span className="block truncate text-muted-foreground">{skill.description || "-"}</span>
                     </TableCell>
@@ -192,6 +211,7 @@ export default function SkillsPage() {
                     <TableCell className="text-muted-foreground">{formatDateTime(skill.created_at)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" disabled={replacing || !!uploading} onClick={() => { setReplacement(skill); replacementInput.current?.click() }}>更新包</Button>
                         <Button variant="ghost" size="sm" onClick={() => setDetailId(skill.id)}>
                           详情
                         </Button>

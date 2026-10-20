@@ -1,0 +1,118 @@
+import test, { afterEach } from "node:test"
+import assert from "node:assert/strict"
+import { canMutateComputer, resolveComputerSelection, type Computer } from "./computers"
+import { useComputerStore } from "@/stores/computers"
+import { computersApi } from "@/api/computers"
+import { ApiError, errorMessage } from "@/api/client"
+import { sessionsApi } from "@/api/sessions"
+import { adminSkillsApi } from "@/api/skills"
+import { useIdentityStore } from "@/stores/identity"
+
+const fixture = (id = "computer", org = "org", status = "running"): Computer => ({
+  id, org_id: org, status, name: id, generation: 1, config: { image: "python:3.12", resources: {}, ttl_seconds: 3600, has_env: false },
+  last_error: "", last_active_at: null, created_at: "",
+})
+const originalFetch = globalThis.fetch
+const originalWindow = globalThis.window
+afterEach(() => {
+  globalThis.fetch = originalFetch
+  globalThis.window = originalWindow
+  useComputerStore.getState().reset("")
+})
+function intercept(handler: (url: string, init: RequestInit) => Response) {
+  globalThis.window = { location: { origin: "http://localhost", pathname: "/computers" } } as Window & typeof globalThis
+  useIdentityStore.setState({ token: "test-token", currentOrgId: "org" })
+  globalThis.fetch = async (input, init) => handler(String(input), init ?? {})
+}
+test("default binding never silently selects another or deleted computer", () => {
+  const items = [fixture("first"), fixture("bound"), fixture("gone", "org", "deleting")]
+  assert.equal(resolveComputerSelection(items, [], "agent"), "")
+  assert.equal(resolveComputerSelection(items, [{ agent_id: "agent", computer_id: "bound" }], "agent"), "bound")
+  assert.equal(resolveComputerSelection(items, [{ agent_id: "agent", computer_id: "missing" }], "agent"), "")
+  assert.equal(resolveComputerSelection(items, [{ agent_id: "agent", computer_id: "gone" }], "agent"), "")
+})
+test("active tasks including expired maintenance leases disable destructive controls", () => {
+  assert.equal(canMutateComputer(fixture(), []), true)
+  assert.equal(canMutateComputer(fixture("id", "org", "rebuilding"), []), false)
+  assert.equal(canMutateComputer(fixture(), [{ id: "run", session_id: "", agent_id: "", parent_run_id: null, status: "running", lease_until: "2000-01-01" }]), false)
+})
+test("late responses from a previous organization cannot repopulate private computers", () => {
+  const store = useComputerStore.getState()
+  store.reset("old"); store.baseline("old", [fixture("old", "old")])
+  store.reset("new")
+  store.baseline("old", [fixture("leak", "old")])
+  store.upsert("old", fixture("leak", "old"))
+  assert.deepEqual(useComputerStore.getState().items, [])
+  store.baseline("new", [fixture("mine", "new"), fixture("other", "old")])
+  assert.deepEqual(useComputerStore.getState().items.map((c) => c.id), ["mine"])
+  store.baseline("new", [])
+  assert.equal(useComputerStore.getState().items.length, 0)
+})
+test("computer create uses idempotency header and respects asynchronous acceptance", async () => {
+  intercept((url, init) => {
+    assert.equal(new URL(url).pathname, "/api/v1/orgs/org/computers")
+    assert.equal(new Headers(init.headers).get("Authorization"), "Bearer test-token")
+    assert.equal(new Headers(init.headers).get("Idempotency-Key"), "stable-key")
+    assert.deepEqual(JSON.parse(String(init.body)), { name: "开发电脑", config: {} })
+    return new Response(JSON.stringify({ operation_id: "operation", status: "pending", resource_id: "computer" }), { status: 202 })
+  })
+  const result = await computersApi.create("org", { name: "开发电脑", config: {} }, "stable-key")
+  assert.equal(result.status, "pending")
+})
+test("busy operation errors remain errors with an actionable message", async () => {
+  intercept(() => new Response(JSON.stringify({ error: { code: "computer/in_use", message: "computer/in_use" } }), { status: 409 }))
+  await assert.rejects(computersApi.action("computer", "delete", "key"), (error: unknown) => {
+    assert.ok(error instanceof ApiError)
+    assert.match(errorMessage(error), /切换.*绑定/)
+    return true
+  })
+})
+test("clearing an agent default targets only the current user's binding", async () => {
+  intercept((url, init) => {
+    assert.equal(new URL(url).pathname, "/api/v1/orgs/org/agent-bindings/agent")
+    assert.equal(init.method, "DELETE")
+    assert.equal(init.body, undefined)
+    assert.equal(new Headers(init.headers).get("Authorization"), "Bearer test-token")
+    return new Response(null, { status: 204 })
+  })
+  await computersApi.unbind("org", "agent")
+})
+test("recovery explicitly confirms termination and keeps a stable idempotency key", async () => {
+  intercept((url, init) => {
+    assert.match(url, /\/computers\/computer\/recover$/)
+    assert.deepEqual(JSON.parse(String(init.body)), { confirm_stop_all: true })
+    assert.equal(new Headers(init.headers).get("Idempotency-Key"), "recover-key")
+    return new Response(JSON.stringify({ operation_id: "recover", resource_id: "computer", status: "running" }), { status: 202 })
+  })
+  assert.equal((await computersApi.recover("computer", "recover-key")).status, "running")
+  assert.equal(canMutateComputer(fixture("computer", "org", "recovering"), []), false)
+})
+test("file scope is explicit, uploads go to inputs and saving preserves source", async () => {
+  intercept((url, init) => {
+    if (url.includes("save-to-storage")) {
+      assert.deepEqual(JSON.parse(String(init.body)), { source: "outputs/report.pdf", destination: "reports/report.pdf" })
+      return new Response("{}")
+    }
+    if (init.method === "POST") {
+      assert.ok(init.body instanceof FormData)
+      assert.equal(init.body.get("path"), "inputs")
+      assert.ok(init.body.get("file") instanceof Blob)
+      return new Response("{}")
+    }
+    const query = new URL(url).searchParams
+    assert.equal(query.get("scope"), "storage"); assert.equal(query.get("path"), ".")
+    return new Response(JSON.stringify({ root: "/storage", path: ".", items: [] }))
+  })
+  await sessionsApi.files("session", ".", "storage")
+  await sessionsApi.uploadFile("session", new File(["hello"], "input.txt"))
+  await sessionsApi.saveToStorage("session", "outputs/report.pdf", "reports/report.pdf")
+})
+test("skill replacement sends expected revision and preserves a concurrent-update conflict", async () => {
+  intercept((url, init) => {
+    assert.match(url, /\/admin\/skills\/skill\/package$/)
+    assert.equal(init.method, "PUT"); assert.ok(init.body instanceof FormData)
+    assert.equal(init.body.get("expected_revision"), "7")
+    return new Response(JSON.stringify({ error: { code: "skill/conflict", message: "changed", details: { revision: 8 } } }), { status: 409 })
+  })
+  await assert.rejects(adminSkillsApi.replace("org", "skill", 7, new File(["zip"], "skill.zip")), (e: unknown) => e instanceof ApiError && e.details?.revision === 8)
+})

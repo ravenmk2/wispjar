@@ -1,6 +1,7 @@
 import { Download, Eye, FileCode2, FileText, Image as ImageIcon, Loader2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import type { FileScope } from "@/api/sessions"
 import { Markdown } from "@/components/Markdown"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,6 +9,7 @@ import { highlightCode } from "@/lib/highlight"
 import type { SandboxFileItem } from "@/lib/types"
 import {
   downloadBlob,
+  downloadWorkspaceFile,
   fetchSandboxFileData,
   fileExt,
   fileName,
@@ -25,16 +27,24 @@ export function FilePreview({
   sessionId,
   item,
   reloadToken,
+  scope,
 }: {
   sessionId: string
   item: SandboxFileItem
   reloadToken: number
+  scope?: FileScope
 }) {
   const kind = previewKind(item.name)
   const [state, setState] = useState<LoadState>({ status: "loading" })
   const [mode, setMode] = useState<"preview" | "source">("preview")
   const [sourceHtml, setSourceHtml] = useState<string | null>(null)
   const loadedPathRef = useRef<string | null>(null)
+  async function download() {
+    try {
+      if (scope) await downloadWorkspaceFile(sessionId, item.path, scope)
+      else if (state.status === "ready") downloadBlob(state.blob, fileName(item.path))
+    } catch (e) { toast.error(e instanceof Error ? e.message : "下载失败") }
+  }
 
   useEffect(() => {
     setMode("preview")
@@ -48,8 +58,8 @@ export function FilePreview({
     const isReload = loadedPathRef.current === item.path
 
     const maxBytes = kind === "image" ? IMAGE_MAX_BYTES : undefined
-    fetchSandboxFileData(sessionId, item.path, maxBytes)
-      .then((data) => {
+    fetchSandboxFileData(sessionId, item.path, maxBytes, scope)
+      .then(async (data) => {
         if (cancelled) return
         if (data.type === "text") {
           // UTF-8 文件统一走 JSON 通道（含 svg）；图片按文本到达时还原为 blob
@@ -74,7 +84,8 @@ export function FilePreview({
         if (kind === "other") {
           // 二进制文件：首次打开直接触发下载，自动刷新重载时不重复下载
           if (!isReload) {
-            downloadBlob(data.blob, fileName(item.path))
+            if (scope) await downloadWorkspaceFile(sessionId, item.path, scope)
+            else downloadBlob(data.blob, fileName(item.path))
             toast.info("二进制文件已开始下载")
           }
           setState({ status: "ready", blob: data.blob, binary: true })
@@ -98,7 +109,7 @@ export function FilePreview({
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [sessionId, item.path, item.size, item.name, kind, reloadToken])
+  }, [sessionId, item.path, item.size, item.name, kind, reloadToken, scope])
 
   useEffect(() => {
     setSourceHtml(null)
@@ -164,7 +175,7 @@ export function FilePreview({
             size="icon"
             className="size-7 shrink-0"
             title="下载文件"
-            onClick={() => downloadBlob(state.blob, fileName(item.path))}
+            onClick={() => void download()}
           >
             <Download className="size-3.5" />
           </Button>
@@ -187,7 +198,7 @@ export function FilePreview({
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-xs text-muted-foreground">
             <FileText className="size-8 text-muted-foreground/50" />
             <span>二进制文件，已通过下载获取</span>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => downloadBlob(state.blob, fileName(item.path))}>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void download()}>
               <Download className="size-3.5" />
               重新下载
             </Button>
@@ -198,7 +209,7 @@ export function FilePreview({
             <div className="flex flex-1 flex-col items-center justify-center gap-3 text-xs text-muted-foreground">
               <ImageIcon className="size-8 text-muted-foreground/50" />
               <span>图片过大仅支持下载</span>
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => downloadBlob(state.blob, fileName(item.path))}>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void download()}>
                 <Download className="size-3.5" />
                 下载文件
               </Button>

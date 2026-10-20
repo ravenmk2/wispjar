@@ -300,6 +300,8 @@ export interface ToolResultMeta {
   operation?: "create" | "update"
   truncated?: boolean
   sandbox_id?: string
+  computer_id?: string
+  run_id?: string
 }
 
 export interface SessionEventBase {
@@ -347,6 +349,9 @@ export type SessionEvent = SessionEventBase &
         }
       }
     | { type: "session/title"; data: { title: string; auto: boolean } }
+    | { type: "session/computer"; data: { computer_id: string; workspace_dir: string } }
+    | { type: "workspace/ready"; data: { root: string; layout_version: number } }
+    | { type: "runtime/environment"; data: { computer_id: string; generation: number; run_id: string; skills: unknown } }
     | {
         type: "session/sandbox"
         data: { action: "created" | "recycled" | "failed"; sandbox_id: string; image: string; error?: string }
@@ -384,6 +389,9 @@ export type SessionEventType = SessionEvent["type"]
 // ============ protocol.md §4：session.follow 帧 ============
 
 export interface SessionHeader {
+  computerId?: string
+  computerStatus?: string
+  workspaceDir?: string
   modelSettingsLocked: boolean
   sessionId: string
   title: string
@@ -449,9 +457,11 @@ export interface SessionProjection {
 }
 
 export type ControlFrame =
-  | { type: "baseline"; sessions: SessionProjection[] }
+  | { type: "baseline"; sessions: SessionProjection[]; computers?: import("./computers").Computer[] }
   | { type: "upsert"; session: SessionProjection }
   | { type: "remove"; sessionId: string }
+  | { type: "computer/upsert"; computer: import("./computers").Computer }
+  | { type: "computer/remove"; computerId: string }
 
 // ============ protocol.md §2：mux 帧 ============
 
@@ -488,6 +498,9 @@ export interface SessionAgentInfo {
 }
 
 export interface SessionDetail extends SessionSummary {
+  computer_id?: string | null
+  computer?: import("./computers").Computer
+  workspace?: { state?: string; layout_version?: number; retention_until?: string | null }
   title_pinned?: boolean
   sandbox_status?: SandboxStatus
   status?: SessionStatus
@@ -498,6 +511,7 @@ export interface SessionDetail extends SessionSummary {
 }
 
 export interface CreateSessionRequest {
+  computer_id?: string
   model_id?: string
   agent_id: string
   title?: string
@@ -505,6 +519,7 @@ export interface CreateSessionRequest {
 }
 
 export interface UpdateSessionRequest {
+  computer_id?: string
   title?: string
   approval_mode?: ApprovalMode
   status?: "active" | "archived"
@@ -651,6 +666,8 @@ export interface SkillReference {
 }
 
 export interface SkillSummary {
+  revision: number
+  content_hash?: string
   id: string
   name: string
   description: string

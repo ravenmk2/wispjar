@@ -1,5 +1,6 @@
 import { useIdentityStore } from "@/stores/identity"
 import type { ErrorEnvelope } from "@/lib/types"
+import { computerErrorMessages } from "@/lib/computers"
 
 const BASE_URL = "/api/v1"
 
@@ -21,6 +22,7 @@ interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
   body?: unknown
   params?: Record<string, string | number | undefined>
+  headers?: Record<string, string>
 }
 
 async function parseError(res: Response): Promise<ApiError> {
@@ -76,7 +78,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   }
 
   const { token, currentOrgId } = useIdentityStore.getState()
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string> = { ...options.headers }
   if (token) headers["Authorization"] = `Bearer ${token}`
   if (currentOrgId) headers["X-Org-Id"] = currentOrgId
   if (body !== undefined) headers["Content-Type"] = "application/json"
@@ -96,7 +98,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 }
 
 export function errorMessage(e: unknown): string {
-  if (e instanceof ApiError) return e.message
+  if (e instanceof ApiError) return computerErrorMessages[e.code] ?? e.message
   if (e instanceof Error) return e.message
   return "未知错误"
 }

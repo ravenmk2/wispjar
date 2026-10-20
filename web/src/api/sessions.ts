@@ -1,4 +1,4 @@
-import { api } from "./client"
+import { api, apiRaw } from "./client"
 import type {
   AnswerQuestionRequest,
   AnswerQuestionResponse,
@@ -17,6 +17,16 @@ import type {
 } from "@/lib/types"
 
 export const sessionsApi = {
+  files(id: string, path = ".", scope: FileScope = "workspace") {
+    return api<SandboxFilesResponse & { root: string }>(`/sessions/${id}/files`, { params: { path, scope } })
+  },
+  async uploadFile(id: string, file: File, path = "inputs") {
+    const body = new FormData(); body.append("file", file); body.append("path", path)
+    return (await apiRaw(`/sessions/${id}/files`, { method: "POST", body })).json()
+  },
+  saveToStorage(id: string, source: string, destination: string) {
+    return api(`/sessions/${id}/files/save-to-storage`, { method: "POST", body: { source, destination } })
+  },
   create(orgId: string, body: CreateSessionRequest) {
     return api<SessionDetail>(`/orgs/${orgId}/sessions`, { method: "POST", body })
   },
@@ -75,3 +85,4 @@ export const sessionsApi = {
     })
   },
 }
+export type FileScope = "workspace" | "storage" | "agent"

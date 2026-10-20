@@ -1,5 +1,6 @@
-import { ApiError } from "@/api/client"
+import { ApiError, apiRaw } from "@/api/client"
 import { useIdentityStore } from "@/stores/identity"
+import type { FileScope } from "@/api/sessions"
 
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "svg"])
 const HTML_EXTS = new Set(["html", "htm"])
@@ -26,9 +27,10 @@ export const IMAGE_MAX_BYTES = 4194304
 
 export type FileData = { type: "text"; content: string; truncated: boolean } | { type: "blob"; blob: Blob }
 
-export async function fetchSandboxFileData(sessionId: string, path: string, maxBytes?: number): Promise<FileData> {
+export async function fetchSandboxFileData(sessionId: string, path: string, maxBytes?: number, scope?: FileScope): Promise<FileData> {
   const { token, currentOrgId } = useIdentityStore.getState()
-  const url = new URL(`/api/v1/sessions/${sessionId}/sandbox/file`, window.location.origin)
+  const url = new URL(`/api/v1/sessions/${sessionId}/${scope ? "file" : "sandbox/file"}`, window.location.origin)
+  if (scope) url.searchParams.set("scope", scope)
   url.searchParams.set("path", path)
   if (maxBytes) url.searchParams.set("max_bytes", String(maxBytes))
   const headers: Record<string, string> = {}
@@ -59,6 +61,12 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(a.href)
+}
+
+export async function downloadWorkspaceFile(sessionId: string, path: string, scope: FileScope): Promise<void> {
+  const query = new URLSearchParams({ path, scope, download: "1" })
+  const res = await apiRaw(`/sessions/${sessionId}/file?${query}`)
+  downloadBlob(await res.blob(), fileName(path))
 }
 
 export function fileName(path: string): string {

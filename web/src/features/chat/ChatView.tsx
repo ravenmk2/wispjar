@@ -17,6 +17,9 @@ import { useComposerStore } from "@/stores/composer"
 import { useCurrentOrg } from "@/stores/identity"
 import { useSessionStore } from "@/stores/session"
 import { useChatPresentationStore } from "@/stores/chatPresentation"
+import { SessionComputer } from "@/features/computers/SessionComputer"
+import { WorkspaceFiles } from "@/features/computers/WorkspaceFiles"
+import type { SessionDetail } from "@/lib/types"
 
 interface LoadError {
   title: string
@@ -44,6 +47,7 @@ export default function ChatView() {
   const [loadError, setLoadError] = useState<LoadError | null>(null)
   const [tab, setTab] = useState<"chat" | "trajectory">("chat")
   const [sandboxOpen, setSandboxOpen] = useState(false)
+  const [detail, setDetail] = useState<SessionDetail | null>(null)
 
   // 顶层待审批队列（嵌套子智能体审批仍在 task 卡内处理），逐条接管 composer 区
   const pendingApproval = useMemo(
@@ -62,9 +66,12 @@ export default function ChatView() {
 
   useEffect(() => {
     setLoadError(null)
+    setDetail(null)
     setTab("chat")
     if (!sessionId) return
-    sessionsApi.detail(sessionId).catch((e) => setLoadError(toLoadError(e)))
+    let active = true
+    sessionsApi.detail(sessionId).then((d) => { if (active) setDetail(d) }).catch((e) => { if (active) setLoadError(toLoadError(e)) })
+    return () => { active = false }
   }, [sessionId])
 
   useEffect(() => {
@@ -74,6 +81,12 @@ export default function ChatView() {
     const handle: FollowHandle = followSession(currentOrg.id, sessionId)
     return () => handle.close()
   }, [sessionId, currentOrg, composerReset])
+  useEffect(() => {
+    if (!detail || header?.sessionId !== sessionId || !header.computerId || header.computerId === detail.computer_id) return
+    let active = true
+    sessionsApi.detail(sessionId).then((d) => { if (active) setDetail(d) }).catch(() => {})
+    return () => { active = false }
+  }, [header?.computerId, header?.sessionId, sessionId, detail?.computer_id])
 
   if (loadError) {
     return (
@@ -144,6 +157,7 @@ export default function ChatView() {
             <PanelRight className="size-4" />
           </Button>
         </div>
+        {detail && <SessionComputer detail={detail} busy={header?.running ?? detail.running} onChanged={setDetail} />}
         {hasMore && (
           <div role="status" className="flex shrink-0 items-center justify-center gap-2 px-4 py-2 text-xs text-fg-secondary">
             {historyStatus === "loading" ? "正在加载更早的消息…" : (
@@ -174,7 +188,7 @@ export default function ChatView() {
             <Composer sessionId={sessionId} />
           ))}
       </div>
-      {sandboxOpen && <SandboxPanel sessionId={sessionId} onClose={() => setSandboxOpen(false)} />}
+      {sandboxOpen && (detail?.computer_id ? <WorkspaceFiles key={sessionId} sessionId={sessionId} running={header?.running ?? false} onClose={() => setSandboxOpen(false)} /> : <SandboxPanel sessionId={sessionId} onClose={() => setSandboxOpen(false)} />)}
     </div>
   )
 }

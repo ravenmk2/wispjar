@@ -241,6 +241,12 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
         delete pendingQuestions[e.data.call_id]
       } else if (e.type === "session/title" && header) {
         header = { ...header, title: e.data.title, titlePinned: !e.data.auto }
+      } else if (e.type === "session/computer" && header) {
+        header = { ...header, computerId: e.data.computer_id, workspaceDir: e.data.workspace_dir }
+      } else if (e.type === "workspace/ready" && header) {
+        header = { ...header, workspaceDir: e.data.root }
+      } else if (e.type === "runtime/environment" && header) {
+        header = { ...header, computerId: e.data.computer_id, computerStatus: "running" }
       } else if (e.type === "session/approval-mode" && header) {
         header = { ...header, approvalMode: e.data.mode }
       } else if (e.type === "model/selection" && header) {
