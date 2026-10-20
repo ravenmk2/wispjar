@@ -72,7 +72,7 @@ export function NodeView({
         </div>
       )
     case "assistant":
-      // 只有一轮的最终回复展示操作条与 token 统计；中间过程回复不展示
+      // 顶层操作条由 TurnView 在整轮末尾渲染；嵌套回复保留自身操作条。
       return (
         <div className="group">
           <AssistantMessage

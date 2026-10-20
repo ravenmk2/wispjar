@@ -42,6 +42,30 @@ export function TokenBadge({ usage, className }: { usage: Usage; className?: str
   )
 }
 
+export function AssistantActions({ node, sessionId, alwaysShow, showInterrupted = true }: {
+  node: AssistantNode
+  sessionId?: string
+  alwaysShow?: boolean
+  showInterrupted?: boolean
+}) {
+  if (node.live) return null
+  const copyTextValue = node.content.filter((b) => b.type === "text").map((b) => b.text).join("\n\n")
+  return (
+    <div className={cn("mt-1 flex items-center gap-0.5", actionBarCls(!!alwaysShow))}>
+      {copyTextValue && <CopyIconButton text={copyTextValue} />}
+      {sessionId && <ForkButton sessionId={sessionId} seq={node.seq} />}
+      {node.usage && <TokenBadge usage={node.usage} className="ml-1" />}
+      {showInterrupted && node.interrupted && (
+        <Badge variant="secondary" className="ml-1 gap-1 text-meta font-normal text-muted-foreground">
+          <OctagonX className="size-3" />
+          已停止
+        </Badge>
+      )}
+      <span className="px-1 text-meta text-fg-caption">{formatMessageTime(node.time)}</span>
+    </div>
+  )
+}
+
 export function ReasoningBlock({
   text,
   streaming,
@@ -110,10 +134,6 @@ export function AssistantMessage({
   showInterrupted?: boolean
 }) {
   const empty = node.content.length === 0
-  const copyTextValue = node.content
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("\n\n")
   return (
     <div>
       {empty && node.live
@@ -144,18 +164,7 @@ export function AssistantMessage({
             return null
           })}
       {showActions && !node.live ? (
-        <div className={cn("mt-1 flex items-center gap-0.5", actionBarCls(!!alwaysShowActions))}>
-          {copyTextValue && <CopyIconButton text={copyTextValue} />}
-          {sessionId && <ForkButton sessionId={sessionId} seq={node.seq} />}
-          {node.usage && <TokenBadge usage={node.usage} className="ml-1" />}
-          {showInterrupted && node.interrupted && (
-            <Badge variant="secondary" className="ml-1 gap-1 text-meta font-normal text-muted-foreground">
-              <OctagonX className="size-3" />
-              已停止
-            </Badge>
-          )}
-          <span className="px-1 text-meta text-fg-caption">{formatMessageTime(node.time)}</span>
-        </div>
+        <AssistantActions node={node} sessionId={sessionId} alwaysShow={alwaysShowActions} showInterrupted={showInterrupted} />
       ) : (
         showMetaFallback &&
         (node.usage || (showInterrupted && node.interrupted)) && (

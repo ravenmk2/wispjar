@@ -7,6 +7,11 @@ import { useChatPresentationStore } from "../stores/chatPresentation"
 import { useSessionStore } from "../stores/session"
 import { execOutput, toolCancelled, toolFailure, writeOutput } from "./tool-output"
 import type { ToolCallNode } from "./conversation"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
+import { MemoryRouter } from "react-router"
+import { TooltipProvider } from "../components/ui/tooltip"
+import { TurnView } from "../features/chat/TurnView"
 
 const text = (value: string): ContentBlock => ({ type: "text", text: value })
 const thought = (value: string): ContentBlock => ({ type: "reasoning", text: value, durationMs: 1200 })
@@ -118,6 +123,44 @@ test("stopped/failed turns retain last text as a fallback", () => {
     const f = fixture(); f.message([text("progress"), tool("a")]); f.end(reason)
     const seg = f.segment()
     assert.equal(seg.answerId, seg.parts[0].kind === "reply" && seg.parts[0].node.id)
+  }
+})
+
+test("turn actions follow trailing tools while fallback text keeps its original position", (t) => {
+  // Effects are intentionally skipped when checking static markup ordering.
+  const logError = console.error
+  t.mock.method(console, "error", (message: unknown, ...args: unknown[]) => {
+    if (typeof message === "string" && message.startsWith("Warning: useLayoutEffect does nothing on the server")) return
+    logError(message, ...args)
+  })
+  const sessionId = "turn-actions"
+  const render = (f: ReturnType<typeof fixture>, latestTurn = 1) => renderToStaticMarkup(createElement(MemoryRouter, null,
+    createElement(TooltipProvider, null, createElement(TurnView, { segment: f.segment(), sessionId, latestTurn }))))
+  for (const reason of ["interrupted", "failed", "completed"] as const) {
+    const f = fixture()
+    f.add({ type: "assistant/message", data: { turn: 1, step: 1,
+      message: { role: "assistant", content: [text("progress before tool"), tool("a")] },
+      usage: { input_tokens: 321, output_tokens: 123, cache_read_tokens: 0, cache_write_tokens: 0, reasoning_tokens: 0 },
+    } })
+    assert.equal(render(f).includes("↑"), false)
+    if (reason === "completed") f.message([text("final answer")], 2)
+    f.end(reason)
+    const html = render(f)
+    const toolPosition = html.lastIndexOf("1次工具使用")
+    const actionPosition = html.indexOf('aria-label="从这里开始新聊天"')
+    assert.ok(toolPosition > html.indexOf("progress before tool"))
+    assert.ok(actionPosition > toolPosition)
+    assert.equal(html.match(/aria-label="从这里开始新聊天"/g)?.length, 1)
+    if (reason !== "completed") {
+      assert.ok(html.indexOf("↑") > toolPosition)
+      assert.ok(html.includes("321"))
+      const collapsed = render(f, 2)
+      assert.ok(collapsed.includes("progress before tool"))
+      assert.ok(collapsed.includes("↑"))
+      assert.equal(collapsed.includes("1次工具使用"), false)
+    } else {
+      assert.ok(actionPosition > html.indexOf("final answer"))
+    }
   }
 })
 

@@ -3,6 +3,7 @@ import { useEffect, useId, useState } from "react"
 import { CopyIconButton } from "@/components/CopyIconButton"
 import { DisclosureChevron, DisclosureContent, useDisclosureMotion } from "@/components/DisclosureMotion"
 import { NodeView } from "@/features/chat/NodeList"
+import { AssistantActions } from "@/features/chat/AssistantMessage"
 import { TurnProcessGroup } from "@/features/chat/TurnProcessGroup"
 import { ActivityIcon } from "@/features/chat/ActivityIcon"
 import { activeProcessNode, formatTurnDuration, type TurnSegment } from "@/lib/turn-grouping"
@@ -57,7 +58,7 @@ export function TurnView({ segment, sessionId, latestTurn }: {
           {expanded && errorOpen ? "收起详情" : "查看详情"}
         </button>}
       </div>
-      <div className="!mt-0">
+      <div className="group !mt-0">
         {reason === "failed" && segment.end?.error && <DisclosureContent open={expanded && errorOpen} revision={errorMotion.revision}>
           <div className="pt-4"><div id={errorId} className="rounded-lg bg-muted/50 px-3 py-2">
             <div className="mb-1 flex items-center justify-between gap-2 text-meta text-fg-process">
@@ -70,13 +71,15 @@ export function TurnView({ segment, sessionId, latestTurn }: {
         {segment.parts.map((part) => {
           const isAnswer = part.kind === "reply" && part.node.id === segment.answerId
           const content = <div className="pt-4">{part.kind === "reply" ? (
-            <NodeView node={part.node} sessionId={sessionId} depth={0} latestTurn={latestTurn} isAnswer={isAnswer} />
+            <NodeView node={part.node} sessionId={sessionId} depth={0} latestTurn={latestTurn} />
           ) : <TurnProcessGroup group={part} sessionId={sessionId} latestTurn={latestTurn} />}</div>
           const key = part.kind === "reply" ? part.node.id : part.id
           return isAnswer ? <div key={key}>{content}</div> : (
             <DisclosureContent key={key} open={expanded} revision={motion.revision}>{content}</DisclosureContent>
           )
         })}
+        {answer?.kind === "reply" && <AssistantActions node={answer.node} sessionId={sessionId}
+          alwaysShow={segment.turn === latestTurn} showInterrupted={false} />}
         {!expanded && !answer && reason === "completed" && <div className="pt-4 text-xs text-fg-caption">本轮未生成最终回复</div>}
       </div>
     </section>
