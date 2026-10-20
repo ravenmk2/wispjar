@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -26,7 +27,7 @@ func main() {
 		os.Exit(1)
 	}
 }
-func run() error {
+func run() (err error) {
 	configPath := flag.String("config", "config.yaml", "deployment configuration")
 	sessionIDs := flag.String("sessions", "", "explicit comma-separated session IDs")
 	apply := flag.Bool("apply", false, "perform migration; otherwise inventory only")
@@ -55,7 +56,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer sqlDB.Close()
+	defer func() { err = errors.Join(err, sqlDB.Close()) }()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	legacy := workspacemigration.NewSDKLegacy(cfg.OpenSandbox.LifecycleURL, cfg.OpenSandbox.APIKey, cfg.OpenSandbox.UseServerProxy)

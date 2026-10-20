@@ -23,6 +23,7 @@ type memoryRepo struct {
 	computer   store.Computer
 	op         store.ResourceOperation
 	failCommit bool
+	releaseErr error
 	recovered  int
 }
 
@@ -39,7 +40,7 @@ func (r *memoryRepo) Operation(context.Context, string) (store.ResourceOperation
 }
 func (r *memoryRepo) Lock(context.Context, string) (func() error, error) {
 	r.worker.Lock()
-	return func() error { r.worker.Unlock(); return nil }, nil
+	return func() error { r.worker.Unlock(); return r.releaseErr }, nil
 }
 func (r *memoryRepo) Progress(_ context.Context, _ string, p operationPlan) error {
 	r.mu.Lock()
@@ -134,6 +135,28 @@ func fixture() (*Service, *memoryRepo, *memoryBackend) {
 	b := &memoryBackend{}
 	return NewService(r, memoryVolumes{}, b, "installation", "local", nil), r, b
 }
+func TestWorkerReturnsUnlockError(t *testing.T) {
+	for _, conflict := range []bool{false, true} {
+		t.Run(map[bool]string{false: "success", true: "conflict"}[conflict], func(t *testing.T) {
+			s, r, _ := fixture()
+			r.releaseErr = errors.New("unlock failed")
+			if conflict {
+				r.computer.Generation++
+			}
+			err := s.Process(context.Background(), "op")
+			if !errors.Is(err, r.releaseErr) {
+				t.Fatalf("lost unlock error: %v", err)
+			}
+			if conflict && !errors.Is(err, ErrConflict) {
+				t.Fatalf("lost operation error: %v", err)
+			}
+			if !conflict && r.op.Status != "completed" {
+				t.Fatalf("operation did not complete: %s", r.op.Status)
+			}
+		})
+	}
+}
+
 func TestWorkerRecoversBackendSuccessBeforeCommit(t *testing.T) {
 	s, r, b := fixture()
 	r.failCommit = true

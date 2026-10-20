@@ -75,7 +75,7 @@ func readPackageFile(fh *multipart.FileHeader) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 	data, err := io.ReadAll(io.LimitReader(src, MaxZipBytes+1))
 	if err != nil {
 		return nil, err

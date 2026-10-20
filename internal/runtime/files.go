@@ -44,7 +44,7 @@ func relativeFilePath(value string) (string, error) {
 	}
 	for _, part := range strings.Split(value, "/") {
 		if part == ".." {
-			return "", fmt.Errorf("path 不允许 ..")
+			return "", fmt.Errorf("path 不允许包含父目录段（..）")
 		}
 	}
 	return path.Clean(value), nil
@@ -264,7 +264,7 @@ func (h *Handler) UploadFile(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 	data, err := io.ReadAll(io.LimitReader(stream, fileTransferLimit+1))
 	if err != nil {
 		fail(c, err)

@@ -3,6 +3,7 @@ package skill
 import (
 	"context"
 	"errors"
+
 	"github.com/ravenmk2/wispjar/internal/store"
 	"gorm.io/gorm"
 )

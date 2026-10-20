@@ -32,7 +32,7 @@ func TestDockerEnsureRejectsCreateRace(t *testing.T) {
 					got.Labels["wispjar.installation"] = "another"
 				}
 				w.WriteHeader(http.StatusCreated)
-				_ = json.NewEncoder(w).Encode(Info{Name: got.Name, Labels: got.Labels})
+				_ = json.NewEncoder(w).Encode(Info(got))
 			}))
 			defer server.Close()
 			p, err := NewDocker(server.URL)

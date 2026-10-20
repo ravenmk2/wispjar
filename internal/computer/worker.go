@@ -53,7 +53,7 @@ func (s *Service) recover(ctx context.Context) {
 		}
 	}
 }
-func (s *Service) Process(ctx context.Context, operationID string) error {
+func (s *Service) Process(ctx context.Context, operationID string) (err error) {
 	if err := s.available(); err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func (s *Service) Process(ctx context.Context, operationID string) error {
 	if err != nil {
 		return err
 	}
-	defer unlock()
+	defer func() { err = errors.Join(err, unlock()) }()
 	op, err = s.repo.Operation(ctx, operationID)
 	if err != nil {
 		return err

@@ -98,7 +98,7 @@ func (p *memoryProvider) Ensure(ctx context.Context, spec Spec) (Info, error) {
 	p.mu.Lock()
 	v, ok := p.rows[spec.Name]
 	if !ok {
-		v = Info{Name: spec.Name, Labels: spec.Labels}
+		v = Info(spec)
 		p.rows[spec.Name] = v
 		p.creates++
 	}

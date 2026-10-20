@@ -87,7 +87,7 @@ func (d *Docker) request(ctx context.Context, method, path string, body any) (In
 		}
 		return Info{}, fmt.Errorf("%w: Docker transport request failed", ErrUnavailable)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return Info{}, ErrNotFound
 	}

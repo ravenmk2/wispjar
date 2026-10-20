@@ -147,9 +147,10 @@ func (t *taskTool) invoke(ctx context.Context, in taskArgs) (string, error) {
 	for {
 		reason, intr, cause := sr.consume(iter)
 		if intr == nil {
-			if reason == "completed" {
+			switch reason {
+			case "completed":
 				childStatus = "completed"
-			} else if reason == "interrupted" {
+			case "interrupted":
 				childStatus = "canceled"
 			}
 			return sr.synthesize(sub.Name, reason, cause), nil

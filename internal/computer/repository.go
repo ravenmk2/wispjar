@@ -175,13 +175,13 @@ func planIntent(c *store.Computer, op *store.ResourceOperation, busy, inUse bool
 	return nil
 }
 
-func (r *GORMRepository) Intent(ctx context.Context, created *store.Computer, op store.ResourceOperation) (store.ResourceOperation, error) {
+func (r *GORMRepository) Intent(ctx context.Context, created *store.Computer, op store.ResourceOperation) (result store.ResourceOperation, err error) {
 	// Serializes same-user idempotency keys even when they target different computers.
 	unlock, err := store.AcquireAdvisoryLock(ctx, r.db, "computer-intent:"+op.OrgID, op.UserID)
 	if err != nil {
 		return op, err
 	}
-	defer unlock()
+	defer func() { err = errors.Join(err, unlock()) }()
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if op.IdempotencyKey != nil {
 			var old store.ResourceOperation
