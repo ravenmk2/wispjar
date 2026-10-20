@@ -38,6 +38,8 @@ type Meta struct {
 	Render     string
 	Truncated  bool
 	SandboxID  string
+	ComputerID string
+	RunID      string
 	Diff       string
 	Operation  string // write 成功后的 create/update；无法判断时为空。
 	DurationMS int64
@@ -76,7 +78,18 @@ type Context struct {
 	SessionID string
 	OrgID     string
 	// UserID 会话所属用户（read_media 图片入库的 created_by，贴合 attachment 表 CHAR(32)）。
-	UserID string
+	UserID        string
+	AgentID       string
+	ComputerID    string
+	RunID         string
+	ParentRunID   string
+	Generation    uint64
+	WorkDir       string
+	SkillsDir     string
+	AgentFilesDir string
+	// BoundHandle is already protected by the root run's durable use/skill leases.
+	BoundHandle    Handle
+	BoundSandboxID string
 
 	Sandbox   SandboxProvider
 	Image     string
@@ -122,7 +135,7 @@ func (c *Context) BeginMeta(ctx context.Context, render string) *Meta {
 }
 
 func (c *Context) beginMeta(ctx context.Context, render string) *Meta {
-	m := &Meta{Render: render}
+	m := &Meta{Render: render, ComputerID: c.ComputerID, RunID: c.RunID}
 	c.mu.Lock()
 	c.metas[callID(ctx)] = m
 	c.mu.Unlock()
@@ -139,6 +152,9 @@ func (c *Context) TakeMeta(id string) *Meta {
 }
 
 func (c *Context) sandboxHandle(ctx context.Context) (Handle, string, error) {
+	if c.BoundHandle != nil {
+		return c.BoundHandle, c.BoundSandboxID, nil
+	}
 	c.mu.Lock()
 	h := c.handle
 	c.mu.Unlock()
@@ -156,6 +172,39 @@ func (c *Context) sandboxHandle(ctx context.Context) (Handle, string, error) {
 	}
 	c.uploadSkills(ctx, sh, sid)
 	return c.setHandle(sh, sid), sid, nil
+}
+
+func (c *Context) ResolvePath(value string) string {
+	base := c.WorkDir
+	if base == "" {
+		base = defaultWorkDir
+	}
+	if value == "" {
+		return base
+	}
+	if path.IsAbs(value) {
+		return path.Clean(value)
+	}
+	return path.Join(base, value)
+}
+
+// Fork creates a child identity with independent metadata. Only the immutable
+// resource handle and callbacks are shared; skill bindings are supplied afresh.
+func (c *Context) Fork(agentID, runID string, skills []agent.SnapshotSkill) *Context {
+	child := NewContext(c.SessionID, c.OrgID)
+	child.UserID, child.AgentID = c.UserID, agentID
+	child.ComputerID, child.Generation = c.ComputerID, c.Generation
+	child.RunID, child.ParentRunID = runID, c.RunID
+	child.WorkDir, child.DataDir = c.WorkDir, c.DataDir
+	child.Sandbox, child.Image, child.Resources, child.Env = c.Sandbox, c.Image, c.Resources, c.Env
+	child.Skills, child.Images = skills, c.Images
+	child.BoundHandle, child.BoundSandboxID = c.BoundHandle, c.BoundSandboxID
+	child.PublishToolOutput, child.OnSkillUploadFailed = c.PublishToolOutput, c.OnSkillUploadFailed
+	if c.ComputerID != "" {
+		child.SkillsDir = "/agents/" + agentID + "/skills"
+		child.AgentFilesDir = "/agents/" + agentID + "/files"
+	}
+	return child
 }
 
 // uploadSkills 在沙箱就绪后上传会话激活 Skills 到 /skills/<name>/（runtime.md §7）。

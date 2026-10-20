@@ -10,6 +10,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/attachment"
 	"github.com/ravenmk2/wispjar/internal/audit"
 	"github.com/ravenmk2/wispjar/internal/auth"
+	"github.com/ravenmk2/wispjar/internal/computer"
 	"github.com/ravenmk2/wispjar/internal/config"
 	"github.com/ravenmk2/wispjar/internal/gateway/ws"
 	"github.com/ravenmk2/wispjar/internal/provider"
@@ -29,6 +30,7 @@ type Deps struct {
 	// WSBus 与 RuntimeSessions 用于 PATCH 附带事件的 follow/control 广播挂钩（可选）。
 	WSBus           *runtime.Bus
 	RuntimeSessions runtime.SessionRepo
+	Computers       *computer.Service
 }
 
 func NewRouter(deps Deps) *gin.Engine {
@@ -50,6 +52,9 @@ func NewRouter(deps Deps) *gin.Engine {
 	providerH := provider.NewHandler(provider.NewService(deps.DB, deps.Config.MasterKey()))
 	agentSvc := agent.NewService(deps.DB)
 	sessionSvc := session.NewService(deps.DB, agentSvc)
+	if deps.Computers != nil {
+		sessionSvc.SetComputers(deps.Computers, true)
+	}
 	if deps.Runtime != nil && deps.WSBus != nil {
 		sessionSvc.AfterEvents = func(sessionID string, events []session.Event) {
 			for _, ev := range events {
@@ -75,12 +80,34 @@ func NewRouter(deps Deps) *gin.Engine {
 		authed.POST("/sessions/:id/questions/:callId/answer", deps.Runtime.AnswerQuestion)
 		authed.GET("/sessions/:id/sandbox/files", deps.Runtime.SandboxFiles)
 		authed.GET("/sessions/:id/sandbox/file", deps.Runtime.SandboxFile)
+		authed.GET("/sessions/:id/files", deps.Runtime.Files)
+		authed.GET("/sessions/:id/file", deps.Runtime.File)
+		authed.POST("/sessions/:id/files", deps.Runtime.UploadFile)
+		authed.POST("/sessions/:id/files/save-to-storage", deps.Runtime.SaveToStorage)
 	} else {
 		authed.DELETE("/sessions/:id", sessionH.DeleteSession)
 	}
 	authed.GET("/sessions/:id/events", sessionH.ListEvents)
 
 	org := authed.Group("/orgs/:orgId", deps.Auth.ResolveOrg())
+	if deps.Computers != nil {
+		h := computer.NewHandler(deps.Computers)
+		org.GET("/computers", h.List)
+		org.POST("/computers", h.Create)
+		org.GET("/agent-bindings", h.Bindings)
+		org.PUT("/agent-bindings/:agentId", h.Bind)
+		org.DELETE("/agent-bindings/:agentId", h.Unbind)
+		org.GET("/volumes", h.Volumes)
+		authed.GET("/computers/:id", h.Get)
+		authed.PATCH("/computers/:id", h.Patch)
+		authed.DELETE("/computers/:id", h.Action("delete"))
+		authed.POST("/computers/:id/start", h.Action("start"))
+		authed.POST("/computers/:id/pause", h.Action("pause"))
+		authed.POST("/computers/:id/rebuild", h.Action("rebuild"))
+		authed.POST("/computers/:id/recover", h.Recover)
+		authed.GET("/computers/:id/runs", h.Runs)
+		authed.GET("/operations/:id", h.Operation)
+	}
 	org.GET("/models", providerH.ListWorkspaceModels)
 	org.GET("/agents", agentH.ListWorkspaceAgents)
 	org.POST("/sessions", sessionH.CreateSession)
@@ -99,6 +126,7 @@ func NewRouter(deps Deps) *gin.Engine {
 	admin.DELETE("/agents/:id", agentH.DeleteAgent)
 	skillH := skill.NewHandler(skill.NewService(deps.DB, deps.Config.Storage.DataDir))
 	admin.POST("/skills", skillH.UploadSkill)
+	admin.PUT("/skills/:id/package", skillH.ReplacePackage)
 	admin.GET("/skills", skillH.ListSkills)
 	admin.GET("/skills/:id", skillH.GetSkill)
 	admin.GET("/skills/:id/file", skillH.GetSkillFile)

@@ -28,8 +28,10 @@ func NewStore(db *gorm.DB) *Store {
 type EventInput struct {
 	// ExpectedLastSeq guards first-prompt configuration against concurrent PATCH requests.
 	ExpectedLastSeq *int64
-	Type            string
-	Data            any
+	// ExpectedTurn fences callbacks from a retired runtime generation.
+	ExpectedTurn *int
+	Type         string
+	Data         any
 }
 
 func (s *Store) Append(ctx context.Context, sessionID, eventType string, data any) (*store.SessionEvent, error) {
@@ -65,12 +67,54 @@ func (s *Store) AppendBatch(ctx context.Context, sessionID string, inputs []Even
 func appendEventsTx(tx *gorm.DB, sessionID string, inputs []EventInput) ([]store.SessionEvent, error) {
 	var sess store.Session
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-		Select("id", "last_seq", "running", "usage_total").
+		Select("id", "last_seq", "running", "usage_total", "workspace", "computer_id").
 		First(&sess, "id = ?", sessionID).Error; err != nil {
 		return nil, err
 	}
 	if err := validateEventSequence(sess.LastSeq, inputs); err != nil {
 		return nil, err
+	}
+	// Read the lifecycle barrier before any other snapshot read in this
+	// transaction. Recovery persists this state before deleting the instance;
+	// an ensuing tool disconnect must not become a successful turn/end.
+	computerStatus := ""
+	if sess.ComputerID != nil {
+		for _, in := range inputs {
+			if in.Type == EventTurnStart || in.Type == EventTurnEnd {
+				var computer store.Computer
+				if err := tx.Select("status").First(&computer, "id = ?", *sess.ComputerID).Error; err != nil {
+					return nil, err
+				}
+				computerStatus = computer.Status
+				break
+			}
+		}
+	}
+	for _, in := range inputs {
+		if in.ExpectedTurn != nil {
+			var turn int64
+			if err := tx.Model(&store.SessionEvent{}).Where("session_id = ? AND type = ?", sessionID, EventTurnStart).Count(&turn).Error; err != nil {
+				return nil, err
+			}
+			if int64(*in.ExpectedTurn) != turn {
+				return nil, &Error{Status: 409, Code: "session/turn_changed", Message: "会话已进入新的任务"}
+			}
+			break
+		}
+	}
+	for _, in := range inputs {
+		if in.Type == EventTurnStart {
+			switch computerStatus {
+			case "recovering", "deleting", "deleted":
+				return nil, &Error{Status: 409, Code: "computer/busy", Message: "云电脑正在维护，暂时无法启动任务"}
+			}
+			if err := WorkspaceAvailable(sess.Workspace); err != nil {
+				return nil, err
+			}
+			if sess.Running {
+				return nil, &Error{Status: 409, Code: "session/running", Message: "会话已有活动任务"}
+			}
+		}
 	}
 	seq := sess.LastSeq
 	running := sess.Running
@@ -85,6 +129,19 @@ func appendEventsTx(tx *gorm.DB, sessionID string, inputs []EventInput) ([]store
 		raw, err := marshalEventData(in.Data)
 		if err != nil {
 			return nil, err
+		}
+		if in.Type == EventTurnEnd && computerStatus == "recovering" {
+			var end TurnEndData
+			if err := json.Unmarshal(raw, &end); err != nil {
+				return nil, err
+			}
+			end.Reason = "failed"
+			end.ErrorCode = "computer/recovered"
+			end.Error = "云电脑正在恢复，旧任务已终止"
+			raw, err = marshalEventData(end)
+			if err != nil {
+				return nil, err
+			}
 		}
 		seq++
 		ev := store.SessionEvent{
@@ -103,12 +160,18 @@ func appendEventsTx(tx *gorm.DB, sessionID string, inputs []EventInput) ([]store
 		}
 		out = append(out, ev)
 	}
-	err := tx.Model(&store.Session{}).Where("id = ?", sessionID).Updates(map[string]any{
+	updates := map[string]any{
 		"last_seq":       seq,
 		"running":        running,
 		"usage_total":    usageTotal,
 		"last_active_at": now,
-	}).Error
+	}
+	for _, in := range inputs {
+		if in.Type == "workspace/ready" {
+			updates["workspace"] = json.RawMessage(`{"state":"ready","layout_version":1}`)
+		}
+	}
+	err := tx.Model(&store.Session{}).Where("id = ?", sessionID).Updates(updates).Error
 	if err != nil {
 		return nil, err
 	}

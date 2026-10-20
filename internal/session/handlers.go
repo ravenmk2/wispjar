@@ -33,6 +33,7 @@ type createSessionRequest struct {
 	AgentID         string `json:"agent_id" binding:"required"`
 	Title           string `json:"title"`
 	ReasoningEffort string `json:"reasoning_effort"`
+	ComputerID      string `json:"computer_id"`
 }
 
 func (h *Handler) CreateSession(c *gin.Context) {
@@ -83,6 +84,7 @@ type patchSessionRequest struct {
 	Status          *string `json:"status"`
 	ModelID         *string `json:"model_id"`
 	ReasoningEffort *string `json:"reasoning_effort"`
+	ComputerID      *string `json:"computer_id"`
 }
 
 func (h *Handler) PatchSession(c *gin.Context) {

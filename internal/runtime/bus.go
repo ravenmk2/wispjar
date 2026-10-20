@@ -128,6 +128,10 @@ type ControlFrame struct {
 	Type    string          `json:"type"`
 	Session *ControlSession `json:"session,omitempty"`
 	Remove  string          `json:"sessionId,omitempty"`
+	// UserID scopes private projections before they leave the gateway.
+	UserID     string `json:"-"`
+	Computer   any    `json:"computer,omitempty"`
+	ComputerID string `json:"computerId,omitempty"`
 }
 
 type ControlSession struct {
@@ -157,8 +161,8 @@ func NewBus() *Bus {
 
 func (b *Bus) Publish(sessionID string, f FollowFrame) {
 	b.mu.RLock()
+	defer b.mu.RUnlock()
 	subs := b.sessions[sessionID]
-	b.mu.RUnlock()
 	for _, ch := range subs {
 		select {
 		case ch <- f:
@@ -180,24 +184,27 @@ func (b *Bus) SubscribeSession(sessionID string, buf int) (<-chan FollowFrame, f
 	}
 	b.sessions[sessionID][id] = ch
 	b.mu.Unlock()
+	var once sync.Once
 	cancel := func() {
-		b.mu.Lock()
-		if subs, ok := b.sessions[sessionID]; ok {
-			delete(subs, id)
-			if len(subs) == 0 {
-				delete(b.sessions, sessionID)
+		once.Do(func() {
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			if subs, ok := b.sessions[sessionID]; ok {
+				delete(subs, id)
+				if len(subs) == 0 {
+					delete(b.sessions, sessionID)
+				}
 			}
-		}
-		b.mu.Unlock()
-		close(ch)
+			close(ch)
+		})
 	}
 	return ch, cancel
 }
 
 func (b *Bus) PublishControl(orgID string, f ControlFrame) {
 	b.mu.RLock()
+	defer b.mu.RUnlock()
 	subs := b.control[orgID]
-	b.mu.RUnlock()
 	for _, ch := range subs {
 		select {
 		case ch <- f:
@@ -219,16 +226,19 @@ func (b *Bus) SubscribeControl(orgID string, buf int) (<-chan ControlFrame, func
 	}
 	b.control[orgID][id] = ch
 	b.mu.Unlock()
+	var once sync.Once
 	cancel := func() {
-		b.mu.Lock()
-		if subs, ok := b.control[orgID]; ok {
-			delete(subs, id)
-			if len(subs) == 0 {
-				delete(b.control, orgID)
+		once.Do(func() {
+			b.mu.Lock()
+			defer b.mu.Unlock()
+			if subs, ok := b.control[orgID]; ok {
+				delete(subs, id)
+				if len(subs) == 0 {
+					delete(b.control, orgID)
+				}
 			}
-		}
-		b.mu.Unlock()
-		close(ch)
+			close(ch)
+		})
 	}
 	return ch, cancel
 }

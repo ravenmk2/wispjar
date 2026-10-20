@@ -24,7 +24,7 @@ type ImageSaver interface {
 }
 
 type readMediaArgs struct {
-	Path string `json:"path" jsonschema:"description=absolute image file path"`
+	Path string `json:"path" jsonschema:"description=image file path, absolute or relative to the session workspace"`
 }
 
 // textResult 可恢复的域拒绝（vision 门控/非图/超限）：以文本工具结果回喂模型而非 Go error
@@ -57,6 +57,7 @@ func newReadMediaTool(vision bool) (tool.BaseTool, error) {
 				return nil, err
 			}
 			meta.SandboxID = sid
+			in.Path = tc.ResolvePath(in.Path)
 			downscaleAdvice := fmt.Sprintf("; downscale it with exec and read again (e.g. convert %s -resize 2048x2048 /tmp/scaled.png)", shellQuote(in.Path))
 			if fi, err := h.FileInfo(ctx, in.Path); err == nil && fi.Size > attachment.MaxImageBytes {
 				return textResult(fmt.Sprintf("image %s is %d bytes, exceeding the 8MB limit%s", in.Path, fi.Size, downscaleAdvice)), nil

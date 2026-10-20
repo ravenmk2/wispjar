@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -32,14 +33,17 @@ type AttachmentReader interface {
 }
 
 type Deps struct {
-	Events      EventStore
-	Sessions    SessionRepo
-	Models      ModelFactory
-	Sandbox     sandbox.Manager
-	Checkpoints func(sessionID string) adk.CheckPointStore
-	Bus         *Bus
-	DataDir     string
-	ContextSize func(ctx context.Context, modelID string) int
+	Computers        ComputerService
+	Skills           SkillCoordinator
+	MaxParallelTasks int
+	Events           EventStore
+	Sessions         SessionRepo
+	Models           ModelFactory
+	Sandbox          sandbox.Manager
+	Checkpoints      func(sessionID string) adk.CheckPointStore
+	Bus              *Bus
+	DataDir          string
+	ContextSize      func(ctx context.Context, modelID string) int
 	// ProviderType 按 model_id 查供应商类型（ark 注入 prompt_cache_key 用；测试可为 nil，
 	// 为 nil 时回退快照中的 provider_type）。
 	ProviderType func(ctx context.Context, modelID string) string
@@ -67,17 +71,36 @@ type Orchestrator interface {
 }
 
 type runState struct {
-	agent           adk.Agent
-	cancel          adk.AgentCancelFunc
-	cancelRequested bool
-	checkpointID    string
-	turn            int
-	stepMu          sync.Mutex // 保护 step：task 工具 goroutine 与 consume goroutine 并发访问
-	step            int
-	lastSeq         int64
-	attempt         *attemptState
-	denied          map[string]struct{}
-	toolCtx         *tools.Context
+	eventMu            sync.Mutex
+	retired            bool
+	resourceMu         sync.Mutex
+	preparing          bool
+	registered         bool
+	skillAcquired      bool
+	controlUncertain   bool
+	execution          *tools.ExecutionHandle
+	childActive        int
+	childUncertain     bool
+	ending             bool
+	endStatus          string
+	resourcesFinished  bool
+	resourcesFinishing bool
+	finishRetries      int
+	taskSlots          chan struct{}
+	runContext         context.Context
+	contextCancel      context.CancelFunc
+	endOnce            sync.Once
+	agent              adk.Agent
+	cancel             adk.AgentCancelFunc
+	cancelRequested    bool
+	checkpointID       string
+	turn               int
+	stepMu             sync.Mutex // 保护 step：task 工具 goroutine 与 consume goroutine 并发访问
+	step               int
+	lastSeq            int64
+	attempt            *attemptState
+	denied             map[string]struct{}
+	toolCtx            *tools.Context
 	// usageSink 本 turn 的原始 usage 抓取收集器（挂 iterCtx，transport 旁路写入）。
 	usageSink *provider.UsageSink
 }
@@ -130,26 +153,47 @@ func (o *orchestrator) StartTurn(ctx context.Context, sessionID string) error {
 		o.mu.Unlock()
 		return ErrSessionRunning
 	}
-	o.runs[sessionID] = &runState{denied: map[string]struct{}{}}
+	runContext, contextCancel := context.WithCancel(context.Background())
+	rs := &runState{denied: map[string]struct{}{}, runContext: runContext, contextCancel: contextCancel, preparing: true}
+	o.runs[sessionID] = rs
 	o.mu.Unlock()
 
-	rs := o.runs[sessionID]
-	if err := o.prepare(ctx, sessionID, rs); err != nil {
+	prepareErr := o.prepare(ctx, sessionID, rs)
+	rs.resourceMu.Lock()
+	rs.preparing = false
+	ended := rs.ending
+	rs.resourceMu.Unlock()
+	if ended && prepareErr == nil {
+		prepareErr = context.Canceled
+	}
+	if err := prepareErr; err != nil {
+		log.Printf("runtime: prepare session %s: %v", sessionID, err)
+		publicErr := publicPreparationError(err)
+		contextCancel()
+		o.finishResources(rs, "failed")
 		if rs.turn > 0 {
-			_, _ = o.commit(context.Background(), sessionID, []session.EventInput{
-				{Type: session.EventTurnEnd, Data: session.TurnEndData{Turn: rs.turn, Reason: "failed", Error: err.Error()}},
+			_, _ = o.commitRun(context.Background(), sessionID, rs, []session.EventInput{
+				{Type: session.EventTurnEnd, Data: session.TurnEndData{Turn: rs.turn, Reason: "failed", Error: publicErr.Message, ErrorCode: publicErr.Code}},
 			})
 		}
 		o.mu.Lock()
-		delete(o.runs, sessionID)
+		if o.runs[sessionID] == rs {
+			delete(o.runs, sessionID)
+		}
 		o.mu.Unlock()
-		return err
+		return publicErr
 	}
 
-	iterCtx := tools.WithContext(context.Background(), rs.toolCtx)
+	iterCtx := tools.WithContext(rs.runContext, rs.toolCtx)
 	iterCtx = provider.WithUsageSink(iterCtx, rs.usageSink)
 	cancelOpt, cancelFn := adk.WithCancel()
+	o.mu.Lock()
 	rs.cancel = cancelFn
+	canceled := rs.cancelRequested
+	o.mu.Unlock()
+	if canceled {
+		_, _ = cancelFn(adk.WithAgentCancelMode(adk.CancelImmediate))
+	}
 	runner := adk.NewRunner(iterCtx, adk.RunnerConfig{
 		Agent:           rs.agent,
 		EnableStreaming: true,
@@ -182,6 +226,14 @@ func (o *orchestrator) prepare(ctx context.Context, sessionID string, rs *runSta
 	rs.turn = turn
 	rs.checkpointID = id.New()
 	rs.toolCtx = o.buildToolContext(sess, &snap)
+	parallel := o.deps.MaxParallelTasks
+	if parallel <= 0 {
+		parallel = 4
+	}
+	rs.taskSlots = make(chan struct{}, parallel)
+	if err := o.prepareComputer(rs.runContext, sess, &snap, rs); err != nil {
+		return err
+	}
 	a, _, err := o.buildAgent(ctx, sess, &snap, rs.toolCtx, rs)
 	if err != nil {
 		return err
@@ -303,12 +355,18 @@ func (o *orchestrator) trimContext(ctx context.Context, sessionID string, msgs [
 func (o *orchestrator) consume(sessionID string, rs *runState, iter *adk.AsyncIterator[*adk.AgentEvent]) {
 	for {
 		event, ok := iter.Next()
+		rs.eventMu.Lock()
+		retired := rs.retired
+		rs.eventMu.Unlock()
+		if retired {
+			return
+		}
 		if !ok {
 			break
 		}
 		if event.Err != nil {
 			var cancelErr *adk.CancelError
-			if errors.As(event.Err, &cancelErr) {
+			if errors.As(event.Err, &cancelErr) || errors.Is(event.Err, context.Canceled) {
 				o.finishInterrupted(sessionID, rs)
 			} else {
 				o.failTurn(sessionID, rs, event.Err)
@@ -353,11 +411,11 @@ func (o *orchestrator) stepStream(sessionID string, rs *runState, stream *schema
 	}) {
 		return false
 	}
-	o.deps.Bus.Publish(sessionID, AssistantStreamFrame(StreamStart{
+	o.publishRun(sessionID, rs, AssistantStreamFrame(StreamStart{
 		Type: "start", AttemptID: attempt.id, Turn: rs.turn, Step: rs.step, StartedAfterSeq: startedAfter,
 	}))
 	err := attempt.drainStream(stream, func(fc framedChunk) {
-		o.deps.Bus.Publish(sessionID, AssistantStreamFrame(StreamChunkFrame{
+		o.publishRun(sessionID, rs, AssistantStreamFrame(StreamChunkFrame{
 			Type: "chunk", AttemptID: attempt.id, Index: fc.index, Time: nowMs(), Chunk: fc.chunk,
 		}))
 	})
@@ -375,13 +433,13 @@ func (o *orchestrator) stepStream(sessionID string, rs *runState, stream *schema
 		return false
 	}
 	for _, fc := range attempt.endChunks(false) {
-		o.deps.Bus.Publish(sessionID, AssistantStreamFrame(StreamChunkFrame{
+		o.publishRun(sessionID, rs, AssistantStreamFrame(StreamChunkFrame{
 			Type: "chunk", AttemptID: attempt.id, Index: fc.index, Time: nowMs(), Chunk: fc.chunk,
 		}))
 	}
 	rs.attempt = nil
 	seq := o.commitAssistant(sessionID, rs, attempt, false)
-	o.deps.Bus.Publish(sessionID, AssistantStreamFrame(StreamEnd{
+	o.publishRun(sessionID, rs, AssistantStreamFrame(StreamEnd{
 		Type: "end", AttemptID: attempt.id,
 		Outcome: StreamOutcome{Kind: "committed", EventType: session.EventAssistantMessage, Seq: seq},
 	}))
@@ -424,7 +482,7 @@ func (o *orchestrator) assistantInputs(rs *runState, attempt *attemptState, inte
 
 // commitAssistant 落库 assistant/message(+tool/call)+step/end，返回 assistant/message 的 seq。
 func (o *orchestrator) commitAssistant(sessionID string, rs *runState, attempt *attemptState, interrupted bool) int64 {
-	events, err := o.commit(context.Background(), sessionID, o.assistantInputs(rs, attempt, interrupted))
+	events, err := o.commitRun(context.Background(), sessionID, rs, o.assistantInputs(rs, attempt, interrupted))
 	if err != nil {
 		o.failTurn(sessionID, rs, err)
 		return 0
@@ -442,6 +500,7 @@ func (o *orchestrator) toolResult(sessionID string, rs *runState, msg *schema.Me
 	}
 	if m := rs.toolCtx.TakeMeta(msg.ToolCallID); m != nil {
 		data.Meta = &session.ToolResultMeta{
+			ComputerID: m.ComputerID, RunID: m.RunID,
 			DurationMS: m.DurationMS,
 			Render:     m.Render,
 			Truncated:  m.Truncated,
@@ -466,7 +525,7 @@ func (o *orchestrator) pause(sessionID string, rs *runState, info *adk.Interrupt
 		o.failTurn(sessionID, rs, errors.New("unknown interrupt (not an approval request)"))
 		return
 	}
-	if _, err := o.commit(context.Background(), sessionID, []session.EventInput{
+	if _, err := o.commitRun(context.Background(), sessionID, rs, []session.EventInput{
 		{Type: session.EventApprovalAsked, Data: session.ApprovalAskedData{
 			Turn: rs.turn, Step: rs.step, CallID: ai.CallID,
 			Name: ai.Name, Arguments: ai.Arguments, Risk: ai.Risk,
@@ -476,6 +535,7 @@ func (o *orchestrator) pause(sessionID string, rs *runState, info *adk.Interrupt
 		return
 	}
 	o.registerPending(&pendingApproval{
+		root:         rs,
 		sessionID:    sessionID,
 		checkpointID: rs.checkpointID,
 		interruptID:  rootID,
@@ -500,7 +560,7 @@ func (o *orchestrator) finishInterruptedAttempt(sessionID string, rs *runState, 
 		attempt.captured = rs.usageSink.TakeLatest()
 	}
 	for _, fc := range attempt.endChunks(true) {
-		o.deps.Bus.Publish(sessionID, AssistantStreamFrame(StreamChunkFrame{
+		o.publishRun(sessionID, rs, AssistantStreamFrame(StreamChunkFrame{
 			Type: "chunk", AttemptID: attempt.id, Index: fc.index, Time: nowMs(), Chunk: fc.chunk,
 		}))
 	}
@@ -508,7 +568,7 @@ func (o *orchestrator) finishInterruptedAttempt(sessionID string, rs *runState, 
 		return
 	}
 	seq := o.commitAssistant(sessionID, rs, attempt, true)
-	o.deps.Bus.Publish(sessionID, AssistantStreamFrame(StreamEnd{
+	o.publishRun(sessionID, rs, AssistantStreamFrame(StreamEnd{
 		Type: "end", AttemptID: attempt.id,
 		Outcome: StreamOutcome{Kind: "committed", EventType: session.EventAssistantMessage, Seq: seq},
 	}))
@@ -527,13 +587,13 @@ func (o *orchestrator) failTurn(sessionID string, rs *runState, err error) {
 
 func (o *orchestrator) failAttempt(sessionID string, rs *runState, attempt *attemptState, cause error) {
 	chunks, _ := json.Marshal(attempt.chunks)
-	events, err := o.commit(context.Background(), sessionID, []session.EventInput{
+	events, err := o.commitRun(context.Background(), sessionID, rs, []session.EventInput{
 		{Type: session.EventAssistantAttempt, Data: session.AssistantAttemptData{
 			Turn: attempt.turn, Step: attempt.step, Chunks: chunks, Error: cause.Error(),
 		}},
 	})
 	if err == nil && len(events) > 0 {
-		o.deps.Bus.Publish(sessionID, AssistantStreamFrame(StreamEnd{
+		o.publishRun(sessionID, rs, AssistantStreamFrame(StreamEnd{
 			Type: "end", AttemptID: attempt.id,
 			Outcome: StreamOutcome{Kind: "abandoned", EventType: session.EventAssistantAttempt, Seq: events[0].Seq},
 		}))
@@ -543,9 +603,23 @@ func (o *orchestrator) failAttempt(sessionID string, rs *runState, attempt *atte
 
 // endTurn 任何路径的 turn 收尾（turn/end + 释放会话锁 + 清理 checkpoint）。
 func (o *orchestrator) endTurn(sessionID string, rs *runState, reason, errMsg string) {
-	_, _ = o.commit(context.Background(), sessionID, []session.EventInput{
+	rs.endOnce.Do(func() { o.completeTurn(sessionID, rs, reason, errMsg) })
+}
+func (o *orchestrator) completeTurn(sessionID string, rs *runState, reason, errMsg string) {
+	if rs.contextCancel != nil {
+		rs.contextCancel()
+	}
+	status := reason
+	if reason == "interrupted" {
+		status = "canceled"
+	}
+	o.finishResources(rs, status)
+	_, _ = o.commitRun(context.Background(), sessionID, rs, []session.EventInput{
 		{Type: session.EventTurnEnd, Data: session.TurnEndData{Turn: rs.turn, Reason: reason, Error: errMsg}},
 	})
+	rs.eventMu.Lock()
+	rs.retired = true
+	rs.eventMu.Unlock()
 	if rs.checkpointID != "" {
 		if d, ok := o.deps.Checkpoints(sessionID).(interface {
 			Delete(context.Context, string) error
@@ -553,7 +627,15 @@ func (o *orchestrator) endTurn(sessionID string, rs *runState, reason, errMsg st
 			_ = d.Delete(context.Background(), rs.checkpointID)
 		}
 	}
+	o.forgetRun(sessionID, rs)
+}
+
+func (o *orchestrator) forgetRun(sessionID string, rs *runState) {
 	o.mu.Lock()
+	if o.runs[sessionID] != rs {
+		o.mu.Unlock()
+		return
+	}
 	delete(o.runs, sessionID)
 	for id, p := range o.pending {
 		if p.sessionID == sessionID {
@@ -589,9 +671,23 @@ func (o *orchestrator) Cancel(sessionID string) error {
 	}
 	rs.cancelRequested = true
 	cancel := rs.cancel
+	contextCancel := rs.contextCancel
+	paused := false
+	for _, pending := range o.pending {
+		if pending.sessionID == sessionID && pending.sub == nil {
+			paused = true
+			break
+		}
+	}
 	o.mu.Unlock()
+	if contextCancel != nil {
+		contextCancel()
+	}
 	if cancel != nil {
 		_, _ = cancel(adk.WithAgentCancelMode(adk.CancelAfterToolCalls), adk.WithAgentCancelTimeout(5*time.Second))
+	}
+	if paused {
+		o.endTurn(sessionID, rs, "interrupted", "")
 	}
 	return nil
 }
@@ -618,7 +714,7 @@ func (o *orchestrator) commit(ctx context.Context, sessionID string, inputs []se
 }
 
 func (o *orchestrator) commitOK(sessionID string, rs *runState, inputs []session.EventInput) bool {
-	if _, err := o.commit(context.Background(), sessionID, inputs); err != nil {
+	if _, err := o.commitRun(context.Background(), sessionID, rs, inputs); err != nil {
 		o.failTurn(sessionID, rs, err)
 		return false
 	}
@@ -640,12 +736,12 @@ func PublishControlProjection(sessions SessionRepo, bus *Bus, sessionID string) 
 		return
 	}
 	if sess.Status == session.StatusDeleted {
-		bus.PublishControl(sess.OrgID, ControlFrame{Type: "remove", Remove: sess.ID})
+		bus.PublishControl(sess.OrgID, ControlFrame{Type: "remove", Remove: sess.ID, UserID: sess.UserID})
 		return
 	}
 	usage := session.Usage{}
 	_ = json.Unmarshal(sess.UsageTotal, &usage)
-	bus.PublishControl(sess.OrgID, ControlFrame{Type: "upsert", Session: &ControlSession{
+	bus.PublishControl(sess.OrgID, ControlFrame{Type: "upsert", UserID: sess.UserID, Session: &ControlSession{
 		SessionID:    sess.ID,
 		Title:        sess.Title,
 		Running:      sess.Running,

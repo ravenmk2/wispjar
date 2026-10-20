@@ -37,8 +37,6 @@ type taskTool struct {
 	snap *agent.Snapshot
 	tc   *tools.Context
 	rs   *runState
-
-	mu sync.Mutex // 同一 turn 多个 task 调用串行化（runtime.md §6.7）
 }
 
 func taskDescription(subs []agent.SnapshotSubAgent) string {
@@ -69,8 +67,14 @@ func (o *orchestrator) newTaskTool(sess *store.Session, snap *agent.Snapshot, tc
 // invoke 执行一次委派。子运行失败/中断不抛 Go error（eino ToolsNode 会把工具错误
 // 升级为整个 run 失败），统一合成为结果文本回喂主 Agent（runtime.md §4.8 返回约定）。
 func (t *taskTool) invoke(ctx context.Context, in taskArgs) (string, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	if t.rs.taskSlots != nil {
+		select {
+		case t.rs.taskSlots <- struct{}{}:
+			defer func() { <-t.rs.taskSlots }()
+		case <-ctx.Done():
+			return "error: task canceled before starting", nil
+		}
+	}
 
 	meta := t.tc.BeginMeta(ctx, tools.RenderGeneric)
 	start := time.Now()
@@ -88,20 +92,41 @@ func (t *taskTool) invoke(ctx context.Context, in taskArgs) (string, error) {
 		return "error: prompt must not be empty", nil
 	}
 
+	childContext := t.tc.Fork(sub.ID, id.New(), sub.Skills)
+	childSink := provider.NewUsageSink()
+	ctx = tools.WithContext(ctx, childContext)
+	ctx = provider.WithUsageSink(ctx, childSink)
+	childStatus := "failed"
+	if t.rs.registered {
+		err := t.o.registerChildRun(ctx, t.rs, childContext)
+		if err != nil {
+			return "error: child run could not start", nil
+		}
+		tracker := tools.NewExecutionHandle(t.rs.execution.Handle)
+		childContext.BoundHandle = tracker
+		finish := t.o.childFinalizer(t.rs, childContext, tracker)
+		defer func() {
+			if ctx.Err() != nil {
+				childStatus = "canceled"
+			}
+			finish(childStatus)
+		}()
+	}
 	subAgent, err := t.o.buildSubAgent(ctx, t.sess, sub)
 	if err != nil {
 		return fmt.Sprintf("error: build subagent %q: %v", sub.Name, err), nil
 	}
 
 	sr := &subRun{
+		root:         t.rs,
 		o:            t.o,
 		sessionID:    t.sess.ID,
-		tc:           t.tc,
+		tc:           childContext,
 		parentCallID: compose.GetToolCallID(ctx),
 		turn:         t.rs.turn,
 		step:         t.rs.currentStep(),
 		denied:       newDenySet(),
-		usageSink:    t.rs.usageSink,
+		usageSink:    childSink,
 	}
 	checkpointID := id.New()
 	sr.checkpointID = checkpointID
@@ -122,6 +147,11 @@ func (t *taskTool) invoke(ctx context.Context, in taskArgs) (string, error) {
 	for {
 		reason, intr, cause := sr.consume(iter)
 		if intr == nil {
+			if reason == "completed" {
+				childStatus = "completed"
+			} else if reason == "interrupted" {
+				childStatus = "canceled"
+			}
 			return sr.synthesize(sub.Name, reason, cause), nil
 		}
 		gate, err := sr.askApproval(intr)
@@ -308,6 +338,7 @@ type subInterrupt struct {
 }
 
 type subRun struct {
+	root         *runState
 	o            *orchestrator
 	sessionID    string
 	tc           *tools.Context
@@ -317,7 +348,7 @@ type subRun struct {
 	step         int // 主 step（task 调用所在 step）
 	subStep      int
 	denied       *denySet
-	// usageSink 共享主 turn 的抓取收集器（子运行与主流程串行，取最新一条即本 step）。
+	// Each child owns its usage sink; concurrent responses cannot consume one another.
 	usageSink *provider.UsageSink
 
 	lastText  string // 最近一条 assistant 消息文本（失败时的部分输出）
@@ -333,7 +364,7 @@ func (sr *subRun) stepData() nestedStepData {
 }
 
 func (sr *subRun) commit(inputs []session.EventInput) error {
-	_, err := sr.o.commit(context.Background(), sr.sessionID, inputs)
+	_, err := sr.o.commitRun(context.Background(), sr.sessionID, sr.root, inputs)
 	return err
 }
 
@@ -465,6 +496,7 @@ func (sr *subRun) toolResult(msg *schema.Message) error {
 	}
 	if m := sr.tc.TakeMeta(msg.ToolCallID); m != nil {
 		data.Meta = &session.ToolResultMeta{
+			ComputerID: m.ComputerID, RunID: m.RunID,
 			DurationMS: m.DurationMS,
 			Render:     m.Render,
 			Truncated:  m.Truncated,
@@ -494,6 +526,7 @@ func (sr *subRun) askApproval(intr *subInterrupt) (*subApproval, error) {
 	}
 	gate := &subApproval{ch: make(chan bool, 1), denied: sr.denied}
 	sr.o.registerPending(&pendingApproval{
+		root:         sr.root,
 		sessionID:    sr.sessionID,
 		checkpointID: sr.checkpointID,
 		interruptID:  intr.interruptID,

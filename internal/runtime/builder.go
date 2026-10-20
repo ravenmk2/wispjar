@@ -48,6 +48,7 @@ func (o *orchestrator) buildToolContext(sess *store.Session, snap *agent.Snapsho
 	sc := parseSandboxConfig(snap.SandboxConfig)
 	tc := tools.NewContext(sess.ID, sess.OrgID)
 	tc.UserID = sess.UserID
+	tc.AgentID = sess.AgentID
 	if o.deps.Sandbox != nil {
 		tc.Sandbox = tools.WrapManager(o.deps.Sandbox)
 	}
@@ -224,8 +225,15 @@ func renderInstruction(snap *agent.Snapshot, sess *store.Session) string {
 		}
 		b.WriteString("使用 task 工具把自包含的子任务委派给子智能体：子智能体在独立上下文中执行（看不到本会话历史），与你共享文件系统，只返回最终结果；prompt 中必须包含子智能体所需的全部信息。\n")
 	}
-	fmt.Fprintf(&b, "\n## 运行环境\n- 当前日期：%s\n- 工作目录：/workspace（exec/read/write/edit/glob/grep 工具均在此目录树下操作）\n",
-		date.Format("2006-01-02"))
+	workDir := "/workspace"
+	if sess.ComputerID != nil {
+		workDir = session.WorkspaceDir(sess.ID)
+	}
+	fmt.Fprintf(&b, "\n## 运行环境\n- 当前日期：%s\n- 默认工作目录：%s；相对路径按此解析。\n",
+		date.Format("2006-01-02"), workDir)
+	if sess.ComputerID != nil {
+		fmt.Fprintf(&b, "- 输入目录：%s/inputs；成果目录：%s/outputs。\n- 用户共享存储：/storage；Agent文件：/agents/%s/files；只读技能：/agents/%s/skills。\n- 命令作为非root用户运行；单次命令完成或超时后会停止其后台子进程。\n", workDir, workDir, snap.AgentID, snap.AgentID)
+	}
 	switch sess.ApprovalMode {
 	case session.ApprovalStrict:
 		b.WriteString("- 确认模式：strict。危险操作（exec/write/edit）执行前会被用户审查，可能被拒绝；被拒绝后不要反复重试同一操作。\n")

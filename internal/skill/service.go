@@ -1,10 +1,10 @@
 package skill
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -14,10 +14,10 @@ import (
 	"unicode/utf8"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/ravenmk2/wispjar/internal/audit"
 	"github.com/ravenmk2/wispjar/internal/gateway/respond"
-	"github.com/ravenmk2/wispjar/internal/id"
 	"github.com/ravenmk2/wispjar/internal/store"
 )
 
@@ -112,102 +112,7 @@ func buildMeta(pkg *Package) (json.RawMessage, error) {
 }
 
 func (s *Service) Upload(actorID, orgID string, fh *multipart.FileHeader) (*ListItem, error) {
-	if fh == nil {
-		return nil, errInvalid("缺少上传文件（multipart 字段 file）", map[string]any{"field": "file"})
-	}
-	if fh.Size > MaxZipBytes {
-		return nil, errInvalidSkill(fmt.Sprintf("zip 大小 %d 字节超过 20MB 限制", fh.Size), map[string]any{"size": fh.Size})
-	}
-	src, err := fh.Open()
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = src.Close() }()
-	data, err := io.ReadAll(io.LimitReader(src, MaxZipBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(data)) > MaxZipBytes {
-		return nil, errInvalidSkill("zip 大小超过 20MB 限制", map[string]any{"size": len(data)})
-	}
-	if s.dataDir == "" {
-		return nil, errors.New("storage.data_dir 未配置")
-	}
-	orgDir := filepath.Join(s.dataDir, "skills", orgID)
-	if err := os.MkdirAll(orgDir, 0o755); err != nil {
-		return nil, err
-	}
-	staging, err := os.MkdirTemp(orgDir, ".staging-*")
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = os.RemoveAll(staging) }()
-	pkg, err := ExtractZip(data, staging)
-	if err != nil {
-		var ie *InvalidError
-		if errors.As(err, &ie) {
-			return nil, errInvalidSkill(ie.Error(), nil)
-		}
-		return nil, err
-	}
-	var cnt int64
-	if err := s.db.Model(&store.Skill{}).
-		Where("org_id = ? AND name = ?", orgID, pkg.Frontmatter.Name).
-		Count(&cnt).Error; err != nil {
-		return nil, err
-	}
-	if cnt > 0 {
-		return nil, errConflict(fmt.Sprintf("skill 名称 %q 在本机构已存在", pkg.Frontmatter.Name), map[string]any{"name": pkg.Frontmatter.Name})
-	}
-	meta, err := buildMeta(pkg)
-	if err != nil {
-		return nil, err
-	}
-	row := store.Skill{
-		ID:          id.New(),
-		OrgID:       orgID,
-		Name:        pkg.Frontmatter.Name,
-		Description: pkg.Frontmatter.Description,
-		Meta:        meta,
-		ZipSize:     int64(len(data)),
-		Status:      StatusActive,
-		CreatedBy:   actorID,
-	}
-	dest := filepath.Join(orgDir, row.ID)
-	if err := os.Rename(pkg.RootDir, dest); err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(filepath.Join(dest, "_source.zip"), data, 0o644); err != nil {
-		_ = os.RemoveAll(dest)
-		return nil, err
-	}
-	row.StoragePath = dest
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&row).Error; err != nil {
-			return err
-		}
-		detail := map[string]any{"name": row.Name, "files": len(pkg.Files), "zip_size": row.ZipSize}
-		if pkg.Deviation != "" {
-			detail["dir_deviation"] = pkg.Deviation
-		}
-		return audit.Log(tx, audit.Entry{
-			OrgID:   orgID,
-			ActorID: actorID,
-			Action:  audit.SkillUpload,
-			Target:  row.ID,
-			Detail:  detail,
-		})
-	})
-	if err != nil {
-		_ = os.RemoveAll(dest)
-		return nil, err
-	}
-	uploaders, err := s.uploaderNames([]string{actorID})
-	if err != nil {
-		return nil, err
-	}
-	item := makeListItem(row, map[string][]AgentRef{}, uploaders)
-	return &item, nil
+	return s.publishPackage(context.Background(), actorID, orgID, "", 0, fh)
 }
 
 type ListItem struct {
@@ -344,7 +249,7 @@ func cleanRelPath(relPath string) (string, error) {
 	return path.Clean(rel), nil
 }
 
-func (s *Service) ReadFile(orgID, skillID, relPath string) (string, string, error) {
+func (s *Service) readFile(orgID, skillID, relPath string) (string, string, error) {
 	sk, err := s.skillOf(orgID, skillID)
 	if err != nil {
 		return "", "", err
@@ -384,33 +289,70 @@ func (s *Service) ReadFile(orgID, skillID, relPath string) (string, string, erro
 	return rel, string(data), nil
 }
 
+func (s *Service) ReadFile(orgID, skillID, relPath string) (rel, content string, err error) {
+	err = withDBLock(context.Background(), s.db, "source:"+orgID+":"+skillID, func() error {
+		var readErr error
+		rel, content, readErr = s.readFile(orgID, skillID, relPath)
+		return readErr
+	})
+	return
+}
+
 func (s *Service) Delete(actorID, orgID, skillID string) error {
-	sk, err := s.skillOf(orgID, skillID)
-	if err != nil {
-		return err
+	if !validID(orgID) || !validID(skillID) {
+		return errInvalid("无效的技能或机构 ID", nil)
 	}
-	refs, err := s.referencedBy([]string{sk.ID})
-	if err != nil {
-		return err
-	}
-	if rb := refs[sk.ID]; len(rb) > 0 {
-		return errConflict("该 Skill 被智能体引用，不可删除", map[string]any{"referenced_by": rb})
-	}
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Delete(&store.Skill{}, "id = ?", sk.ID).Error; err != nil {
+	return withDBLock(context.Background(), s.db, "source:"+orgID+":"+skillID, func() error {
+		var sk store.Skill
+		err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND org_id = ?", skillID, orgID).Take(&sk).Error; err != nil {
+				return err
+			}
+			var count int64
+			if err := tx.Model(&store.AgentSkill{}).Where("skill_id = ?", skillID).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				return errConflict("该 Skill 被智能体引用，不可删除", nil)
+			}
+			if err := tx.Model(&store.RunSkillLease{}).Where("org_id = ? AND skill_id = ?", orgID, skillID).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				return errConflict("该 Skill 仍被运行使用，不可删除", nil)
+			}
+			if err := tx.Model(&store.UserSkillState{}).Where("org_id = ? AND skill_id = ? AND status IN ?", orgID, skillID, []string{"syncing", "blocked"}).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				return errConflict("该 Skill 的安装状态未确认，不可删除", nil)
+			}
+			var operations []store.ResourceOperation
+			if err := tx.Where("org_id = ? AND resource_id = ? AND action = ?", orgID, skillID, "skill/sync").Order("created_at DESC, id DESC").Find(&operations).Error; err != nil {
+				return err
+			}
+			seen := map[string]bool{}
+			for _, op := range operations {
+				if seen[op.UserID] {
+					continue
+				}
+				seen[op.UserID] = true
+				var plan InstallPlan
+				if err := json.Unmarshal(op.Progress, &plan); err != nil {
+					return err
+				}
+				if len(plan.Targets) > 0 || op.Status != "completed" {
+					return errConflict("请先在安全任务边界同步移除已安装的技能", nil)
+				}
+			}
+			if err := tx.Delete(&store.Skill{}, "id = ?", skillID).Error; err != nil {
+				return err
+			}
+			return audit.Log(tx, audit.Entry{OrgID: orgID, ActorID: actorID, Action: audit.SkillDelete, Target: skillID, Detail: map[string]any{"name": sk.Name}})
+		})
+		if err != nil {
 			return err
 		}
-		return audit.Log(tx, audit.Entry{
-			OrgID:   orgID,
-			ActorID: actorID,
-			Action:  audit.SkillDelete,
-			Target:  sk.ID,
-			Detail:  map[string]any{"name": sk.Name},
-		})
+		return s.cleanCandidates(context.Background(), orgID, skillID, filepath.Join(s.dataDir, "skills", orgID, ".sources", skillID))
 	})
-	if err != nil {
-		return err
-	}
-	_ = os.RemoveAll(sk.StoragePath)
-	return nil
 }

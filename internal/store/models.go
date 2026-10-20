@@ -99,6 +99,8 @@ type Agent struct {
 func (Agent) TableName() string { return "agent" }
 
 type Skill struct {
+	Revision    uint64          `gorm:"column:revision;default:1" json:"revision"`
+	ContentHash string          `gorm:"column:content_hash;size:64" json:"content_hash"`
 	ID          string          `gorm:"column:id;primaryKey;size:32" json:"id"`
 	OrgID       string          `gorm:"column:org_id;size:32" json:"org_id"`
 	Name        string          `gorm:"column:name;size:64" json:"name"`
@@ -131,6 +133,8 @@ type AgentSubagent struct {
 func (AgentSubagent) TableName() string { return "agent_subagent" }
 
 type Session struct {
+	ComputerID    *string         `gorm:"column:computer_id;size:32" json:"computer_id"`
+	Workspace     json.RawMessage `gorm:"column:workspace;type:json" json:"workspace"`
 	ID            string          `gorm:"column:id;primaryKey;size:32" json:"id"`
 	OrgID         string          `gorm:"column:org_id;size:32" json:"org_id"`
 	UserID        string          `gorm:"column:user_id;size:32" json:"user_id"`

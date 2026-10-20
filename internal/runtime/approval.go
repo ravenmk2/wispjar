@@ -160,6 +160,7 @@ func approvalFromInterrupt(info *adk.InterruptInfo) (ApprovalInterruptInfo, stri
 }
 
 type pendingApproval struct {
+	root         *runState
 	sessionID    string
 	checkpointID string
 	interruptID  string
@@ -193,6 +194,13 @@ func (e *Error) Error() string { return e.Message }
 
 // registerPending 登记内存审批表并启动超时兜底（fail-closed）。
 func (o *orchestrator) registerPending(p *pendingApproval) {
+	if p.root != nil {
+		p.root.eventMu.Lock()
+		defer p.root.eventMu.Unlock()
+		if p.root.retired {
+			return
+		}
+	}
 	o.mu.Lock()
 	o.pending[p.callID] = p
 	p.timer = time.AfterFunc(approvalTimeout, func() {
@@ -245,7 +253,7 @@ func (o *orchestrator) decide(sessionID, callID string, allow bool, by string, a
 			ParentCallID: p.parentCallID,
 		}
 	}
-	if _, err := o.commit(context.Background(), sessionID, []session.EventInput{
+	if _, err := o.commitRun(context.Background(), sessionID, p.root, []session.EventInput{
 		{Type: session.EventApprovalDecided, Data: decidedData},
 	}); err != nil {
 		return fmt.Errorf("approval/decided 落库失败: %w", err)
@@ -256,7 +264,7 @@ func (o *orchestrator) decide(sessionID, callID string, allow bool, by string, a
 			p.sub.denied.add(callID)
 		} else {
 			o.mu.Lock()
-			if rs := o.runs[sessionID]; rs != nil {
+			if rs := o.runs[sessionID]; rs != nil && (p.root == nil || rs == p.root) {
 				rs.denied[callID] = struct{}{}
 			}
 			o.mu.Unlock()
@@ -278,11 +286,15 @@ func (o *orchestrator) resume(p *pendingApproval, allow bool) {
 	o.mu.RLock()
 	rs := o.runs[p.sessionID]
 	o.mu.RUnlock()
-	if rs == nil {
+	if rs == nil || (p.root != nil && rs != p.root) {
 		return
 	}
 	go func() {
-		ctx := tools.WithContext(context.Background(), rs.toolCtx)
+		base := rs.runContext
+		if base == nil {
+			base = context.Background()
+		}
+		ctx := tools.WithContext(base, rs.toolCtx)
 		ctx = provider.WithUsageSink(ctx, rs.usageSink)
 		runner := adk.NewRunner(ctx, adk.RunnerConfig{
 			Agent:           rs.agent,
@@ -291,7 +303,7 @@ func (o *orchestrator) resume(p *pendingApproval, allow bool) {
 		})
 		cancelOpt, cancelFn := adk.WithCancel()
 		o.mu.Lock()
-		if cur := o.runs[p.sessionID]; cur != nil {
+		if cur := o.runs[p.sessionID]; cur == rs {
 			cur.cancel = cancelFn
 			if cur.cancelRequested {
 				_, _ = cancelFn(adk.WithAgentCancelMode(adk.CancelImmediate))

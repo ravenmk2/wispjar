@@ -52,7 +52,7 @@ func TestControlFlow(t *testing.T) {
 		t.Fatalf("upsert session mismatch: %s", f.Value)
 	}
 
-	env.bus.PublishControl("o1", runtime.ControlFrame{Type: "remove", Remove: "sess2"})
+	env.bus.PublishControl("o1", runtime.ControlFrame{Type: "remove", Remove: "sess2", UserID: "u1"})
 	f = readFrame(t, c)
 	_ = json.Unmarshal(f.Value, &v)
 	if v["type"] != "remove" || v["sessionId"] != "sess2" {
@@ -81,5 +81,40 @@ func TestControlEmptyBaseline(t *testing.T) {
 	sessions, ok := v["sessions"].([]any)
 	if !ok || len(sessions) != 0 {
 		t.Fatalf("empty baseline must be [], got %s", f.Value)
+	}
+	computers, ok := v["computers"].([]any)
+	if !ok || len(computers) != 0 {
+		t.Fatalf("empty computers baseline must be [], got %s", f.Value)
+	}
+}
+
+func TestControlPrivateComputersAndSessions(t *testing.T) {
+	env := newTestEnv(t, func(d *Deps) {
+		d.Store.(*fakeStore).computers = []any{map[string]any{"id": "mine", "status": "running"}}
+	})
+	c := env.dial(t, "u1", nil)
+	writeClient(t, c, `{"type":"open","streamId":"s1","endpoint":"control","payload":{"orgId":"o1"}}`)
+	f := readFrame(t, c)
+	var baseline struct {
+		Computers []map[string]any `json:"computers"`
+	}
+	if err := json.Unmarshal(f.Value, &baseline); err != nil || len(baseline.Computers) != 1 || baseline.Computers[0]["id"] != "mine" {
+		t.Fatalf("computer baseline: %s / %v", f.Value, err)
+	}
+	env.bus.PublishControl("o1", runtime.ControlFrame{Type: "computer/upsert", UserID: "other", Computer: map[string]any{"id": "private"}})
+	env.bus.PublishControl("o1", runtime.ControlFrame{Type: "computer/upsert", Computer: map[string]any{"id": "ownerless"}})
+	env.bus.PublishControl("o1", runtime.ControlFrame{Type: "upsert", Session: &runtime.ControlSession{SessionID: "not-owned"}})
+	env.bus.PublishControl("o1", runtime.ControlFrame{Type: "remove", UserID: "other", Remove: "foreign"})
+	env.bus.PublishControl("o1", runtime.ControlFrame{Type: "computer/remove", UserID: "u1", ComputerID: "mine"})
+	f = readFrame(t, c)
+	var value map[string]any
+	if err := json.Unmarshal(f.Value, &value); err != nil {
+		t.Fatal(err)
+	}
+	if value["type"] != "computer/remove" || value["computerId"] != "mine" {
+		t.Fatalf("private resource leaked before owner's update: %s", f.Value)
+	}
+	if _, exists := value["UserID"]; exists {
+		t.Fatal("internal routing identity leaked into payload")
 	}
 }

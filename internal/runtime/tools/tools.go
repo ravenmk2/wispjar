@@ -31,15 +31,15 @@ const (
 )
 
 type execArgs struct {
-	Command   string            `json:"command" jsonschema:"description=shell command to execute (run via bash -lc)"`
-	Cwd       string            `json:"cwd,omitempty" jsonschema:"description=working directory, default /workspace"`
+	Command   string            `json:"command" jsonschema:"description=shell command to execute (bash when available, otherwise sh)"`
+	Cwd       string            `json:"cwd,omitempty" jsonschema:"description=working directory, defaults to this session workspace"`
 	TimeoutMs int64             `json:"timeout_ms,omitempty" jsonschema:"description=timeout in milliseconds, default 30000, max 600000"`
 	Env       map[string]string `json:"env,omitempty" jsonschema:"description=additional environment variables"`
 }
 
 func newExecTool() (tool.BaseTool, error) {
 	return utils.InferTool("exec",
-		"Execute a shell command (bash -lc). Returns exit code, stdout and stderr.",
+		"Execute a shell command (bash when available, otherwise sh). Returns exit code, stdout and stderr.",
 		func(ctx context.Context, in execArgs) (string, error) {
 			tc := FromContext(ctx)
 			meta := tc.beginMeta(ctx, RenderTerminal)
@@ -51,9 +51,7 @@ func newExecTool() (tool.BaseTool, error) {
 			}
 			meta.SandboxID = sid
 			cwd := in.Cwd
-			if cwd == "" {
-				cwd = defaultWorkDir
-			}
+			cwd = tc.ResolvePath(cwd)
 			timeout := in.TimeoutMs
 			if timeout <= 0 {
 				timeout = 30000
@@ -61,7 +59,14 @@ func newExecTool() (tool.BaseTool, error) {
 			if timeout > 600000 {
 				timeout = 600000
 			}
-			res, err := h.RunCommand(ctx, in.Command, cwd, in.Env, timeout,
+			env := make(map[string]string, len(tc.Env)+len(in.Env))
+			for k, v := range tc.Env {
+				env[k] = v
+			}
+			for k, v := range in.Env {
+				env[k] = v
+			}
+			res, err := h.RunCommand(ctx, in.Command, cwd, env, timeout,
 				func(stream, chunk string) { tc.publish(ctx, stream, chunk) })
 			if err != nil {
 				return execErrorResult(err)
@@ -79,7 +84,7 @@ func newExecTool() (tool.BaseTool, error) {
 }
 
 type readArgs struct {
-	Path   string `json:"path" jsonschema:"description=absolute file path"`
+	Path   string `json:"path" jsonschema:"description=file path, absolute or relative to the session workspace"`
 	Offset int    `json:"offset,omitempty" jsonschema:"description=start line (1-based), default 1"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"description=max lines to return, default 200, max 2000"`
 }
@@ -97,6 +102,7 @@ func newReadTool() (tool.BaseTool, error) {
 				return "", err
 			}
 			meta.SandboxID = sid
+			in.Path = tc.ResolvePath(in.Path)
 			if fi, err := h.FileInfo(ctx, in.Path); err == nil && fi.Size > readMaxBytes {
 				return "", fmt.Errorf("file %s is %d bytes (>2MB); use exec with head/tail/sed to read it in segments", in.Path, fi.Size)
 			}
@@ -150,7 +156,7 @@ func newReadTool() (tool.BaseTool, error) {
 }
 
 type writeArgs struct {
-	Path    string `json:"path" jsonschema:"description=absolute file path"`
+	Path    string `json:"path" jsonschema:"description=file path, absolute or relative to the session workspace"`
 	Content string `json:"content" jsonschema:"description=full file content (overwrites existing file)"`
 }
 
@@ -167,6 +173,7 @@ func newWriteTool() (tool.BaseTool, error) {
 				return "", err
 			}
 			meta.SandboxID = sid
+			in.Path = tc.ResolvePath(in.Path)
 			var old, operation string
 			oldKnown := false
 			if fi, err := h.FileInfo(ctx, in.Path); err == nil && fi.Type != "directory" {
@@ -202,7 +209,7 @@ func newWriteTool() (tool.BaseTool, error) {
 }
 
 type editArgs struct {
-	Path       string `json:"path" jsonschema:"description=absolute file path"`
+	Path       string `json:"path" jsonschema:"description=file path, absolute or relative to the session workspace"`
 	OldString  string `json:"old_string" jsonschema:"description=exact string to replace; must match exactly once unless replace_all is set"`
 	NewString  string `json:"new_string" jsonschema:"description=replacement string"`
 	ReplaceAll bool   `json:"replace_all,omitempty" jsonschema:"description=replace all occurrences, default false"`
@@ -224,6 +231,7 @@ func newEditTool() (tool.BaseTool, error) {
 				return "", err
 			}
 			meta.SandboxID = sid
+			in.Path = tc.ResolvePath(in.Path)
 			var old string
 			if data, err := h.DownloadFile(ctx, in.Path); err == nil && utf8.Valid(data) {
 				old = string(data)
@@ -252,7 +260,7 @@ func newEditTool() (tool.BaseTool, error) {
 
 type globArgs struct {
 	Pattern string `json:"pattern" jsonschema:"description=glob pattern, e.g. **/*.go"`
-	Path    string `json:"path,omitempty" jsonschema:"description=search root directory, default /workspace"`
+	Path    string `json:"path,omitempty" jsonschema:"description=search root directory, defaults to this session workspace"`
 }
 
 func newGlobTool() (tool.BaseTool, error) {
@@ -268,10 +276,7 @@ func newGlobTool() (tool.BaseTool, error) {
 				return "", err
 			}
 			meta.SandboxID = sid
-			root := in.Path
-			if root == "" {
-				root = defaultWorkDir
-			}
+			root := tc.ResolvePath(in.Path)
 			infos, err := h.SearchFiles(ctx, root, in.Pattern)
 			if err != nil {
 				return "", fmt.Errorf("glob: %w", err)
@@ -296,7 +301,7 @@ func newGlobTool() (tool.BaseTool, error) {
 
 type grepArgs struct {
 	Pattern    string `json:"pattern" jsonschema:"description=regular expression (ripgrep syntax)"`
-	Path       string `json:"path,omitempty" jsonschema:"description=search root directory, default /workspace"`
+	Path       string `json:"path,omitempty" jsonschema:"description=search root directory, defaults to this session workspace"`
 	Glob       string `json:"glob,omitempty" jsonschema:"description=file name filter, e.g. *.go"`
 	IgnoreCase bool   `json:"ignore_case,omitempty" jsonschema:"description=case-insensitive search, default false"`
 	OutputMode string `json:"output_mode,omitempty" jsonschema:"description=content or files_with_matches, default content"`
@@ -315,10 +320,7 @@ func newGrepTool() (tool.BaseTool, error) {
 				return "", err
 			}
 			meta.SandboxID = sid
-			root := in.Path
-			if root == "" {
-				root = defaultWorkDir
-			}
+			root := tc.ResolvePath(in.Path)
 			bin, cmdStr := "rg", rgCommand(in, root)
 			res, err := h.RunCommand(ctx, cmdStr, "/", nil, 30000, nil)
 			if err != nil {
@@ -369,6 +371,27 @@ func newActivateSkillTool() (tool.BaseTool, error) {
 			}
 			if skill == nil {
 				return "", fmt.Errorf("skill %q not found; use a name from the available skills index", in.Name)
+			}
+			if tc.SkillsDir != "" {
+				h, sid, err := tc.sandboxHandle(ctx)
+				if err != nil {
+					return "", err
+				}
+				meta.SandboxID = sid
+				dir := path.Join(tc.SkillsDir, skill.Name)
+				data, err := h.DownloadFile(ctx, path.Join(dir, "SKILL.md"))
+				if err != nil {
+					return "", err
+				}
+				meta.Truncated = len(data) > skillMaxBytes
+				if meta.Truncated {
+					data = data[:skillMaxBytes]
+				}
+				files, err := h.SearchFiles(ctx, dir, "**/*")
+				if err != nil {
+					return "", err
+				}
+				return marshalResult(map[string]any{"name": skill.Name, "instructions": string(data), "files": files, "dir": dir + "/", "truncated": meta.Truncated})
 			}
 			dir, err := skillDir(tc.DataDir, tc.OrgID, skill.ID)
 			if err != nil {

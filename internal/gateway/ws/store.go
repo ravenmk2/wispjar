@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/ravenmk2/wispjar/internal/computer"
 	"github.com/ravenmk2/wispjar/internal/runtime"
 	"github.com/ravenmk2/wispjar/internal/session"
 	"github.com/ravenmk2/wispjar/internal/store"
@@ -71,6 +72,21 @@ func (s *gormStore) SessionProjections(ctx context.Context, orgID, userID string
 			LastActiveAt: r.LastActiveAt.UnixMilli(),
 			Status:       r.Status,
 		})
+	}
+	return out, nil
+}
+
+// Optional capability keeps transport tests and other Store implementations
+// independent of computer persistence while production always provides it.
+func (s *gormStore) ComputerProjections(ctx context.Context, orgID, userID string) ([]any, error) {
+	rows := []store.Computer{}
+	if err := s.db.WithContext(ctx).Where("org_id=? AND user_id=? AND status<>?", orgID, userID, "deleted").
+		Order("created_at DESC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]any, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, computer.View(row))
 	}
 	return out, nil
 }

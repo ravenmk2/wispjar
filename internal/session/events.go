@@ -58,9 +58,10 @@ type TurnStartData struct {
 }
 
 type TurnEndData struct {
-	Turn   int    `json:"turn"`
-	Reason string `json:"reason"`
-	Error  string `json:"error,omitempty"`
+	Turn      int    `json:"turn"`
+	Reason    string `json:"reason"`
+	Error     string `json:"error,omitempty"`
+	ErrorCode string `json:"error_code,omitempty"`
 }
 
 type StepData struct {
@@ -122,6 +123,8 @@ type ToolCallData struct {
 }
 
 type ToolResultMeta struct {
+	ComputerID string `json:"computer_id,omitempty"`
+	RunID      string `json:"run_id,omitempty"`
 	DurationMS int64  `json:"duration_ms"`
 	Render     string `json:"render"`
 	Truncated  bool   `json:"truncated,omitempty"`

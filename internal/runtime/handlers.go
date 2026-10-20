@@ -24,6 +24,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/runtime/tools"
 	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/session"
+	"github.com/ravenmk2/wispjar/internal/skill"
 	"github.com/ravenmk2/wispjar/internal/store"
 )
 
@@ -40,6 +41,7 @@ type AttachmentResolver interface {
 
 // Handler 承载会话运行时相关 REST 端点（api.md §3）。
 type Handler struct {
+	computers   ComputerService
 	orch        Orchestrator
 	sessions    SessionService
 	events      EventStore
@@ -77,6 +79,12 @@ func (h *Handler) publishCommitted(sessionID string, events []store.SessionEvent
 }
 
 func fail(c *gin.Context, err error) {
+	err = session.ComputerError(err)
+	var ske *skill.Error
+	if errors.As(err, &ske) {
+		respond.Error(c, ske.Status, ske.Code, ske.Message, ske.Details)
+		return
+	}
 	var re *Error
 	if errors.As(err, &re) {
 		respond.Error(c, re.Status, re.Code, re.Message, re.Details)
@@ -400,6 +408,10 @@ func (h *Handler) SandboxFiles(c *gin.Context) {
 		fail(c, err)
 		return
 	}
+	if sess.ComputerID != nil {
+		h.Files(c)
+		return
+	}
 	handle, ok := h.sandboxHandle(c, sess)
 	if !ok {
 		return
@@ -429,6 +441,10 @@ func (h *Handler) SandboxFile(c *gin.Context) {
 	sess, err := h.sessions.Get(c.Request.Context(), auth.UID(c), c.Param("id"))
 	if err != nil {
 		fail(c, err)
+		return
+	}
+	if sess.ComputerID != nil {
+		h.File(c)
 		return
 	}
 	filePath := strings.TrimSpace(c.Query("path"))
@@ -488,7 +504,7 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 	if h.bus != nil {
 		go PublishControlProjection(h.repo, h.bus, sess.ID)
 	}
-	if h.sandbox != nil {
+	if h.sandbox != nil && sess.ComputerID == nil {
 		go func() { _ = h.sandbox.Recycle(sess.ID, "session deleted") }()
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})

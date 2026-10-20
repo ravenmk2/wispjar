@@ -3,6 +3,7 @@ package skill
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -12,6 +13,25 @@ import (
 
 type Handler struct {
 	svc *Service
+}
+
+func (h *Handler) ReplacePackage(c *gin.Context) {
+	revision, err := strconv.ParseUint(c.PostForm("expected_revision"), 10, 64)
+	if err != nil || revision == 0 {
+		fail(c, errInvalid("expected_revision 必须是大于 0 的整数", nil))
+		return
+	}
+	fh, err := c.FormFile("file")
+	if err != nil {
+		fail(c, errInvalid("缺少上传文件（multipart 字段 file）", nil))
+		return
+	}
+	item, err := h.svc.ReplacePackage(c.Request.Context(), auth.UID(c), auth.OrgID(c), c.Param("id"), revision, fh)
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, item)
 }
 
 func NewHandler(svc *Service) *Handler {

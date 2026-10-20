@@ -142,7 +142,7 @@ func (t *questionTool) invoke(ctx context.Context, in askUserQuestionArgs) (stri
 	w := &pendingQuestion{sessionID: t.sess.ID, ch: make(chan questionDelivery, 1)}
 	t.o.registerQuestionWait(callID, w)
 	defer t.o.deregisterQuestionWait(callID, w)
-	if _, err := t.o.commit(context.Background(), t.sess.ID, []session.EventInput{
+	if _, err := t.o.commitRun(context.Background(), t.sess.ID, t.rs, []session.EventInput{
 		{Type: session.EventQuestionAsked, Data: session.QuestionAskedData{
 			Turn: t.rs.turn, Step: t.rs.currentStep(), CallID: callID, Questions: questions,
 		}},
@@ -153,7 +153,7 @@ func (t *questionTool) invoke(ctx context.Context, in askUserQuestionArgs) (stri
 	timer := time.NewTimer(t.o.questionTimeout)
 	defer timer.Stop()
 	answered := func(d questionDelivery) (string, error) {
-		if _, err := t.o.commit(context.Background(), t.sess.ID, []session.EventInput{
+		if _, err := t.o.commitRun(context.Background(), t.sess.ID, t.rs, []session.EventInput{
 			{Type: session.EventQuestionAnswered, Data: session.QuestionAnsweredData{
 				CallID: callID, Answers: d.answers, AnsweredBy: d.by,
 			}},
@@ -181,7 +181,7 @@ func (t *questionTool) invoke(ctx context.Context, in askUserQuestionArgs) (stri
 		// 未答的问题无 question/answered，投影上仍属 continued 可补答。
 		select {
 		case d := <-w.ch:
-			_, _ = t.o.commit(context.Background(), t.sess.ID, []session.EventInput{
+			_, _ = t.o.commitRun(context.Background(), t.sess.ID, t.rs, []session.EventInput{
 				{Type: session.EventQuestionAnswered, Data: session.QuestionAnsweredData{
 					CallID: callID, Answers: d.answers, AnsweredBy: d.by,
 				}},

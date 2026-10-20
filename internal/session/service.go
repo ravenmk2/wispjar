@@ -52,9 +52,11 @@ func errNotFound(msg string) *Error {
 }
 
 type Service struct {
-	db    *gorm.DB
-	agent *agent.Service
-	store *Store
+	db               *gorm.DB
+	agent            *agent.Service
+	store            *Store
+	computers        ComputerBindings
+	computerRequired bool
 
 	// AfterEvents 在 PATCH 附带的事件随事务提交后调用（WS 广播挂钩；生产接线，测试可为 nil）。
 	AfterEvents func(sessionID string, events []Event)
@@ -76,9 +78,10 @@ type AgentRef struct {
 
 type Detail struct {
 	store.Session
-	Agent               AgentRef `json:"agent"`
-	EffortLocked        bool     `json:"effort_locked"`
-	ModelSettingsLocked bool     `json:"model_settings_locked"`
+	Agent               AgentRef         `json:"agent"`
+	EffortLocked        bool             `json:"effort_locked"`
+	ModelSettingsLocked bool             `json:"model_settings_locked"`
+	Computer            *ComputerSummary `json:"computer,omitempty"`
 }
 
 func detailOf(sess *store.Session, started bool) *Detail {
@@ -98,6 +101,7 @@ type CreateInput struct {
 	AgentID         string
 	Title           string
 	ReasoningEffort string
+	ComputerID      string
 }
 
 func (s *Service) Create(ctx context.Context, actorID, orgID string, in CreateInput) (*Detail, error) {
@@ -158,10 +162,18 @@ func (s *Service) Create(ctx context.Context, actorID, orgID string, in CreateIn
 		Status:        StatusActive,
 		LastActiveAt:  time.Now(),
 	}
-	if err := s.db.WithContext(ctx).Create(&sess).Error; err != nil {
+	if err := s.createComputer(ctx, &sess, in.ComputerID); err != nil {
 		return nil, err
 	}
-	return detailOf(&sess, false), nil
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockSessionComputer(tx, &sess); err != nil {
+			return err
+		}
+		return tx.Create(&sess).Error
+	}); err != nil {
+		return nil, err
+	}
+	return s.detail(ctx, &sess, false)
 }
 
 // capabilities 是会话域关心的 model.capabilities 子集（思考强度档位声明、视觉能力）。
@@ -353,7 +365,7 @@ func (s *Service) Get(ctx context.Context, uid, sessionID string) (*Detail, erro
 	if err != nil {
 		return nil, err
 	}
-	return detailOf(sess, started), nil
+	return s.detail(ctx, sess, started)
 }
 
 type UpdateInput struct {
@@ -362,6 +374,7 @@ type UpdateInput struct {
 	Status          *string
 	ModelID         *string
 	ReasoningEffort *string
+	ComputerID      *string
 }
 
 func validateModelSettingsUpdate(sess *store.Session, started bool, in UpdateInput) error {
@@ -380,6 +393,18 @@ func validateModelSettingsUpdate(sess *store.Session, started bool, in UpdateInp
 func (s *Service) Update(ctx context.Context, uid, sessionID string, in UpdateInput) (*Detail, error) {
 	var committed []store.SessionEvent
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if in.ComputerID != nil {
+			// Lifecycle operations lock computer before session. Hold the same
+			// order so a concurrently deleted target cannot become a new binding.
+			var target store.Computer
+			err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ? AND status NOT IN ?", *in.ComputerID, uid, []string{"deleting", "deleted"}).Take(&target).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return &Error{Status: 404, Code: "computer/not_found", Message: "云电脑不存在或无权访问"}
+			}
+			if err != nil {
+				return err
+			}
+		}
 		var sess store.Session
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&sess, "id = ?", sessionID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -430,6 +455,13 @@ func (s *Service) Update(ctx context.Context, uid, sessionID string, in UpdateIn
 func (s *Service) planUpdate(ctx context.Context, uid string, sess *store.Session, in UpdateInput) (map[string]any, []EventInput, error) {
 	updates := map[string]any{}
 	events := []EventInput{}
+	if in.ComputerID != nil {
+		var err error
+		updates, events, err = s.planComputerUpdate(ctx, sess, *in.ComputerID)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	if in.Title != nil {
 		title := strings.TrimSpace(*in.Title)
 		if len(title) > 256 {

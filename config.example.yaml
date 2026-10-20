@@ -25,8 +25,26 @@ crypto:
 
 storage:
   data_dir: "./data"
+  volumes:
+    backend: "docker"
+    backend_id: "local" # 稳定存储域标识；已有卷不可跨域自动迁移
+    namespace: "main"
+    # 必须包含 volume_id；可用 namespace/kind/volume_id/org_id/user_id。
+    # 首次创建后卷名落库固定，修改此配置只影响新卷。
+    name_pattern: "wj-{namespace}-{kind}-{volume_id}"
+    # 部署管理员配置；空值禁用持久卷创建，不回退成临时存储。
+    # Linux 本地 Docker 可使用 unix:///var/run/docker.sock。
+    # Windows 可配置受保护的 Docker HTTP(S) 端点；不支持 named pipe。
+    docker_endpoint: ""
+
+runtime:
+  # 单个主 turn 同时运行的 subagent 上限，范围 1..32。
+  max_parallel_tasks: 4
 
 opensandbox:
+  # 旧 session 沙箱兼容管理器。新独立部署共用 server 时必须设 false，
+  # 避免扫描没有 installation 标签的旧 wispjar=1 实例。
+  legacy_sessions_enabled: true
   lifecycle_url: "http://127.0.0.1:8081"
   api_key: ""
   # true：execd/egress 流量经 opensandbox-server 反代（客户端只需连通 server 端口，

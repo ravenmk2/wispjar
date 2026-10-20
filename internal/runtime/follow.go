@@ -18,6 +18,9 @@ type Snapshot struct {
 }
 
 type SnapshotHeader struct {
+	ComputerID          string        `json:"computerId,omitempty"`
+	ComputerStatus      string        `json:"computerStatus,omitempty"`
+	WorkspaceDir        string        `json:"workspaceDir,omitempty"`
 	ModelSettingsLocked bool          `json:"modelSettingsLocked"`
 	SessionID           string        `json:"sessionId"`
 	Title               string        `json:"title"`
@@ -102,6 +105,15 @@ func (o *orchestrator) Follow(sessionID string, afterSeq int64) (*Snapshot, <-ch
 		},
 		Records: rows,
 		HasMore: hasMore,
+	}
+	if sess.ComputerID != nil {
+		snapshot.Header.ComputerID = *sess.ComputerID
+		snapshot.Header.WorkspaceDir = session.WorkspaceDir(sess.ID)
+		if o.deps.Computers != nil {
+			if computer, err := o.deps.Computers.GetOwned(ctx, sess.OrgID, sess.UserID, *sess.ComputerID); err == nil {
+				snapshot.Header.ComputerStatus = computer.Status
+			}
+		}
 	}
 
 	o.mu.RLock()

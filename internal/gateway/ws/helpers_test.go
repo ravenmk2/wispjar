@@ -28,6 +28,7 @@ type fakeStore struct {
 	members     map[string]bool
 	owned       map[string]bool
 	projections []runtime.ControlSession
+	computers   []any
 	err         error
 }
 
@@ -47,6 +48,10 @@ func (f *fakeStore) OwnsSession(_ context.Context, orgID, userID, sessionID stri
 
 func (f *fakeStore) SessionProjections(_ context.Context, orgID, userID string) ([]runtime.ControlSession, error) {
 	return f.projections, f.err
+}
+
+func (f *fakeStore) ComputerProjections(_ context.Context, orgID, userID string) ([]any, error) {
+	return f.computers, f.err
 }
 
 type decideCall struct {

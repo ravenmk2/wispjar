@@ -31,6 +31,9 @@ func (s *Service) Fork(ctx context.Context, uid, sessionID string, atSeq int64) 
 		return "", err
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockSessionComputer(tx, forked); err != nil {
+			return err
+		}
 		if err := tx.Create(forked).Error; err != nil {
 			return err
 		}
@@ -77,6 +80,10 @@ func planFork(src *store.Session, events []store.SessionEvent, atSeq int64, newI
 		UsageTotal:    usageTotalFromEvents(copied),
 		Status:        StatusActive,
 		LastActiveAt:  now,
+		ComputerID:    src.ComputerID,
+	}
+	if src.ComputerID != nil {
+		forked.Workspace = newWorkspace()
 	}
 	return forked, copied, nil
 }

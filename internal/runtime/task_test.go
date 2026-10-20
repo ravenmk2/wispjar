@@ -448,9 +448,9 @@ func TestTaskUnknownSubAgent(t *testing.T) {
 	}
 }
 
-// ---------- 串行化：同一 turn 两个并发 task 调用排队执行 ----------
+// ---------- 同一 turn 两个 task 并行且结果按调用身份归属 ----------
 
-func TestTaskSerialization(t *testing.T) {
+func TestTaskParallelExecution(t *testing.T) {
 	var mu sync.Mutex
 	inFlight := 0
 	maxInFlight := 0
@@ -489,8 +489,8 @@ func TestTaskSerialization(t *testing.T) {
 	if subCalls != 2 {
 		t.Fatalf("sub model calls = %d, want 2", subCalls)
 	}
-	if maxInFlight != 1 {
-		t.Fatalf("sub runs overlapped (maxInFlight = %d), task mutex not serializing", maxInFlight)
+	if maxInFlight != 2 {
+		t.Fatalf("sub runs did not overlap (maxInFlight = %d)", maxInFlight)
 	}
 	for _, id := range []string{"call_t1", "call_t2"} {
 		tr := taskResultOf(t, env.es, id)
