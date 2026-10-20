@@ -32,6 +32,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { AgentStatusBadge } from "@/features/admin/AgentsPage"
 import { AgentAvatar, AVATAR_ICONS } from "@/features/agents/AgentAvatar"
 import { cn } from "@/lib/utils"
+import { envPatch, envRowsError } from "@/lib/env"
 import {
   SETTING_KEYS,
   type AdminAgentDetail,
@@ -64,16 +65,6 @@ const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
 interface EnvRow {
   key: string
   value: string
-}
-
-function envRowsError(rows: EnvRow[]): string | null {
-  for (const row of rows) {
-    const key = row.key.trim()
-    if (!key) continue
-    if (!ENV_KEY_RE.test(key)) return `环境变量名 ${key} 不合法：以字母或下划线开头，仅含字母、数字、下划线`
-    if (key === "WISPJAR") return "WISPJAR 为平台保留变量名，不可使用"
-  }
-  return null
 }
 
 const TOOL_LABELS: Array<{ key: keyof AgentToolsEnabled; label: string; description: string }> = [
@@ -123,7 +114,7 @@ export default function AgentEditorPage() {
   const [sandboxImages, setSandboxImages] = useState<string[] | null>(null)
   const [defaultResources, setDefaultResources] = useState<ResourceLimits | null>(null)
   const [envRows, setEnvRows] = useState<EnvRow[]>([])
-  const [acting, setActing] = useState<"save" | "publish" | "archive" | null>(null)
+  const [acting, setActing] = useState<"save" | "publish" | "archive" | "env" | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const patch = useCallback((p: Partial<AgentBody>) => {
@@ -192,11 +183,7 @@ export default function AgentEditorPage() {
     if (params.max_tokens !== undefined && params.max_tokens > 0) modelParams.max_tokens = params.max_tokens
     const resources = form.sandbox_config.resources
     const hasResources = resources && ((resources.cpu ?? "") !== "" || (resources.memory ?? "") !== "")
-    const env: Record<string, string> = {}
-    for (const row of envRows) {
-      const key = row.key.trim()
-      if (key) env[key] = row.value
-    }
+    const env = envPatch(envRows, []).set
     return {
       ...form,
       name: form.name.trim(),
@@ -208,6 +195,19 @@ export default function AgentEditorPage() {
         env: Object.keys(env).length > 0 ? env : null,
       },
     }
+  }
+
+  async function saveEnv() {
+    if (!currentOrg || !id || acting) return
+    const error = envRowsError(envRows)
+    if (error) { setSaveError(error); return }
+    setActing("env"); setSaveError(null)
+    try {
+      const variables = envPatch(envRows, Object.keys(form.sandbox_config.env ?? {}))
+      await adminAgentsApi.updateEnv(currentOrg.id, id, variables)
+      patch({ sandbox_config: { ...form.sandbox_config, env: variables.set } })
+      toast.success("环境变量已保存，已有会话下一轮任务生效")
+    } catch (e) { setSaveError(formatApiError(e)) } finally { setActing(null) }
   }
 
   async function save(): Promise<AdminAgentDetail | null> {
@@ -343,6 +343,8 @@ export default function AgentEditorPage() {
                 defaultResources={defaultResources}
                 envRows={envRows}
                 setEnvRows={setEnvRows}
+                saveEnv={isNew ? undefined : () => void saveEnv()}
+                saving={acting !== null}
               />
             )}
           </div>
@@ -765,6 +767,8 @@ function SandboxSection({
   defaultResources,
   envRows,
   setEnvRows,
+  saveEnv,
+  saving,
 }: {
   form: AgentBody
   patch: (p: Partial<AgentBody>) => void
@@ -772,6 +776,8 @@ function SandboxSection({
   defaultResources: ResourceLimits | null
   envRows: EnvRow[]
   setEnvRows: React.Dispatch<React.SetStateAction<EnvRow[]>>
+  saveEnv?: () => void
+  saving: boolean
 }) {
   const resources = form.sandbox_config.resources ?? {}
   const setResources = (r: { cpu?: string; memory?: string }) =>
@@ -876,9 +882,10 @@ function SandboxSection({
               <Plus className="size-3.5" />
               添加变量
             </Button>
+            {saveEnv && <Button variant="outline" size="sm" disabled={saving} onClick={saveEnv}>仅保存环境变量</Button>}
           </div>
           <p className="text-xs text-muted-foreground">
-            创建云电脑时注入，同名变量覆盖平台默认值，修改后重建云电脑生效
+            exec 执行时注入，同名变量覆盖电脑配置。仅保存变量不改变发布状态，已有会话下一轮任务生效，无需重建。
           </p>
         </div>
       </div>

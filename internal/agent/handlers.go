@@ -9,10 +9,24 @@ import (
 
 	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/gateway/respond"
+	"github.com/ravenmk2/wispjar/internal/sandbox"
 )
 
 type Handler struct {
 	svc *Service
+}
+
+func (h *Handler) UpdateEnv(c *gin.Context) {
+	var patch sandbox.EnvPatch
+	if err := c.ShouldBindJSON(&patch); err != nil {
+		fail(c, errInvalid("环境变量参数无效", nil))
+		return
+	}
+	if err := h.svc.PatchEnv(c.Request.Context(), auth.UID(c), auth.OrgID(c), c.Param("id"), patch); err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(200, gin.H{"ok": true})
 }
 
 func NewHandler(svc *Service) *Handler {

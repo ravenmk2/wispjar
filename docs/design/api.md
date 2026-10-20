@@ -230,6 +230,7 @@
 | `PUT /admin/agents/{id}` | 全量更新（仅 draft/archived 可直接改；published 修改自动转 draft 需重新发布——避免线上配置被悄悄改变） |
 | `POST /admin/agents/{id}/publish` | 发布：校验完整性（model 有效、prompt 非空、subagents DAG 合法且均 published） |
 | `POST /admin/agents/{id}/archive` | 下线（进行中的会话不受影响——会话持有快照；新会话不可选） |
+| `PATCH /admin/agents/{id}/env` | `{set:{KEY:value},unset:[KEY]}`；机构管理员独立修改变量，不改变发布状态；已有会话下一轮任务生效 |
 | `DELETE /admin/agents/{id}` | 删除（仅 draft/archived；有会话引用的置 archived 并标记） |
 
 创建/更新 body：
@@ -344,10 +345,11 @@
 | `GET /orgs/{orgId}/computers` | 当前用户在机构内的未删除电脑 |
 | `POST /orgs/{orgId}/computers` | `{name, agent_id?, config?}`；保存逻辑电脑和创建意图，再异步准备三卷及实例 |
 | `GET /computers/{id}` | 安全电脑视图 |
-| `PATCH /computers/{id}` | `{name}`，只改名称；环境变更必须通过 rebuild |
+| `PATCH /computers/{id}` | `{name?, env?:{set:{KEY:value},unset:[KEY]}}`，直接保存名称和变量；至少一项，变量下一轮任务生效 |
+| `GET /computers/{id}/env` | 仅本人可读，返回 `{keys:[KEY]}`，不返回变量值 |
 | `POST /computers/{id}/start` | 无需 body；running 幂等完成，paused 恢复；确认实例丢失且无活动运行时以新 generation 重建 |
 | `POST /computers/{id}/pause` | 无需 body；活动任务、后台任务或维护占用返回 409 `computer/busy` |
-| `POST /computers/{id}/rebuild` | 可空 body 或 `{config?}`；空闲时替换实例、增加 generation，保留三卷 |
+| `POST /computers/{id}/rebuild` | 可空 body 或 `{config?,env?:{set:{KEY:value},unset:[KEY]}}`；空闲时替换实例、增加 generation，保留三卷 |
 | `POST /computers/{id}/recover` | 必需 `{confirm_stop_all:true}`；显式强制终止该电脑所有任务与维护并停止实例，保留三卷及会话／默认绑定，202 异步操作 |
 | `DELETE /computers/{id}` | 有活动任务返回 `computer/busy`；存在未删除会话或 Agent 默认绑定返回 `computer/in_use`；成功仅删除电脑 |
 | `GET /computers/{id}/runs` | 非终态任务及维护占用，租约过期不隐藏记录 |
@@ -368,11 +370,11 @@
 }
 ```
 
-- 创建时优先级：显式配置 → 可选 Agent 模板 → 平台默认。env 按键合并；resources 显式提供时整体替换。
-- 镜像必须是平台默认或 `sandbox.images` 中启用的镜像。resources 仅支持 cpu、memory 的正数资源量；env 沿用沙箱变量校验（最多 64 项，每值最多 4096 字节，保留 WISPJAR 键）。TTL 为 60–604800 秒，表示底层续租时长，不是数据保留期。
+- 创建镜像与资源优先级：显式配置 → 可选 Agent 模板 → 平台默认。电脑 env 只合并平台默认与显式 config.env，不复制 Agent env；resources 显式提供时整体替换。
+- 镜像必须是平台默认或 `sandbox.images` 中启用的镜像。resources 仅支持 cpu、memory 的正数资源量；env 沿用下述任务变量校验。TTL 为 60–604800 秒，表示底层续租时长，不是数据保留期。
 - `network_policy` 由平台 egress 设置决定，普通用户请求中出现该字段会被拒绝；不得通过电脑配置绕过统一出口策略。
-- rebuild 的 config 在已有配置上合并，并在新实例创建时生效；不提供在线修改运行实例的全局环境。
-- env 保存在电脑配置中，但仅注入非 root 任务进程，不传入容器级 root execd/维护环境。EXECD_* 是平台保留变量。电脑强制启用 execd 认证；旧实例缺少安全策略标记时返回 `computer/rebuild_required`，需要显式重建后运行。
+- rebuild 的 config 在已有配置上合并，并在新实例创建时生效；变量通过顶层 env 补丁修改，不接受 config.env。补丁与新配置在同一意图事务保存，保留并发编辑过的最新变量。单独 PATCH env 无需重建，运行中的任务保留本轮值；生命周期转换期间修改变量返回 computer/busy。
+- env 保存在电脑配置中，但仅注入非 root 任务进程，不传入容器级 root execd/维护环境。WISPJAR、HOME、EXECD_* 为保留变量，值拒绝 NUL。每层及合并后的用户变量最多 64 项，每值最多 4096 字节。exec 按电脑 → 当前 Agent → 单次 env 覆盖，最后注入 WISPJAR=1；HOME 固定 /tmp。电脑强制启用 execd 认证。
 - 响应 config 仅包含 image、resources、ttl_seconds、has_env，不回传 env 值、网络策略、后端地址或卷物理名。
 
 恢复操作用于服务重启、连接中断后遗留占用，也允许用户明确终止健康任务。进入 `recovering` 后拒绝新运行、文件维护、启动和普通生命周期操作。只有按 installation/电脑/generation 校验归属并删除旧实例、再次查询确认不存在后，才终结相关运行并释放技能使用权；随后恢复匹配的技能同步与会话运行状态，最后推进 generation、进入 `stopped`。不会重放中断命令，也不会新建或删除持久卷。删除响应丢失、查询失败或归属不符时维持 `recovering` 与 operation `running`，返回安全的 `error` 说明并由后台重试；未取得停止证明前不释放运行与技能占用。相同幂等键返回原操作，完成后重复请求不再次终止电脑。

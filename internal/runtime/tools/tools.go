@@ -16,6 +16,7 @@ import (
 	"github.com/cloudwego/eino/components/tool/utils"
 
 	"github.com/ravenmk2/wispjar/internal/agent"
+	"github.com/ravenmk2/wispjar/internal/sandbox"
 )
 
 var errSandboxUnavailable = errors.New("execution environment unavailable; please retry once")
@@ -59,13 +60,11 @@ func newExecTool() (tool.BaseTool, error) {
 			if timeout > 600000 {
 				timeout = 600000
 			}
-			env := make(map[string]string, len(tc.Env)+len(in.Env))
-			for k, v := range tc.Env {
-				env[k] = v
+			env := sandbox.MergeEnv(tc.ComputerEnv, tc.Env, in.Env)
+			if err := sandbox.ValidateEnv(env); err != nil {
+				return execErrorResult(err)
 			}
-			for k, v := range in.Env {
-				env[k] = v
-			}
+			env["WISPJAR"] = "1"
 			res, err := h.RunCommand(ctx, in.Command, cwd, env, timeout,
 				func(stream, chunk string) { tc.publish(ctx, stream, chunk) })
 			if err != nil {

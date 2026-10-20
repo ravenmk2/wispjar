@@ -141,6 +141,7 @@ func main() {
 		legacyManager = sandboxSvc
 	}
 	orch := runtime.NewOrchestrator(runtime.Deps{
+		AgentEnvs:        agentSvc.LoadEnvs,
 		MaxParallelTasks: cfg.Runtime.MaxParallelTasks,
 		Computers:        computerSvc,
 		Skills:           skillCoordinator,

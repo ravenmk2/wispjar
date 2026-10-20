@@ -163,6 +163,7 @@ func (s *Service) resolvedConfig(ctx context.Context, org, agent string, explici
 		if err != nil {
 			return c, err
 		}
+		tmpl.Env = nil // Agent variables belong to exec, not the computer template.
 		c = mergeConfig(c, tmpl)
 	}
 	c = mergeConfig(c, explicit)
@@ -262,6 +263,9 @@ func (s *Service) Action(ctx context.Context, org, user, computer, action, key s
 		}
 	}
 	if action == "rebuild" && input.Config != nil {
+		if input.Config.Env != nil {
+			return op, fmt.Errorf("%w: use the env patch to edit variables", ErrInvalid)
+		}
 		if len(input.Config.NetworkPolicy) > 0 {
 			return op, fmt.Errorf("%w: network policy is platform managed", ErrInvalid)
 		}
@@ -285,6 +289,14 @@ func (s *Service) Action(ctx context.Context, org, user, computer, action, key s
 			return op, err
 		}
 		input.Config = &merged
+		input.Config.Env = nil // Read the current env under the intent's row lock.
+	}
+	if action == "rebuild" {
+		if input.Env != nil {
+			if _, err := input.Env.Apply(nil); err != nil {
+				return op, fmt.Errorf("%w: %v", ErrInvalid, err)
+			}
+		}
 		op.Progress, _ = json.Marshal(input)
 	}
 	op, err = s.repo.Intent(ctx, nil, op)
@@ -294,15 +306,18 @@ func (s *Service) Action(ctx context.Context, org, user, computer, action, key s
 	}
 	return op, err
 }
-func (s *Service) Rename(ctx context.Context, org, user, computer, name string) error {
-	if strings.TrimSpace(name) == "" || len([]rune(name)) > 128 {
+func (s *Service) Patch(ctx context.Context, org, user, computer string, in PatchInput) error {
+	if in.Name == nil && in.Env == nil {
+		return ErrInvalid
+	}
+	if in.Name != nil && (strings.TrimSpace(*in.Name) == "" || len([]rune(*in.Name)) > 128) {
 		return ErrInvalid
 	}
 	c, err := s.GetOwned(ctx, org, user, computer)
 	if err != nil {
 		return err
 	}
-	if err := s.repo.Rename(ctx, c.ID, c.OrgID, user, name); err != nil {
+	if err := s.repo.Patch(ctx, c.ID, c.OrgID, user, in); err != nil {
 		return err
 	}
 	s.changed(ctx, c.ID)

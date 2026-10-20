@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -11,6 +12,32 @@ func TestValidateEnvOK(t *testing.T) {
 	}
 	if err := ValidateEnv(map[string]string{"FOO_BAR": "v", "_X": "", "a1": "2"}); err != nil {
 		t.Fatalf("valid env must pass: %v", err)
+	}
+}
+
+func TestEnvPatchPreservesSecretsAndDeletesKeys(t *testing.T) {
+	base := map[string]string{"SECRET": "keep", "REMOVE": "old", "EMPTY": "old"}
+	got, err := (EnvPatch{Set: map[string]string{"EMPTY": "", "NEW": "new"}, Unset: []string{"REMOVE"}}).Apply(base)
+	want := map[string]string{"SECRET": "keep", "EMPTY": "", "NEW": "new"}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("patch: %v %v", got, err)
+	}
+	if base["REMOVE"] != "old" || base["EMPTY"] != "old" {
+		t.Fatal("mutated original env")
+	}
+	if _, err := (EnvPatch{Set: map[string]string{"A": "a"}, Unset: []string{"A"}}).Apply(nil); err == nil {
+		t.Fatal("ambiguous patch accepted")
+	}
+}
+
+func TestTaskEnvValidation(t *testing.T) {
+	for _, key := range []string{"HOME", "WISPJAR", "EXECD_ACCESS_TOKEN", "execd_test"} {
+		if err := ValidateEnv(map[string]string{key: "x"}); err == nil {
+			t.Fatalf("accepted reserved key %s", key)
+		}
+	}
+	if err := ValidateEnv(map[string]string{"A": "a\x00b"}); err == nil {
+		t.Fatal("accepted NUL")
 	}
 }
 

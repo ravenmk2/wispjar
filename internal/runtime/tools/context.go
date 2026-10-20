@@ -94,8 +94,9 @@ type Context struct {
 	Sandbox   SandboxProvider
 	Image     string
 	Resources map[string]string
-	// Env 智能体级沙箱环境变量（agent.sandbox_config.env），创建沙箱时注入。
-	Env map[string]string
+	// Env belongs to this Agent; ComputerEnv is the shared task baseline.
+	ComputerEnv map[string]string
+	Env         map[string]string
 
 	DataDir string
 	Skills  []agent.SnapshotSkill
@@ -196,7 +197,8 @@ func (c *Context) Fork(agentID, runID string, skills []agent.SnapshotSkill) *Con
 	child.ComputerID, child.Generation = c.ComputerID, c.Generation
 	child.RunID, child.ParentRunID = runID, c.RunID
 	child.WorkDir, child.DataDir = c.WorkDir, c.DataDir
-	child.Sandbox, child.Image, child.Resources, child.Env = c.Sandbox, c.Image, c.Resources, c.Env
+	child.Sandbox, child.Image, child.Resources = c.Sandbox, c.Image, c.Resources
+	child.ComputerEnv = sandbox.MergeEnv(c.ComputerEnv)
 	child.Skills, child.Images = skills, c.Images
 	child.BoundHandle, child.BoundSandboxID = c.BoundHandle, c.BoundSandboxID
 	child.PublishToolOutput, child.OnSkillUploadFailed = c.PublishToolOutput, c.OnSkillUploadFailed

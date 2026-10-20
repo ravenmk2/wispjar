@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ravenmk2/wispjar/internal/agent"
 	"github.com/ravenmk2/wispjar/internal/id"
+	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/store"
 )
 
@@ -32,6 +34,9 @@ func TestRepositoryConcurrencyIntegration(t *testing.T) {
 	org, user := id.New(), id.New()
 	providerID, modelID, agentID := id.New(), id.New(), id.New()
 	t.Cleanup(func() {
+		if err := db.Where("org_id=?", org).Delete(&store.AuditLog{}).Error; err != nil {
+			t.Error(err)
+		}
 		for _, row := range []struct {
 			model any
 			key   string
@@ -65,6 +70,65 @@ func TestRepositoryConcurrencyIntegration(t *testing.T) {
 		}
 	}
 	repo := NewGORMRepository(db)
+	// Runtime variables update independently of Agent publication and computer generation.
+	agentSvc := agent.NewService(db)
+	if err := agentSvc.PatchEnv(ctx, user, org, agentID, sandbox.EnvPatch{Set: map[string]string{"AGENT_TOKEN": "fixture"}}); err != nil {
+		t.Fatal(err)
+	}
+	envs, err := agentSvc.LoadEnvs(ctx, org, []string{agentID})
+	if err != nil || envs[agentID]["AGENT_TOKEN"] != "fixture" {
+		t.Fatalf("agent env: %v %v", envs, err)
+	}
+	var savedAgent store.Agent
+	svc := NewService(repo, memoryVolumes{}, &memoryBackend{}, "test", "test", nil)
+	template, err := svc.resolvedConfig(ctx, org, agentID, Config{Env: map[string]string{"COMPUTER": "computer"}})
+	if err != nil || template.Env["AGENT_TOKEN"] != "" || template.Env["COMPUTER"] != "computer" {
+		t.Fatal("Agent environment copied into computer")
+	}
+	if err := db.First(&savedAgent, "id=?", agentID).Error; err != nil || savedAgent.Status != "published" {
+		t.Fatal("env edit changed publication status")
+	}
+	if _, err := agentSvc.LoadEnvs(ctx, "another-org", []string{agentID}); err == nil {
+		t.Fatal("cross-org environment read")
+	}
+	if err := agentSvc.PatchEnv(ctx, user, org, agentID, sandbox.EnvPatch{Unset: []string{"AGENT_TOKEN"}}); err != nil {
+		t.Fatal(err)
+	}
+	envs, err = agentSvc.LoadEnvs(ctx, org, []string{agentID})
+	if err != nil || len(envs[agentID]) != 0 {
+		t.Fatal("agent env deletion failed")
+	}
+	envComputerID := id.New()
+	computer := store.Computer{ID: envComputerID, OrgID: org, UserID: user, Name: "env-test", BackendID: "test", Generation: 4, Status: "running", Config: json.RawMessage(`{"image":"python:3.12","ttl_seconds":3600,"env":{"SECRET":"keep","OLD":"remove"}}`)}
+	if err := db.Create(&computer).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Patch(ctx, envComputerID, org, user, PatchInput{Env: &sandbox.EnvPatch{Set: map[string]string{"NEW": "new"}, Unset: []string{"OLD"}}}); err != nil {
+		t.Fatal(err)
+	}
+	savedComputer, err := repo.Get(ctx, envComputerID)
+	var savedConfig Config
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(savedComputer.Config, &savedConfig); err != nil {
+		t.Fatal(err)
+	}
+	if savedComputer.Generation != 4 || savedComputer.Status != "running" || savedConfig.Env["SECRET"] != "keep" || savedConfig.Env["NEW"] != "new" || len(savedConfig.Env) != 2 {
+		t.Fatal("online computer environment patch failed")
+	}
+	if err := repo.Patch(ctx, envComputerID, org, "other", PatchInput{Env: &sandbox.EnvPatch{}}); !errors.Is(err, ErrNotFound) {
+		t.Fatal("cross-user env write")
+	}
+	if err := db.Model(&computer).Update("status", "rebuilding").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Patch(ctx, envComputerID, org, user, PatchInput{Env: &sandbox.EnvPatch{}}); !errors.Is(err, ErrBusy) {
+		t.Fatal("env write during rebuild")
+	}
+	if err := db.Delete(&computer).Error; err != nil {
+		t.Fatal(err)
+	}
 	key := id.New()
 	ops := make(chan store.ResourceOperation, 8)
 	var wg sync.WaitGroup

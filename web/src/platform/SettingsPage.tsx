@@ -306,7 +306,7 @@ export default function SettingsPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">环境变量</CardTitle>
             <CardDescription>
-              创建云电脑时注入的环境变量（sandbox.env）；智能体可配置同名变量覆盖，修改后需重建云电脑生效
+              新建云电脑的默认环境变量（sandbox.env）。已有电脑可在「我的云电脑」中编辑；智能体变量在 exec 时覆盖同名值。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-1.5">

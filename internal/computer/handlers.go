@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ravenmk2/wispjar/internal/auth"
@@ -118,11 +119,30 @@ func (h *Handler) Patch(c *gin.Context) {
 		fail(c, ErrInvalid)
 		return
 	}
-	if err := h.svc.Rename(c.Request.Context(), "", auth.UID(c), c.Param("id"), in.Name); err != nil {
+	if err := h.svc.Patch(c.Request.Context(), "", auth.UID(c), c.Param("id"), in); err != nil {
 		fail(c, err)
 		return
 	}
 	h.Get(c)
+}
+
+func (h *Handler) Env(c *gin.Context) {
+	row, err := h.svc.GetOwned(c.Request.Context(), "", auth.UID(c), c.Param("id"))
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	var config Config
+	if err := json.Unmarshal(row.Config, &config); err != nil {
+		fail(c, err)
+		return
+	}
+	keys := make([]string, 0, len(config.Env))
+	for key := range config.Env {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	c.JSON(200, gin.H{"keys": keys})
 }
 func (h *Handler) Action(action string) gin.HandlerFunc {
 	return func(c *gin.Context) {

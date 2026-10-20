@@ -9,6 +9,7 @@ import { computersApi } from "@/api/computers"
 import { ApiError, errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
 import { adminSkillsApi } from "@/api/skills"
+import { adminAgentsApi } from "@/api/agents"
 import { useIdentityStore } from "@/stores/identity"
 
 const fixture = (id = "computer", org = "org", status = "running"): Computer => ({
@@ -17,6 +18,24 @@ const fixture = (id = "computer", org = "org", status = "running"): Computer => 
 })
 const originalFetch = globalThis.fetch
 const originalWindow = globalThis.window
+
+test("variable edits use direct PATCH, while rebuild carries the same patch atomically", async () => {
+  const patch = { set: { NEW: "fixture" }, unset: ["OLD"] }
+  const requests: Array<{ url: string; method: string | undefined; body: unknown }> = []
+  intercept((url, init) => {
+    requests.push({ url, method: init.method, body: init.body ? JSON.parse(String(init.body)) : undefined })
+    return Response.json(url.endsWith("/env") && !init.body ? { keys: ["SECRET"] } : {})
+  })
+  assert.deepEqual(await computersApi.env("computer"), { keys: ["SECRET"] })
+  await computersApi.patch("computer", { env: patch })
+  await computersApi.action("computer", "rebuild", "key", { image: "python:3.12" }, patch)
+  await adminAgentsApi.updateEnv("org", "agent", patch)
+  assert.equal(requests[1].method, "PATCH")
+  assert.deepEqual(requests[1].body, { env: patch })
+  assert.deepEqual(requests[2].body, { config: { image: "python:3.12" }, env: patch })
+  assert.ok(requests[3].url.endsWith("/orgs/org/admin/agents/agent/env"))
+  assert.deepEqual(requests[3].body, patch)
+})
 
 test("computer failures show the cause, remedy and a traceable operation", () => {
   const computer = { ...fixture("computer", "org", "failed"), last_error: "实例不存在", error_detail: {

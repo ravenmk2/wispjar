@@ -71,14 +71,6 @@ func validateConfig(c Config) error {
 	if err := sandbox.ValidateEnv(c.Env); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
-	for k, v := range c.Env {
-		if strings.HasPrefix(strings.ToUpper(k), "EXECD_") {
-			return fmt.Errorf("%w: execution daemon variables are platform managed", ErrInvalid)
-		}
-		if k == "" || strings.ContainsAny(k, "=\x00") || strings.ContainsRune(v, 0) {
-			return ErrInvalid
-		}
-	}
 	for key, value := range c.Resources {
 		if key != "cpu" && key != "memory" {
 			return fmt.Errorf("%w: unsupported resource", ErrInvalid)
@@ -103,10 +95,12 @@ type CreateInput struct {
 	Config  Config `json:"config"`
 }
 type PatchInput struct {
-	Name string `json:"name"`
+	Name *string           `json:"name,omitempty"`
+	Env  *sandbox.EnvPatch `json:"env,omitempty"`
 }
 type RebuildInput struct {
-	Config *Config `json:"config,omitempty"`
+	Config *Config           `json:"config,omitempty"`
+	Env    *sandbox.EnvPatch `json:"env,omitempty"`
 }
 type RecoverInput struct {
 	ConfirmStopAll bool `json:"confirm_stop_all"`

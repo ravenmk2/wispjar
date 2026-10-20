@@ -150,7 +150,7 @@ CREATE TABLE agent (
   model_params   JSON          NULL,                    -- 覆盖 model.default_params
   max_iterations INT           NOT NULL DEFAULT 20,
   tools_enabled  JSON          NOT NULL,                -- {"exec":true,"read":true,"write":true,"edit":true,"glob":true,"grep":true,"read_media":true}
-  sandbox_config JSON          NULL,                    -- {"image":"","resources":{"cpu":"2","memory":"2Gi"},"env":{"KEY":"value"}}；空/缺省=平台默认；env 逐键覆盖平台 sandbox.env
+  sandbox_config JSON          NULL,                    -- {"image":"","resources":{"cpu":"2","memory":"2Gi"},"env":{"KEY":"value"}}；image/resources 为电脑模板；env 每轮读取，exec 时覆盖电脑变量
   status         VARCHAR(16)   NOT NULL DEFAULT 'draft',-- draft / published / archived
   created_by     CHAR(32)      NOT NULL,
   created_at     DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

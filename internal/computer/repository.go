@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/store"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -30,7 +32,7 @@ type Repository interface {
 	Runs(context.Context, string) ([]store.ComputerRun, error)
 	RegisterRun(context.Context, store.ComputerRun, uint64) error
 	FinishRun(context.Context, string, string, string) error
-	Rename(context.Context, string, string, string, string) error
+	Patch(context.Context, string, string, string, PatchInput) error
 }
 
 type GORMRepository struct{ db *gorm.DB }
@@ -155,7 +157,25 @@ func planIntent(c *store.Computer, op *store.ResourceOperation, busy, inUse bool
 		var req RebuildInput
 		_ = json.Unmarshal(op.Progress, &req)
 		if req.Config != nil {
+			var current Config
+			if err := json.Unmarshal(c.Config, &current); err != nil {
+				return err
+			}
+			req.Config.Env = current.Env
+			if req.Env != nil {
+				var err error
+				req.Config.Env, err = req.Env.Apply(current.Env)
+				if err != nil {
+					return fmt.Errorf("%w: %v", ErrInvalid, err)
+				}
+			}
 			c.Config, _ = json.Marshal(req.Config)
+		} else if req.Env != nil {
+			var err error
+			c.Config, err = patchComputerEnv(c.Config, *req.Env)
+			if err != nil {
+				return err
+			}
 		}
 	case "computer/pause":
 		c.Status = "pausing"
@@ -442,6 +462,43 @@ func (r *GORMRepository) FinishRun(ctx context.Context, runID, user, status stri
 		return tx.Model(&c).Update("last_active_at", time.Now()).Error
 	})
 }
-func (r *GORMRepository) Rename(ctx context.Context, id, org, user, name string) error {
-	return r.db.WithContext(ctx).Model(&store.Computer{}).Where("id=? AND org_id=? AND user_id=? AND status<>?", id, org, user, "deleted").Update("name", name).Error
+func patchComputerEnv(raw json.RawMessage, patch sandbox.EnvPatch) (json.RawMessage, error) {
+	var config Config
+	if err := json.Unmarshal(raw, &config); err != nil {
+		return nil, err
+	}
+	var err error
+	config.Env, err = patch.Apply(config.Env)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
+	}
+	return json.Marshal(config)
+}
+
+func (r *GORMRepository) Patch(ctx context.Context, id, org, user string, in PatchInput) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var c store.Computer
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id=? AND org_id=? AND user_id=? AND status<>?", id, org, user, "deleted").Take(&c).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrNotFound
+			}
+			return err
+		}
+		updates := map[string]any{}
+		if in.Name != nil {
+			updates["name"] = strings.TrimSpace(*in.Name)
+		}
+		if in.Env != nil {
+			switch c.Status {
+			case "starting", "pausing", "rebuilding", "deleting", "recovering":
+				return ErrBusy
+			}
+			raw, err := patchComputerEnv(c.Config, *in.Env)
+			if err != nil {
+				return err
+			}
+			updates["config"] = raw
+		}
+		return tx.Model(&c).Updates(updates).Error
+	})
 }

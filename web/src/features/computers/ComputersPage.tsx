@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useOrgAgents } from "@/features/agents/AgentPicker"
 import { canMutateComputer, computerOperationError, computerStatus, computerTransitioning, selectableComputer, type AgentBinding, type Computer, type ComputerConfig, type ComputerRun, type OperationAccepted, type UserVolume } from "@/lib/computers"
 import { ComputerFailure } from "./ComputerFailure"
+import { EnvEditor } from "@/components/EnvEditor"
+import { envPatch, envRowsError, type EnvRow } from "@/lib/env"
 import { uuid } from "@/lib/utils"
 import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 import { useComputerStore } from "@/stores/computers"
@@ -124,7 +126,7 @@ export default function ComputersPage() {
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" disabled={busy || pending || computerTransitioning(c.status) || c.status === "running"} onClick={() => void act(c, "start")}>启动</Button>
             <Button size="sm" variant="outline" disabled={busy || !mutable || c.status !== "running"} onClick={() => void act(c, "pause")}>暂停</Button>
-            <Button size="sm" variant="outline" disabled={busy || !mutable} onClick={() => setEditor(c)}>编辑 / 重建</Button>
+            <Button size="sm" variant="outline" disabled={busy || pending || computerTransitioning(c.status)} onClick={() => setEditor(c)}>编辑 / 重建</Button>
             <Button size="sm" variant="ghost" className="text-destructive" disabled={busy || !mutable} onClick={() => { deleteKey.current = uuid(); setDeleting(c) }}>删除</Button>
             <Button size="sm" variant="ghost" className="text-destructive" disabled={busy || pending || computerTransitioning(c.status)} onClick={() => { recoverKey.current = uuid(); setRecovering(c) }}>终止任务并恢复</Button>
           </div>
@@ -166,9 +168,21 @@ function ComputerEditor({ orgId, computer, onClose, onSaved, onRenamed }: { orgI
   const [cpu, setCPU] = useState(computer?.config.resources?.cpu ?? "")
   const [memory, setMemory] = useState(computer?.config.resources?.memory ?? "")
   const [agent, setAgent] = useState("")
+  const [envRows, setEnvRows] = useState<EnvRow[]>([])
+  const [envKeys, setEnvKeys] = useState<string[]>([])
+  const [envLoaded, setEnvLoaded] = useState(!computer)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const key = useRef(uuid())
+  useEffect(() => {
+    if (!computer) return
+    let active = true
+    computersApi.env(computer.id).then(({ keys }) => {
+      if (active) { setEnvKeys(keys); setEnvRows(keys.map((key) => ({ key }))); setEnvLoaded(true) }
+    }).catch((e) => { if (active) setError(errorMessage(e)) })
+    return () => { active = false }
+  }, [computer?.id])
+  const rebuild = !!computer && (image.trim() !== computer.config.image || cpu.trim() !== (computer.config.resources?.cpu ?? "") || memory.trim() !== (computer.config.resources?.memory ?? ""))
   async function renameOnly() {
     if (!computer || !name.trim()) return
     setBusy(true); setError("")
@@ -177,28 +191,36 @@ function ComputerEditor({ orgId, computer, onClose, onSaved, onRenamed }: { orgI
   }
   async function submit() {
     if (!name.trim()) { setError("请输入电脑名称"); return }
+    const envError = envRowsError(envRows)
+    if (envError) { setError(envError); return }
+    const variables = envPatch(envRows, envKeys)
     const config: ComputerConfig = {}
     if (image.trim()) config.image = image.trim()
     if (cpu.trim() || memory.trim()) config.resources = { ...(cpu.trim() ? { cpu: cpu.trim() } : {}), ...(memory.trim() ? { memory: memory.trim() } : {}) }
     setBusy(true); setError("")
     try {
+      if (computer && !rebuild) {
+        await computersApi.patch(computer.id, { name: name.trim(), env: variables })
+        onRenamed(); toast.success("已保存，环境变量从下一轮任务生效"); onClose(); return
+      }
       if (computer && name !== computer.name) await computersApi.rename(computer.id, name.trim())
       const op = computer
-        ? await computersApi.action(computer.id, "rebuild", key.current, config)
-        : await computersApi.create(orgId, { name: name.trim(), agent_id: agent || undefined, config }, key.current)
+        ? await computersApi.action(computer.id, "rebuild", key.current, config, variables)
+        : await computersApi.create(orgId, { name: name.trim(), agent_id: agent || undefined, config: { ...config, env: variables.set } }, key.current)
       onSaved(op); onClose()
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   function changed(fn: () => void) { fn(); key.current = uuid() }
-  return <Dialog open onOpenChange={(open) => !open && !busy && onClose()}><DialogContent>
-    <DialogHeader><DialogTitle>{computer ? "编辑并重建电脑" : "创建云电脑"}</DialogTitle><DialogDescription>{computer ? "修改将在新实例中生效。三类持久存储保留，系统目录和临时安装将重置。" : "未填写的环境选项使用智能体模板或平台默认配置。"}</DialogDescription></DialogHeader>
+  return <Dialog open onOpenChange={(open) => !open && !busy && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto">
+    <DialogHeader><DialogTitle>{computer ? "编辑云电脑" : "创建云电脑"}</DialogTitle><DialogDescription>{computer ? "名称和变量可直接保存；修改镜像或资源需要空闲后重建，三类持久存储保留。" : "镜像和资源可使用智能体模板；环境变量以平台默认值为基础。"}</DialogDescription></DialogHeader>
     <div className="space-y-3">
       <div><Label htmlFor="computer-name">名称</Label><Input id="computer-name" maxLength={128} value={name} onChange={(e) => changed(() => setName(e.target.value))} /></div>
       {!computer && <div><Label htmlFor="computer-template">环境模板</Label><select id="computer-template" className={selectClass} value={agent} onChange={(e) => changed(() => setAgent(e.target.value))}><option value="">平台默认</option>{agents?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>}
       <div><Label htmlFor="computer-image">镜像（平台已启用）</Label><Input id="computer-image" value={image} placeholder="使用默认镜像" onChange={(e) => changed(() => setImage(e.target.value))} /></div>
       <div className="grid grid-cols-2 gap-3"><div><Label htmlFor="computer-cpu">CPU</Label><Input id="computer-cpu" value={cpu} placeholder="默认" onChange={(e) => changed(() => setCPU(e.target.value))} /></div><div><Label htmlFor="computer-memory">内存</Label><Input id="computer-memory" value={memory} placeholder="默认，例如 1Gi" onChange={(e) => changed(() => setMemory(e.target.value))} /></div></div>
+      <div className="space-y-2"><Label>电脑环境变量</Label><EnvEditor rows={envRows} savedKeys={envKeys} disabled={busy || !envLoaded} onChange={(rows) => changed(() => setEnvRows(rows))} /><p className="text-xs text-muted-foreground">下一轮任务生效。同名变量可由智能体和单次命令覆盖。</p></div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={onClose}>取消</Button>{computer && <Button variant="outline" disabled={busy || !name.trim() || name === computer.name} onClick={() => void renameOnly()}>仅保存名称</Button>}<Button disabled={busy || !name.trim()} onClick={() => void submit()}>{busy ? "正在提交…" : computer ? "保存并重建" : "创建"}</Button></div>
+      <div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={onClose}>取消</Button>{computer && <Button variant="outline" disabled={busy || !name.trim() || name === computer.name} onClick={() => void renameOnly()}>仅保存名称</Button>}<Button disabled={busy || !envLoaded || !name.trim()} onClick={() => void submit()}>{busy ? "正在提交…" : computer ? rebuild ? "保存并重建" : "保存" : "创建"}</Button></div>
     </div>
   </DialogContent></Dialog>
 }

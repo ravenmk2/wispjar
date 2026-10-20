@@ -33,6 +33,7 @@ type AttachmentReader interface {
 }
 
 type Deps struct {
+	AgentEnvs        func(context.Context, string, []string) (map[string]map[string]string, error)
 	Computers        ComputerService
 	Skills           SkillCoordinator
 	MaxParallelTasks int
@@ -225,6 +226,9 @@ func (o *orchestrator) prepare(ctx context.Context, sessionID string, rs *runSta
 	}
 	rs.turn = turn
 	rs.checkpointID = id.New()
+	if err := o.refreshAgentEnvs(ctx, sess.OrgID, &snap); err != nil {
+		return err
+	}
 	rs.toolCtx = o.buildToolContext(sess, &snap)
 	parallel := o.deps.MaxParallelTasks
 	if parallel <= 0 {

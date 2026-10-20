@@ -84,6 +84,10 @@ func TestExecutionSupervisorIntegration(t *testing.T) {
 	t.Setenv("EXECD_ACCESS_TOKEN", "must-not-reach-user")
 	raw := processHandle{}
 	h := NewExecutionHandle(raw)
+	variables, err := h.RunCommand(context.Background(), `test "$(id -u)" = 65532; test -z "$EXECD_ACCESS_TOKEN"; test "$WISPJAR" = 1; printf '%s' "$TASK_ENV"`, directory, map[string]string{"TASK_ENV": "task-value", "WISPJAR": "1"}, 1000, nil)
+	if err != nil || variables.ExitCode != 0 || variables.Stdout != "task-value" {
+		t.Fatalf("task environment: %+v %v", variables, err)
+	}
 	result, err := h.RunCommand(context.Background(), "id -u; test -z \"$EXECD_ACCESS_TOKEN\"; grep NoNewPrivs /proc/self/status", directory, nil, 1000, nil)
 	if err != nil || result.ExitCode != 0 || !strings.Contains(result.Stdout, "65532") || !strings.Contains(result.Stdout, "NoNewPrivs:\t1") {
 		t.Fatalf("identity: %+v %v", result, err)

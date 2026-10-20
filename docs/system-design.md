@@ -53,7 +53,7 @@ Wispjar 是一个多租户智能体平台：
 | 16 | 沙箱接入 | OpenSandbox 官方 Go SDK（lifecycle REST + execd API） |
 | 17 | 缓存命中优先 | 模型上下文缓存按输入前缀命中，system/历史前缀稳定优先于一切动态内容注入；原则清单与评审基线见 runtime.md §12《缓存命中优先设计原则》 |
 | 18 | 用户持久卷 | `(org,user)` 三卷共享于其所有电脑，重要程度 storage > agents > sessions；卷名由部署 YAML 模板生成后落库固定，电脑删除不删卷 |
-| 19 | 工作区与技能 | `/sessions/<sid>` 为 cwd，默认 inputs/outputs；Agent skills 单版本、任务边界更新，技能为会话快照的动态例外 |
+| 19 | 工作区与技能 | `/sessions/<sid>` 为 cwd，默认 inputs/outputs；Agent skills 单版本、任务边界更新，技能与 Agent env 为会话快照的动态例外；exec 变量按电脑 → 当前 Agent → 单次命令覆盖 |
 
 ## 3. 术语
 

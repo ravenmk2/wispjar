@@ -1,18 +1,21 @@
 import { api } from "./client"
+import type { EnvPatch } from "@/lib/env"
 import type { AgentBinding, Computer, ComputerConfig, ComputerOperation, ComputerRun, OperationAccepted, UserVolume } from "@/lib/computers"
 
 export const computersApi = {
   list: (org: string) => api<{ items: Computer[] }>(`/orgs/${org}/computers`),
   get: (id: string) => api<Computer>(`/computers/${id}`),
+  env: (id: string) => api<{ keys: string[] }>(`/computers/${id}/env`),
+  patch: (id: string, body: { name?: string; env?: EnvPatch }) => api<Computer>(`/computers/${id}`, { method: "PATCH", body }),
   recover: (id: string, key: string) => api<OperationAccepted>(`/computers/${id}/recover`, {
     method: "POST", body: { confirm_stop_all: true }, headers: { "Idempotency-Key": key },
   }),
   create: (org: string, body: { name: string; agent_id?: string; config?: ComputerConfig }, key: string) =>
     api<OperationAccepted>(`/orgs/${org}/computers`, { method: "POST", body, headers: { "Idempotency-Key": key } }),
   rename: (id: string, name: string) => api<Computer>(`/computers/${id}`, { method: "PATCH", body: { name } }),
-  action: (id: string, action: "start" | "pause" | "rebuild" | "delete", key: string, config?: ComputerConfig) =>
+  action: (id: string, action: "start" | "pause" | "rebuild" | "delete", key: string, config?: ComputerConfig, env?: EnvPatch) =>
     api<OperationAccepted>(`/computers/${id}${action === "delete" ? "" : `/${action}`}`, {
-      method: action === "delete" ? "DELETE" : "POST", body: action === "rebuild" ? { config } : undefined, headers: { "Idempotency-Key": key },
+      method: action === "delete" ? "DELETE" : "POST", body: action === "rebuild" ? { config, env } : undefined, headers: { "Idempotency-Key": key },
     }),
   operation: (id: string) => api<ComputerOperation>(`/operations/${id}`),
   runs: (id: string) => api<{ items: ComputerRun[] }>(`/computers/${id}/runs`),

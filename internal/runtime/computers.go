@@ -85,7 +85,7 @@ func (o *orchestrator) prepareComputer(ctx context.Context, sess *store.Session,
 	if err := json.Unmarshal(c.Config, &configured); err != nil {
 		return err
 	}
-	tc.Env = configured.Env
+	tc.ComputerEnv = configured.Env
 	tc.ComputerID, tc.Generation, tc.RunID, tc.AgentID = c.ID, c.Generation, id.New(), sess.AgentID
 	tc.WorkDir = session.WorkspaceDir(sess.ID)
 	tc.SkillsDir = "/agents/" + sess.AgentID + "/skills"

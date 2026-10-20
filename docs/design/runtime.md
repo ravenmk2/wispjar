@@ -379,14 +379,16 @@ type Handle struct {
 ### 7.1 创建参数（lifecycle `POST /v1/sandboxes`）
 
 ```jsonc
-{ "image": {"uri": agent.sandbox_config.image || settings.default_image},
+{ "image": {"uri": computer.config.image},
   "timeout": settings.sandbox_ttl_seconds,
-  "resourceLimits": agent.sandbox_config.resources || settings.resource_limits,  // {"cpu":"1","memory":"1Gi"}
+  "resourceLimits": computer.config.resources,  // {"cpu":"1","memory":"1Gi"}
   "networkPolicy": settings.egress_policy,   // 平台统一黑白名单
-  "env": {...settings.sandbox_env, ...agent.sandbox_config.env, "WISPJAR": "1"} }
+  "env": {"WISPJAR": "1", "EXECD_ACCESS_TOKEN": "<platform-managed>"} }
 ```
 
-环境变量（`env`）仅在**创建时注入**：平台默认 `sandbox.env` 打底，`agent.sandbox_config.env` 逐键覆盖同名键；`WISPJAR` 为平台保留键（校验拒绝用户配置，注入时最后写入）。键名须匹配 `[A-Za-z_][A-Za-z0-9_]*`，上限 64 条、单值 4096 字节。修改 env 对存量/暂停恢复的沙箱不生效，沙箱重建（过期回收、新会话）后才生效。
+电脑 env 创建时合并平台 `sandbox.env` 与显式配置，不从 Agent 模板复制。每轮开始读取电脑变量和主/子 Agent 最新 `sandbox_config.env`，本轮固定；exec 按电脑 → 当前 Agent → 命令 env 逐键覆盖，再注入 `WISPJAR=1`。变量只传入非 root 任务进程，不传给容器级 execd 或维护进程。子 Agent 不继承父 Agent env。电脑变量可通过 PATCH 编辑，Agent 变量可独立保存且不改变发布状态，已有会话下一轮任务生效，无需重建或改写历史快照。读取失败终止准备，不静默使用旧值。
+
+键名须匹配 `[A-Za-z_][A-Za-z0-9_]*`，每层及合并后最多 64 项、单值最多 4096 字节，值不可包含 NUL。WISPJAR、HOME、EXECD_* 为保留变量；HOME 固定 /tmp。
 
 创建成功后：
 1. `GET /sandboxes/{id}/endpoints/44772` 解析 execd 地址 → 构造 ExecdClient。

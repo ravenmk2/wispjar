@@ -93,6 +93,7 @@ func (t *taskTool) invoke(ctx context.Context, in taskArgs) (string, error) {
 	}
 
 	childContext := t.tc.Fork(sub.ID, id.New(), sub.Skills)
+	childContext.Env = parseSandboxConfig(sub.SandboxConfig).Env
 	childSink := provider.NewUsageSink()
 	ctx = tools.WithContext(ctx, childContext)
 	ctx = provider.WithUsageSink(ctx, childSink)

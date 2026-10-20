@@ -1,4 +1,5 @@
 import { api } from "./client"
+import type { EnvPatch } from "@/lib/env"
 import type { AdminAgentDetail, AdminAgentSummary, AgentBody, List } from "@/lib/types"
 
 function normalizeIdList(raw: unknown): string[] {
@@ -48,6 +49,7 @@ export function normalizeAgentDetail(raw: unknown): AdminAgentDetail {
 }
 
 export const adminAgentsApi = {
+  updateEnv: (orgId: string, id: string, body: EnvPatch) => api<{ ok: boolean }>(`/orgs/${orgId}/admin/agents/${id}/env`, { method: "PATCH", body }),
   list(orgId: string, params?: { cursor?: string; limit?: number }) {
     return api<List<AdminAgentSummary>>(`/orgs/${orgId}/admin/agents`, {
       params: { cursor: params?.cursor, limit: params?.limit },

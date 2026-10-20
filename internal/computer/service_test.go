@@ -27,6 +27,23 @@ type memoryRepo struct {
 	recovered  int
 }
 
+func TestRebuildKeepsLatestComputerEnvAndAppliesPatch(t *testing.T) {
+	c := store.Computer{OrgID: "org", UserID: "user", Status: "running", Generation: 1, Config: json.RawMessage(`{"image":"old","ttl_seconds":3600,"env":{"SECRET":"latest","REMOVE":"old"}}`)}
+	input := RebuildInput{Config: &Config{Image: "new", TTLSeconds: 3600, Env: map[string]string{"SECRET": "stale"}}, Env: &sandbox.EnvPatch{Set: map[string]string{"NEW": "new"}, Unset: []string{"REMOVE"}}}
+	raw, _ := json.Marshal(input)
+	op := store.ResourceOperation{OrgID: "org", UserID: "user", Action: "computer/rebuild", Progress: raw}
+	if err := planIntent(&c, &op, false, false); err != nil {
+		t.Fatal(err)
+	}
+	var cfg Config
+	if err := json.Unmarshal(c.Config, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Image != "new" || cfg.Env["SECRET"] != "latest" || cfg.Env["NEW"] != "new" || len(cfg.Env) != 2 {
+		t.Fatal("rebuild overwrote a concurrent env edit")
+	}
+}
+
 func (r *memoryRepo) Member(context.Context, string, string) error { return nil }
 func (r *memoryRepo) Get(context.Context, string) (store.Computer, error) {
 	r.mu.Lock()
