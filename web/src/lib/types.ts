@@ -297,6 +297,7 @@ export interface ToolResultMeta {
   duration_ms?: number
   render?: ToolRender
   diff?: string
+  operation?: "create" | "update"
   truncated?: boolean
   sandbox_id?: string
 }

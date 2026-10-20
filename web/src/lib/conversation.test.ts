@@ -5,7 +5,8 @@ import { activeProcessNode, groupByTurn, reasoningTail } from "./turn-grouping"
 import type { ContentBlock, SessionEvent, StreamChunk, TurnEndReason } from "./types"
 import { useChatPresentationStore } from "../stores/chatPresentation"
 import { useSessionStore } from "../stores/session"
-import { execOutput, toolCancelled, toolFailure } from "./tool-output"
+import { execOutput, toolCancelled, toolFailure, writeOutput } from "./tool-output"
+import type { ToolCallNode } from "./conversation"
 
 const text = (value: string): ContentBlock => ({ type: "text", text: value })
 const thought = (value: string): ContentBlock => ({ type: "reasoning", text: value, durationMs: 1200 })
@@ -281,6 +282,44 @@ test("manual disclosure survives remount/reconnect; switching sessions resets it
   assert.equal(useChatPresentationStore.getState().expanded["tool-a"], true)
   s.enterSession("b")
   assert.deepEqual(useChatPresentationStore.getState().expanded, {})
+})
+
+test("tool wrapping and content view preferences survive remounts and stay independent", () => {
+  const s = useChatPresentationStore.getState()
+  s.enterSession("prefs")
+  s.setPreference("tool-a-stdout-wrap", true)
+  s.setPreference("tool-b-content-view", true)
+  s.enterSession("prefs")
+  assert.equal(useChatPresentationStore.getState().preferences["tool-a-stdout-wrap"], true)
+  assert.equal(useChatPresentationStore.getState().preferences["tool-a-stderr-wrap"], undefined)
+  assert.equal(useChatPresentationStore.getState().preferences["tool-b-content-view"], true)
+  s.enterSession("next")
+  assert.deepEqual(useChatPresentationStore.getState().preferences, {})
+})
+
+test("writes expose the exact call content independently of result diffs", () => {
+  const content = "unchanged header\r\n  new value\r\nunchanged footer\r\n"
+  const node: ToolCallNode = {
+    kind: "tool-call", id: "write-a", callId: "write-a", seq: 1, time: 1, turn: 1, step: 1, name: "write", children: [],
+    arguments: JSON.stringify({ path: "/workspace/a.txt", content }),
+    result: { content: JSON.stringify({ path: "/workspace/a.txt", bytes: content.length }), meta: { operation: "update", diff: "-old\n+new" } },
+  }
+  assert.deepEqual(writeOutput(node), { content, diff: "-old\n+new", operation: "update", completed: true, error: undefined })
+  node.arguments = JSON.stringify({ path: "/workspace/a.txt", content: "" })
+  node.result = { content: '{"path":"/workspace/a.txt","bytes":0}', meta: { operation: "create" } }
+  assert.equal(writeOutput(node).content, "")
+  assert.equal(writeOutput(node).operation, "create")
+  assert.equal(writeOutput(node).diff, undefined)
+  node.result = { content: "Tool execution failed: permission denied", meta: { operation: "update", diff: "stale diff" } }
+  assert.equal(writeOutput(node).completed, false)
+  assert.equal(writeOutput(node).operation, undefined)
+  assert.equal(writeOutput(node).diff, undefined)
+  assert.equal(writeOutput(node).error, "Tool execution failed: permission denied")
+  node.result = undefined
+  assert.equal(writeOutput(node).completed, false)
+  assert.equal(writeOutput(node).content, "")
+  node.arguments = '{"content":"partial'
+  assert.equal(writeOutput(node).content, undefined)
 })
 
 

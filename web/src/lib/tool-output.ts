@@ -39,7 +39,25 @@ export function toolCancelled(node: ToolCallNode): boolean {
 
 export function toolFailure(node: ToolCallNode): string | undefined {
   if (toolCancelled(node)) return undefined
-  if (node.name !== "exec") return node.result?.error
+  if (node.name !== "exec") {
+    const content = node.result?.content ?? ""
+    return node.result?.error || (content.startsWith("Tool execution failed: ") ? content : undefined)
+  }
   const output = execOutput(node.result)
   return output.error || (output.exitCode !== null && output.exitCode !== 0 ? `exit ${output.exitCode}` : undefined)
+}
+
+export function writeOutput(node: ToolCallNode) {
+  const args = safeParseJson(node.arguments)
+  const result = node.result ? safeParseJson(node.result.content) : null
+  const error = toolFailure(node)
+  const completed = !!node.result && !error && typeof result?.bytes === "number" && typeof result?.path === "string"
+  const operation = completed ? node.result?.meta?.operation : undefined
+  return {
+    content: typeof args?.content === "string" ? args.content : undefined,
+    diff: completed ? node.result?.meta?.diff : undefined,
+    operation: operation === "create" || operation === "update" ? operation : undefined,
+    completed,
+    error,
+  }
 }

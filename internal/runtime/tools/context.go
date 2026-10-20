@@ -39,6 +39,7 @@ type Meta struct {
 	Truncated  bool
 	SandboxID  string
 	Diff       string
+	Operation  string // write 成功后的 create/update；无法判断时为空。
 	DurationMS int64
 	// Attachments 工具产出图片的持久引用（read_media；tool/result data 记录用，
 	// 回放时按引用从附件存储读字节重组多模态 tool 消息）。

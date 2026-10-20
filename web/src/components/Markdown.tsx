@@ -112,7 +112,7 @@ export const Markdown = memo(function Markdown({ content, className }: { content
   )
 })
 
-export function DiffBlock({ diff, className }: { diff: string; className?: string }) {
+export function DiffBlock({ diff, className, wrapped = false }: { diff: string; className?: string; wrapped?: boolean }) {
   const lines = diff.split("\n")
   return (
     <div className={cn("overflow-x-auto rounded-md border bg-muted/40 font-mono text-chat", className)}>
@@ -126,7 +126,7 @@ export function DiffBlock({ diff, className }: { diff: string; className?: strin
           lineClass = "bg-blue-500/10 text-blue-700 dark:text-blue-400"
         }
         return (
-          <div key={i} className={cn("whitespace-pre px-3", lineClass)}>
+          <div key={i} className={cn("px-3", wrapped ? "whitespace-pre-wrap [overflow-wrap:anywhere]" : "whitespace-pre", lineClass)}>
             {line || " "}
           </div>
         )

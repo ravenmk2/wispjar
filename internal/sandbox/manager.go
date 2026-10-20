@@ -520,6 +520,10 @@ func (h *Handle) FileInfo(ctx context.Context, remotePath string) (FileInfo, err
 	h.Touch()
 	m, err := h.sandbox.GetFileInfo(ctx, remotePath)
 	if err != nil {
+		// /files/info 的缺失文件响应，供调用方区分不存在与探测失败。
+		if isNotFound(err) {
+			return FileInfo{}, fmt.Errorf("%w: %s", os.ErrNotExist, remotePath)
+		}
 		return FileInfo{}, err
 	}
 	if fi, ok := m[remotePath]; ok {
@@ -528,5 +532,5 @@ func (h *Handle) FileInfo(ctx context.Context, remotePath string) (FileInfo, err
 	for _, fi := range m {
 		return fi, nil
 	}
-	return FileInfo{}, fmt.Errorf("sandbox: no file info for %s", remotePath)
+	return FileInfo{}, fmt.Errorf("%w: %s", os.ErrNotExist, remotePath)
 }

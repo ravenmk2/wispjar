@@ -106,8 +106,8 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 - **ToolCallCard**：默认折叠单行（工具图标 + 中文显示名（exec→执行 / read→读取 / write→写入 / edit→编辑 / glob→查找 / grep→搜索 / read_media→查看 / skill→技能 / task→任务 / question→提问，英文原名入 tooltip）+ 参数摘要；运行中摘要 shimmer、失败显示红色小叉图标（exit code 等细节留在展开态）；write/edit 有 diff 数据显示 +N -M），点击展开灰底卡，内容按 `tool/result.meta.render` 或 live 工具名映射：
   | render | 工具 | 展开内容 |
   |---|---|---|
-  | terminal | exec | 首行 cwd（缺省 `/workspace`，长路径省略并提供 tooltip）+ 耗时 + exit code／运行状态；下方命令代码区、stdout、stderr 上下分区，各自复制，保留多行命令换行缩进，长行横向滚动；仅渲染非空输出区，stderr 使用普通文字颜色。超过可见高度提供"展开全部"及区内滚动，不再按前端字符数截断；服务端截断另行提示。实时输出保留 stream 分流，完成后由持久结果接管 |
-  | diff | write/edit | 文件路径头 + unified diff 着色（新增绿/删除红） |
+  | terminal | exec | 首行 cwd（缺省 `/workspace`，长路径省略并提供 tooltip）+ 耗时 + exit code／运行状态；下方命令代码区、stdout、stderr 上下分区，各自复制，复制按钮左侧为自动换行开关（错误详情同样支持）。默认不换行、长行横向滚动；启用后保留原有换行缩进并折行超长文本，复制始终为原文。各分区独立记忆选择，收起、切换聊天/轨迹及重连保留，切换会话或刷新重置。仅渲染非空输出区，stderr 使用普通文字颜色。超过可见高度提供"展开全部"及区内滚动，不再按前端字符数截断；服务端截断另行提示。实时输出保留 stream 分流，完成后由持久结果接管 |
+  | diff | write/edit | 文件路径头 + unified diff 着色（新增绿/删除红）。write 成功后按 `meta.operation` 显示"创建文件"或"覆盖文件"，未知时仍显示"写入"；有 diff 默认展示"变更"，可切到"完整内容"，无 diff 直接展示全文。全文取该次调用的 `content` 参数，保留空白及换行，支持完整复制、自动换行和展开滚动；变更视图也提供复制及自动换行。视图选择与换行状态在本会话内保留。空文件显示"内容为空"；未完成或失败时标为"拟写入内容"，失败另展示错误详情；参数不完整时显示接收中或内容不可用提示。edit 保持 diff 展示 |
   | search | glob/grep | 查询词头 + 结果列表（path:line） |
   | read | read/read_media | 路径头 + 内容代码块（read_media 附带 `attachments` 引用时渲染图片缩略图，经附件 objectURL 通道加载） |
   | generic | skill/task | JSON 参数使用支持 CJK 回退的等宽字体，普通结果使用正文系统字体 |

@@ -97,6 +97,65 @@ func newTaskTestEnv(t *testing.T, approvalMode string, mainScript, subScript fun
 	}
 }
 
+func TestWriteOperationPersistsInRootAndNestedResults(t *testing.T) {
+	for _, nested := range []bool{false, true} {
+		name := "root"
+		if nested {
+			name = "nested"
+		}
+		t.Run(name, func(t *testing.T) {
+			writeScript := func(call int, _ []*schema.Message) []*schema.Message {
+				if call == 1 {
+					return toolCallChunks("write-file", "write", `{"path":"/workspace/file.txt","content":"new\n"}`)
+				}
+				return textChunks("done", nil)
+			}
+			var env *testEnv
+			if nested {
+				taskEnv := newTaskTestEnv(t, session.ApprovalAuto,
+					func(call int, _ []*schema.Message) []*schema.Message {
+						if call == 1 {
+							return taskCallChunks("task-write", "data-analyst", "write file")
+						}
+						return textChunks("done", nil)
+					}, writeScript)
+				env = taskEnv.testEnv
+				var snap agent.Snapshot
+				if err := json.Unmarshal(env.session.AgentSnapshot, &snap); err != nil {
+					t.Fatal(err)
+				}
+				snap.SubAgents[0].ToolsEnabled = json.RawMessage(`{"write":true}`)
+				raw, err := json.Marshal(snap)
+				if err != nil {
+					t.Fatal(err)
+				}
+				env.session.AgentSnapshot = raw
+			} else {
+				env = newTestEnv(t, session.ApprovalAuto, writeScript)
+			}
+			env.handle.files["/workspace/file.txt"] = []byte("old\n")
+			env.prompt(t, "write file", "req-write")
+			if err := env.orch.StartTurn(context.Background(), env.session.ID); err != nil {
+				t.Fatal(err)
+			}
+			for _, ev := range env.es.byType(session.EventToolResult) {
+				var result session.ToolResultData
+				if err := json.Unmarshal(ev.Data, &result); err != nil {
+					t.Fatal(err)
+				}
+				if result.CallID != "write-file" {
+					continue
+				}
+				if result.Meta == nil || result.Meta.Operation != "update" || !strings.Contains(result.Meta.Diff, "+new") {
+					t.Fatalf("write presentation metadata not persisted: %+v", result.Meta)
+				}
+				return
+			}
+			t.Fatal("write result missing")
+		})
+	}
+}
+
 func taskCallChunks(callID, subagent, prompt string) []*schema.Message {
 	args, _ := json.Marshal(map[string]string{"subagent": subagent, "prompt": prompt})
 	return toolCallChunks(callID, "task", string(args))

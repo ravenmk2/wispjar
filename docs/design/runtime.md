@@ -149,10 +149,10 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 ```jsonc
 // name: write —— 写入文件（覆盖式），自动创建父目录
 { "path": "string（必填）", "content": "string（必填，完整内容）" }
-// 返回：{ "path", "bytes": N }
+// 返回：{ "path", "bytes": N, "operation"?: "create" | "update" }
 ```
 
-实现：execd `POST /files/upload`；已存在同名文件时先 download 旧内容计算 unified diff 放入 `meta.diff`（供 UI diff 卡片）。
+实现：execd `POST /files/upload`；写入前通过 file info 区分不存在（create）或已存在文件（update），仅写入成功后将 operation 放入返回结果及 `meta.operation`，探测失败时省略标记，不阻断写入。已有文本可读取时计算 unified diff 放入 `meta.diff`（供 UI diff 卡片），空文件同样参与比较；旧文件读取失败、非 UTF-8、任一侧超过 2MB 或行数乘积超过 4,000,000 时省略 diff，避免可选展示影响写入。前端从持久工具调用参数 `content` 展示及复制该次写入全文，不依赖当前沙箱文件；无 diff 也可查看全文。
 
 ### 4.4 edit（风险 medium，render diff）
 

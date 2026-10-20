@@ -470,6 +470,7 @@ func (sr *subRun) toolResult(msg *schema.Message) error {
 			Truncated:  m.Truncated,
 			SandboxID:  m.SandboxID,
 			Diff:       m.Diff,
+			Operation:  m.Operation,
 		}
 		data.Attachments = m.Attachments
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -20,12 +21,13 @@ import (
 var errSandboxUnavailable = errors.New("execution environment unavailable; please retry once")
 
 const (
-	execMaxOutput  = 64 * 1024
-	readMaxBytes   = 2 * 1024 * 1024
-	globMaxResults = 100
-	grepMaxLines   = 250
-	skillMaxBytes  = 32 * 1024
-	defaultWorkDir = "/workspace"
+	execMaxOutput     = 64 * 1024
+	readMaxBytes      = 2 * 1024 * 1024
+	globMaxResults    = 100
+	grepMaxLines      = 250
+	skillMaxBytes     = 32 * 1024
+	writeDiffMaxCells = 4_000_000
+	defaultWorkDir    = "/workspace"
 )
 
 type execArgs struct {
@@ -165,11 +167,17 @@ func newWriteTool() (tool.BaseTool, error) {
 				return "", err
 			}
 			meta.SandboxID = sid
-			var old string
+			var old, operation string
+			oldKnown := false
 			if fi, err := h.FileInfo(ctx, in.Path); err == nil && fi.Type != "directory" {
-				if data, err := h.DownloadFile(ctx, in.Path); err == nil && utf8.Valid(data) {
-					old = string(data)
+				operation = "update"
+				if fi.Size <= readMaxBytes {
+					if data, err := h.DownloadFile(ctx, in.Path); err == nil && len(data) <= readMaxBytes && utf8.Valid(data) {
+						old, oldKnown = string(data), true
+					}
 				}
+			} else if errors.Is(err, os.ErrNotExist) {
+				operation = "create"
 			}
 			if dir := path.Dir(in.Path); dir != "/" && dir != "." {
 				if _, err := h.RunCommand(ctx, "mkdir -p "+shellQuote(dir), "/", nil, 10000, nil); err != nil {
@@ -179,10 +187,17 @@ func newWriteTool() (tool.BaseTool, error) {
 			if err := h.UploadFile(ctx, in.Path, []byte(in.Content)); err != nil {
 				return "", fmt.Errorf("write %s: %w", in.Path, err)
 			}
-			if old != "" && old != in.Content {
+			meta.Operation = operation
+			// Diff 是可选展示信息；大文件直接由 UI 展示调用参数中的全文，避免 LCS 占用过多内存。
+			if oldKnown && old != in.Content && len(in.Content) <= readMaxBytes &&
+				int64(strings.Count(old, "\n")+1)*int64(strings.Count(in.Content, "\n")+1) <= writeDiffMaxCells {
 				meta.Diff = UnifiedDiff(in.Path, old, in.Content)
 			}
-			return marshalResult(map[string]any{"path": in.Path, "bytes": len(in.Content)})
+			result := map[string]any{"path": in.Path, "bytes": len(in.Content)}
+			if operation != "" {
+				result["operation"] = operation
+			}
+			return marshalResult(result)
 		})
 }
 

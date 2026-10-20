@@ -127,6 +127,7 @@ type ToolResultMeta struct {
 	Truncated  bool   `json:"truncated,omitempty"`
 	SandboxID  string `json:"sandbox_id,omitempty"`
 	Diff       string `json:"diff,omitempty"`
+	Operation  string `json:"operation,omitempty"`
 }
 
 type ToolResultData struct {

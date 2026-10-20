@@ -447,6 +447,7 @@ func (o *orchestrator) toolResult(sessionID string, rs *runState, msg *schema.Me
 			Truncated:  m.Truncated,
 			SandboxID:  m.SandboxID,
 			Diff:       m.Diff,
+			Operation:  m.Operation,
 		}
 		data.Attachments = m.Attachments
 	}
