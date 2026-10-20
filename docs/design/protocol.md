@@ -1,5 +1,7 @@
 # 实时协议（WebSocket mux）
 
+> 云电脑增量协议见 [computers.md §9](computers.md#9-实时协议与前端)：control 增加电脑投影，snapshot 增加电脑/工作区，工具 meta 增加 computer_id/run_id。旧 session/sandbox 事件保留历史回放，不再作为共享电脑当前状态的唯一依据；实现状态见该文档 §12。
+
 > 本文是会话实时通讯的权威协议定义，前后端都以此为准。
 > 设计来源：借鉴 DeepSeek Harness 的 stream-protocol / session follow / StreamChunk / SessionEvent 设计，适配多租户与 MySQL 事件表。
 
@@ -67,6 +69,8 @@
     "agentId": "...", "agentName": "...", "agentAvatar": "",
     "modelId": "...", "approvalMode": "default",
     "sandboxStatus": "running", "running": true,
+    "computerId": "...", "computerStatus": "running",
+    "workspaceDir": "/sessions/<session_id>",
     "modelSettingsLocked": true, "lastSeq": 87, "usageTotal": { "input_tokens": 1234, "output_tokens": 567,
       "cache_read_tokens": 0, "cache_write_tokens": 0, "reasoning_tokens": 0 },
     "createdAt": "..." },
@@ -79,6 +83,8 @@
 ```
 
 客户端语义：**用快照原子替换本地会话窗口**，再按序应用后续帧。
+
+云电脑会话使用 `computerId/computerStatus/workspaceDir`；旧会话可缺省这些字段并继续回放 `sandboxStatus`。获取快照只读取当前电脑状态，不隐式创建或启动电脑。
 
 ### 4.3 持久事件帧
 
@@ -145,14 +151,19 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 ```jsonc
 { "type": "baseline", "sessions": [
   { "sessionId": "...", "title": "...", "running": true, "agentId": "...",
-    "usageTotal": {...}, "lastActiveAt": "...", "status": "active" } ] }
+    "usageTotal": {...}, "lastActiveAt": "...", "status": "active" } ],
+  "computers": [ /* 本人电脑的 REST 安全视图；无电脑时 [] */ ] }
 
 { "type": "upsert", "session": { /* 同上结构，任一字段变化即推 */ } }
 { "type": "remove", "sessionId": "..." }
+{ "type": "computer/upsert", "computer": { /* GET /computers/:id 的安全视图 */ } }
+{ "type": "computer/remove", "computerId": "..." }
 ```
 
 - 触发源：本连接用户在该机构下任何会话的事件提交（标题变化、running 翻转、用量增长、last_active 更新、归档/删除）。
 - 这是侧栏"其他标签页/设备也在跑"状态同步的通道；`session.follow` 负责单会话细节，`control` 负责列表投影。
+- 电脑意图提交、生命周期完成、重命名触发电脑投影；重连基线覆盖旧列表。电脑删除后仍保留用户卷，remove 不代表文件被删除。
+- control 虽按机构订阅，出口必须过滤用户归属并核查成员关系；同机构其他用户（包括管理员）不能收到私人会话或电脑投影。内部路由用 user ID，不将该内部字段序列化给客户端。
 
 ## 6. 会话事件词表（session_event.type → data schema）
 
@@ -164,7 +175,7 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 | type | data | 说明 |
 |---|---|---|
 | `turn/start` | `{turn, request_id}` | 一次 prompt 开始 |
-| `turn/end` | `{turn, reason: "completed"\|"interrupted"\|"failed", error?}` | 任何路径保证有收尾 |
+| `turn/end` | `{turn, reason: "completed"\|"interrupted"\|"failed", error?, error_code?}` | 任何路径保证有收尾；环境准备失败使用稳定错误码和安全文案，不包含后端地址或原始错误 |
 | `step/start` | `{turn, step}` | 一次模型请求开始 |
 | `step/end` | `{turn, step}` | |
 
@@ -176,13 +187,16 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 | `assistant/message` | `{turn, step, message, usage?, interrupted?}`。`message` 为完整 assistant 消息：`{role:"assistant", content:[ContentBlock...]}`，ContentBlock = `{type:"text",text}` / `{type:"reasoning",text,durationMs?}`（`durationMs` 为思考首帧到末帧的耗时，流式窗口埋点，可缺省）/ `{type:"tool-call",id,name,arguments}`。`usage` 结构同 StreamChunk usage（snake_case），含可选 `cache_reported`（供应商是否上报缓存字段，false/缺省 = 未上报，区别于命中为 0；runtime.md §3.1） |
 | `assistant/attempt` | `{turn, step, chunks:[StreamChunk...]（压缩存储）, error?}` —— 失败/取消的尝试留痕，**不进模型历史** |
 | `tool/call` | `{turn, step, call_id, name, arguments(原始JSON字符串), parent_call_id?}` |
-| `tool/result` | `{turn, step, call_id, name, content(string), error?, meta?, attachments?, parent_call_id?}`。`meta` 含 `{duration_ms, render:"terminal"\|"diff"\|"search"\|"read"\|"generic", truncated?, sandbox_id?, diff?, operation?:"create"\|"update"}`；`diff` 为 unified diff，`operation` 仅用于成功 write 的创建/覆盖标记，探测未知时省略。`attachments` 为工具产出图片的引用数组（read_media；结构与 `user/message.attachments` 相同——不透明引用，绝无 base64，字节经 `GET /attachments/{id}` 获取） |
+| `tool/result` | `{turn, step, call_id, name, content(string), error?, meta?, attachments?, parent_call_id?}`。`meta` 含 `{duration_ms, render:"terminal"\|"diff"\|"search"\|"read"\|"generic", truncated?, sandbox_id?, computer_id?, run_id?, diff?, operation?:"create"\|"update"}`；子任务有独立 run_id，继承主任务 computer_id。`diff` 为 unified diff，`operation` 仅用于成功 write 的创建/覆盖标记，探测未知时省略。`attachments` 为工具产出图片的引用数组（read_media；结构与 `user/message.attachments` 相同——不透明引用，绝无 base64，字节经 `GET /attachments/{id}` 获取） |
 
 ### 6.3 会话事件
 
 | type | data |
 |---|---|
 | `session/title` | `{title, auto: true\|false}`（latest-wins；用户改名 auto=false 且 pinned） |
+| `session/computer` | `{computer_id, workspace_dir}`；空闲会话切换电脑后追加，旧事件不改写 |
+| `workspace/ready` | `{root, layout_version:1}`；当前会话工作区及 inputs/outputs 已准备 |
+| `runtime/environment` | `{computer_id, generation?, run_id?, skills?, status?}`；实际技能 manifest 记录 Agent、revision、hash、目录；`status:"waiting_skills"` 表示等待旧运行释放技能，尚未调用模型/工具 |
 | `session/sandbox` | `{action: "created"\|"paused"\|"resumed"\|"recycled"\|"failed", sandbox_id, image, error?}`（paused=空闲暂停/重启 adopt，resumed=恢复使用；会话 `sandboxStatus` 对应 `running\|paused\|recycled\|failed`） |
 | `session/approval-mode` | `{mode: "strict"\|"default"\|"auto", changed_by}` |
 | `session/effort` | `{effort: "<档位>", changed_by}` —— 会话思考强度改档（仅 `last_seq = 0` 时可改，见 api.md §3） |

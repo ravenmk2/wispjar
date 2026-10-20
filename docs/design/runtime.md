@@ -1,6 +1,7 @@
 # Agent 运行时详细设计
 
 > 本文是 `internal/runtime`、`internal/sandbox`、`internal/skill`、`internal/provider` 的权威设计。
+> 用户云电脑的新资源边界、目录、并行执行和技能更新以 [computers.md](computers.md) 为准。本文 `/workspace`、会话独占实例、统一 `/skills` 的描述仅为迁移前兼容行为；新路径为 `/sessions/<sid>` 与 `/agents/<agent_id>/skills`，改造任务见该文档 §12。
 > 依赖事实（调研结论）：
 > - eino：`adk.NewChatModelAgent` 即预置 ReAct Agent（model → tools 循环，`MaxIterations` 默认 20）；`adk.Runner{EnableStreaming:true}` 产出 `AsyncIterator[*AgentEvent]`；工具声明用 `components/tool/utils.InferTool`；模型组件在 eino-ext（openai/ark/qwen 各自独立 module）；interrupt + `CheckPointStore` 支持工具审批恢复；`adk.WithCancel` 支持安全点取消。
 > - OpenSandbox：lifecycle REST（`POST /v1/sandboxes` 等，header `OPEN-SANDBOX-API-KEY`）；execd 数据面（`/command` SSE 流式、`/files/upload|download|replace|search|info`、`/directories/list`）；官方 Go SDK `github.com/alibaba/OpenSandbox/sdks/sandbox/go`；execd 无原生内容搜索端点（grep 用 exec 跑 `rg`）。
@@ -200,7 +201,13 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 //         "files": ["scripts/a.py", ...], "dir": "/skills/<name>/" }
 ```
 
-实现：读平台磁盘 `<data_dir>/skills/<org>/<id>/SKILL.md`（不进沙箱）；SKILL.md >32KB 截断并提示用 read 工具读包内具体文件。
+新云电脑路径：根据主运行取得的 `skill.Manifest`，读取当前执行 Agent 的 `/agents/<agent_id>/skills/<name>/SKILL.md`。不能读取已更新的平台源包来搭配尚未同步的安装脚本。SKILL.md >32KB 截断并提示用 read 工具读包内具体文件。旧会话兼容路径仍读取平台源包，待迁移后切换。
+
+`skill.Coordinator.Acquire(ctx, AcquireRequest{OrgID,UserID,RootRunID,AgentIDs}, installer)` 要求先登记主 `computer_run`；AgentIDs 包含主 Agent 和所有可达 subagent。它在新主任务边界解析当前关联，整组取权后把 `skill_manifest` 合并写入运行 manifest。同 rootRunID 的审批恢复返回原 manifest，不重新解析新版本。所有主/子任务和后台命令均确认结束后才能 `Release(..., commandsStopped=true)`；租约失效不能代替确认。
+
+平台通过 `skill.NewSandboxInstaller(upload, run)` 使用原始 root 执行能力，同步校验后将技能文件设为只读。`/agents`、Agent 根和 `skills` 根归 root，任务只能写自己的 `files` 与会话目录；`/agents/.wispjar` 是 root-only 控制区。实际任务采用非 root 身份。安装失败已确认退出可重试；进程状态未知则保留屏障，须经带审计的 `Recover` 确认停止后推进 fence。
+
+电脑显式恢复在删除旧实例且 Inspect 证实消失、旧代次运行已终结后，调用 `Coordinator.RecoverComputer` 收敛该电脑代次的技能状态。安装计划归属来自持久运行记录；旧无归属计划继续阻塞。安装结果与整组租约提交再次锁运行行并校验终态、释放标记和代次，拒绝恢复期间晚到的旧安装结果；锁顺序与生命周期 hook 契约见 computers.md §7。
 
 ### 4.8 task（风险继承子 Agent，render generic，v1=M3）
 
@@ -344,9 +351,19 @@ func NewTaskTool(snap AgentSnapshot, deps Deps) tool.InvokableTool // snap.SubAg
 4. 事件嵌套：消费子 AgentEvent 流，翻译为会话事件时全部附加 `parent_call_id=<本次 task 的 call_id>`（含 turn/step 用子序列 `sub_turn`/`sub_step` 字段避免与主冲突：data 内用 `turn:0, sub_turn:N` 表达，前端按 parent_call_id 聚合）。
 5. 结果合成：取子 Agent 最终 assistant 消息文本作为 `output`；`stopReason != completed` 时按"错误标题 + Diagnostic + Partial output"合成 error（参考 §4.8 返回约定）。
 6. 主 Agent 视角：一次普通 tool/call(task) + tool/result；审批在子 Agent 内部独立触发（嵌套事件）。
-7. 并发：v1 只允许主 Agent 同时发起的多个 task 串行执行（eino ToolsNode 并行调用时由 task 工具内互斥锁串行化，避免沙箱文件竞态；v1.1 再评估并行）。
+7. 并发：原 v1 使用 task 互斥锁串行执行；云电脑改造支持有界并行，必须先隔离工具 Context、UsageSink、审批/取消归属，再移除串行锁。电脑及会话工作区继承主任务，技能按实际执行的子 Agent 解析（computers.md §7）。
 
 ## 7. 沙箱管理器（internal/sandbox）
+
+本节为旧会话实例的迁移兼容说明。新模式由 computer 持有实例生命周期，volume 解析三卷挂载，sandbox 只负责 SDK 适配；删除会话不再回收共享电脑，见 computers.md §3/§6。
+
+新模式的工作区初始化区分“已退出失败”和“完成状态未知”：同步命令返回明确非零退出码时，包装为 `StoppedControlError`，主任务与文件维护都以 failed 释放对应运行占用；例如 inputs/outputs 是符号链接而被 `O_NOFOLLOW` 拒绝，不能因此永久占用电脑。只有传输断链、没有退出状态等无法确认完成的情况才保留占用，等待核查恢复。初始化尚未取得技能使用权，不得误当作仍有技能命令在执行。
+
+资源收尾先关闭命令准入，再检查所有命令已停。准备过程保留独立预约，取消不能在准备尚未完成时释放资源；子任务在父运行锁内预占计数后才登记数据库运行，登记失败归还预约。父任务开始结束后拒绝新增子任务，避免数据库登记期间提前释放根技能租约。运行环境准备错误使用稳定错误码与固定文案写入 `turn/end` 和 API；后端地址、路径及原始原因仅记录服务日志。
+
+显式电脑恢复在旧实例确认消失并将旧运行置终态后调用 `runtime.RecoverComputer`。该 hook 取消旧内存运行、阻断晚到的事件和审批恢复，并对重启残留的 running 会话补 deny 与 `turn/end{failed,error_code:"computer/recovered"}`；完成前电脑保持 recovering，禁止新 `turn/start`。运行事件落库还在会话行锁内校验 turn 代次，旧回调不能清除新任务的 running 状态。创建、Fork 和切换绑定同样在目标电脑行锁内拒绝 deleting/deleted。
+
+恢复意图先持久化 recovering，再删除旧实例。若工具因此断链，而模型在恢复 hook 前已经自行收尾，事件落库边界仍按电脑 recovering 状态将 `turn/end` 统一记为 `failed` / `computer/recovered`；不得将恢复中断误报为 completed。该判定不改变命令确认与技能租约释放次序。
 
 ```go
 type Manager interface {

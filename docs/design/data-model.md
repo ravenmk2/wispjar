@@ -1,6 +1,7 @@
 # 数据模型（MySQL 8）
 
 > 本文是数据库的权威定义：DDL 可直接执行，迁移文件按此生成。
+> 云电脑增量模型见 [computers.md §5](computers.md#5-数据模型)。七张新表、session 电脑引用与 skill 修订字段见 §14（000005 增量迁移）；旧 session.sandbox 仅用于过渡兼容，不能代表共享电脑的权威状态。
 > 全局约定：
 > - 表名一律**单数**（`session_event`、`agent_subagent` …）。
 > - 主键：`CHAR(32)`，UUIDv7 去掉 `-` 的 32 位小写 hex，**应用层生成**（`internal/id`），时序有序，天然可作分页游标。
@@ -251,7 +252,7 @@ CREATE TABLE agent_checkpoint (
 3. `session_event` 永不 UPDATE/DELETE；上下文压缩只追加新事件（`surface_op` 语义在 protocol.md §6.3）。
 4. 回放：`SELECT seq,type,time_ms,data FROM session_event WHERE session_id=? AND seq>? ORDER BY seq`。
 5. `agent_checkpoint` 定期清理：`DELETE WHERE created_at < NOW() - INTERVAL 7 DAY`（审批 checkpoint 在 decided 后立即删除）。
-6. 沙箱状态读写一律经 `session.sandbox` JSON（`JSON_SET` / 应用层整体改写均可）；崩溃恢复时 `WHERE JSON_UNQUOTE(JSON_EXTRACT(sandbox,'$.status'))='running'` 仅在启动扫描执行一次，无需独立列。
+6. 旧会话沙箱状态由 `session.sandbox` 保存，仅供兼容和迁移。绑定云电脑的新会话使用 `session.computer_id`；实例状态以 `computer` 为准，不能根据某个会话删除状态回收共享电脑。
 
 ## 10. attachment（图片附件，机构级）
 
@@ -339,4 +340,144 @@ INSERT INTO platform_setting (`key`, value, updated_by) VALUES
 |---|---|---|
 | Skill zip 解压目录 | `<data_dir>/skills/<org_id>/<skill_id>/` | 原始 zip 保留为 `_source.zip` 便于重新校验；路径配置化，保留对象存储扩展口 |
 | 图片附件 blob | `<data_dir>/attachments/v1/objects/<sha256[:2]>/<sha256>` | 内容寻址、不可变、字节去重；写：临时文件→校验→原子 rename；读：按记录 sha256 校验后再服务（`internal/attachment`）。永不自动删除 |
-| 沙箱内文件 | 沙箱容器内 | 经 execd 上传/下载；沙箱回收即销毁 |
+| 云电脑持久文件 | 用户三类卷 `/storage`、`/agents`、`/sessions` | 生命周期独立于实例；仅旧沙箱未迁移文件与容器运行层会随销毁丢失 |
+
+## 14. 云电脑与持久卷（000005_computers）
+
+以下 DDL 是在上述基础表上的增量定义，与 `000005_computers.up.sql` 保持一致。资源归属由应用层同时校验机构成员关系和用户身份；外部资源操作不放在 SQL 事务中。
+
+```sql
+-- Additive migration. No backend resources are created or deleted by SQL.
+CREATE TABLE computer (
+  id CHAR(32) NOT NULL PRIMARY KEY,
+  org_id CHAR(32) NOT NULL,
+  user_id CHAR(32) NOT NULL,
+  name VARCHAR(128) NOT NULL,
+  backend_id VARCHAR(64) NOT NULL,
+  sandbox_id VARCHAR(128) NULL,
+  generation BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  status VARCHAR(16) NOT NULL DEFAULT 'stopped',
+  config JSON NOT NULL,
+  last_active_at DATETIME(3) NULL,
+  last_error TEXT NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  KEY idx_computer_owner (org_id, user_id, status),
+  KEY idx_computer_sandbox (sandbox_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE user_volume (
+  id CHAR(32) NOT NULL PRIMARY KEY,
+  org_id CHAR(32) NOT NULL,
+  user_id CHAR(32) NOT NULL,
+  kind VARCHAR(16) NOT NULL,
+  backend_id VARCHAR(64) NOT NULL,
+  backend_name VARCHAR(63) NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  policy JSON NOT NULL,
+  `usage` JSON NOT NULL,
+  last_error TEXT NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_user_volume_owner (org_id, user_id, kind),
+  UNIQUE KEY uk_user_volume_backend (backend_id, backend_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE user_agent_binding (
+  org_id CHAR(32) NOT NULL,
+  user_id CHAR(32) NOT NULL,
+  agent_id CHAR(32) NOT NULL,
+  computer_id CHAR(32) NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (org_id, user_id, agent_id),
+  KEY idx_user_agent_binding_computer (computer_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE user_skill_state (
+  org_id CHAR(32) NOT NULL,
+  user_id CHAR(32) NOT NULL,
+  skill_id CHAR(32) NOT NULL,
+  desired_revision BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  applied_revision BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  lock_owner VARCHAR(128) NOT NULL DEFAULT '',
+  lock_until DATETIME(3) NULL,
+  fence BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  last_error TEXT NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (org_id, user_id, skill_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE computer_run (
+  id CHAR(32) NOT NULL PRIMARY KEY,
+  org_id CHAR(32) NOT NULL,
+  user_id CHAR(32) NOT NULL,
+  computer_id CHAR(32) NOT NULL,
+  session_id CHAR(32) NOT NULL,
+  parent_run_id CHAR(32) NULL,
+  agent_id CHAR(32) NOT NULL,
+  status VARCHAR(16) NOT NULL,
+  owner VARCHAR(128) NOT NULL DEFAULT '',
+  lease_until DATETIME(3) NULL,
+  execution JSON NOT NULL,
+  manifest JSON NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  KEY idx_computer_run_computer (computer_id, status),
+  KEY idx_computer_run_session (session_id, status),
+  KEY idx_computer_run_parent (parent_run_id),
+  KEY idx_computer_run_lease (status, lease_until)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE run_skill_lease (
+  run_id CHAR(32) NOT NULL,
+  org_id CHAR(32) NOT NULL,
+  user_id CHAR(32) NOT NULL,
+  skill_id CHAR(32) NOT NULL,
+  revision BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (run_id, skill_id),
+  KEY idx_run_skill_lease_skill (org_id, user_id, skill_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE resource_operation (
+  id CHAR(32) NOT NULL PRIMARY KEY,
+  org_id CHAR(32) NOT NULL,
+  user_id CHAR(32) NOT NULL,
+  resource_type VARCHAR(32) NOT NULL,
+  resource_id CHAR(32) NOT NULL,
+  action VARCHAR(64) NOT NULL,
+  status VARCHAR(16) NOT NULL,
+  idempotency_key VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
+  request_hash CHAR(64) NOT NULL DEFAULT '',
+  progress JSON NOT NULL,
+  error TEXT NOT NULL,
+  lease_until DATETIME(3) NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uk_resource_operation_idempotency (org_id, user_id, action, idempotency_key),
+  KEY idx_resource_operation_lease (status, lease_until)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE session
+  ADD COLUMN computer_id CHAR(32) NULL,
+  ADD COLUMN workspace JSON NULL,
+  ADD KEY idx_session_computer (computer_id);
+ALTER TABLE skill
+  ADD COLUMN revision BIGINT UNSIGNED NOT NULL DEFAULT 1,
+  ADD COLUMN content_hash CHAR(64) NOT NULL DEFAULT '';
+
+```
+
+- `backend_id` 是配置中的稳定存储域身份，不等同于后端类型；`backend_name` 首次落库后不再渲染。更换端点不能作为迁移已存在卷的手段。
+- `platform_setting` 中的 `volume.installation_id` 在首次卷操作时幂等建立，值为 JSON 字符串（32 位小写 UUID）。所有服务副本共享此身份；备份数据库时必须保留它。回滚 schema 不删除该标识或后端卷。
+- 卷服务按 `(org_id,user_id)` 使用 MySQL 命名锁串行化创建与检查，锁使用专用连接；外部请求期间没有 SQL 事务。取消/释放失败时丢弃物理连接，避免持锁连接回到池中。意图先落库，后端 Ensure 成功后才写 ready；网络超时或 DB 写失败可用同一卷名重试。
+- `ready/missing` 只允许 Inspect，不允许 Ensure；发现缺失写 missing。显式恢复的卷只有全部归属标签匹配时才能回到 ready。
+- `config/policy/usage/execution/manifest/progress` 由模型写入前初始化为 `{}`，避免 JSON `NULL`；旧 `session.workspace` 保持 nullable 以兼容旧插入，新流程显式写入工作区状态。
+- `skill.revision` 初始为 1；旧包 `content_hash` 初始空串，技能同步负责计算摘要。单版本安装不意味着丢失运行记录中的修订审计。
+- `resource_operation.idempotency_key` 可空（无幂等键），非空值使用二进制排序规则；唯一约束按机构、用户、action 限定。相同键且 request_hash 不同由服务返回 conflict。
+- `computer_run` 的活动主任务互斥由运行服务锁定 session 行后检查并登记，不能仅依赖进程 map。过期 lease 不等同于远端进程结束。
+- 删除电脑使用 status=deleted，不级联删除用户卷。schema down 会删除资源索引表，执行前应导出资源身份；已有工作区新写入需要独立数据回滚计划。

@@ -1,7 +1,35 @@
 # 前端详细设计
 
+> 用户云电脑整体契约见 [computers.md §9](computers.md#9-实时协议与前端)，界面实现见本文“用户云电脑与持久文件”。新会话使用独立工作区文件面板，历史未迁移会话保留 SandboxPanel；两者复用本文件组件及 theme.md token。
+
 > 本文是 `web/` 的权威设计。技术栈已定（决策 #11）：React 18 + Vite + TypeScript + Tailwind CSS + shadcn/ui + Zustand + React Router。界面语言中文。
 > 交互对标 DeepSeek Harness 的产品形态（三栏布局、聊天/轨迹双视图、工具卡片、审批内嵌），但不照搬其自研 store/Slots/模块加载器。
+
+## 用户云电脑与持久文件
+
+云电脑是用户级资源，前端不得从某个会话的旧 `session/sandbox` 事件推断共享电脑状态。REST DTO 与错误码见 [api.md §8](api.md#8-用户云电脑绑定卷与操作)。
+
+| 界面 | 实现与交互 |
+|---|---|
+| `/computers` 我的云电脑 | 侧栏展开与折叠状态均有入口。列表显示名称、镜像、资源、状态及活动任务；提供创建、启动、暂停、仅改名称、编辑后重建、删除 |
+| 创建／重建对话框 | 创建可选已发布 Agent 的环境模板；显式 image/resources 优先。创建请求持有幂等键，修改输入后才更换；重建说明持久卷保留、运行层重置 |
+| 生命周期操作 | 202 只表示已接收，记录 operation_id 并轮询至 completed/failed。操作中的电脑禁用重复维护；失败保持可见并允许重试，不显示成功假象 |
+| 活动任务 | 任务链接回对应会话；维护占用单独展示。失效租约仍视为占用，暂停／重建／删除禁用；服务器继续执行最终校验 |
+| 终止任务并恢复 | 独立危险操作，即使存在活动任务也可进入确认；明确提示会终止这台电脑所有正常任务／子任务／维护、丢失系统临时层，保留三卷与绑定。提交 confirm_stop_all:true 和稳定幂等键；recovering 时禁用其他操作并显示后台重试状态，只有完成后才可重新启动 |
+| 持久存储摘要 | 固定展示 `/storage`、`/agents`、`/sessions` 的状态和保留定位；未创建卷显示首次创建时准备，故障不当作空目录 |
+| Agent 默认电脑 | 每个已发布 Agent 可选择本人电脑或“无默认电脑”；残留的下线 Agent 绑定仍列出以便清理。不修改已有会话 |
+| 新会话 | 草稿页选择电脑，优先采用个人绑定；无绑定时保持未选，不自动选第一台。未选择电脑时发送按钮禁用，并提供管理入口 |
+| 已有会话 | 顶部显示电脑选择、实际状态、稳定 `/sessions/<sid>` 路径。无活动任务时可切换电脑，活动时禁用；暂停状态可请求启动 |
+| 会话文件面板 | 已绑定电脑使用 `WorkspaceFiles`，旧未迁移会话继续使用 `SandboxPanel`。范围为当前会话、我的存储、智能体文件；所有请求传显式 scope 和相对 path |
+| 输入与交付 | 通用上传进入 inputs，不能覆盖已存在文件；会话根目录优先展示 outputs。成果“保存到我的存储”采用明确目标相对路径，成功返回校验结果后才提示完成 |
+| 预览／下载 | 复用 FilePreview；完整下载使用 `download=1`，不把截断预览当作完整文件。大文件限制和后端错误原样保留为失败 |
+| 技能管理 | 管理员技能列表显示 revision，提供“更新包”；PUT multipart file/expected_revision；并发冲突要求刷新重选，成功提示任务结束后同步安装 |
+
+`stores/computers.ts` 承接 control baseline 的 computers 与 computer/upsert/remove，按当前 org 及每项 org_id 校验投影。切换机构清空旧投影，迟到的旧请求不重新填入。电脑页还周期刷新 REST 状态和活动运行，用于显示操作、任务和卷摘要；WS 仍负责及时状态投影及重连覆盖。电脑配置只读取安全视图，不回显 env 值。
+
+`session/computer`、`workspace/ready`、`runtime/environment` 更新会话 header 中的 computerId/workspaceDir/computerStatus。其他客户端切换电脑后，当前聊天重新读取 Detail，不需要用户手动刷新页面。技能更新等待、同步失败、电脑忙、卷缺失等错误转为可行动的中文提示，不自动取消正在运行的任务。
+
+验收：`pnpm test` 覆盖默认绑定解析、不自动选机、活动／失效维护占用的控制禁用、跨机构迟到投影、幂等请求头、202 状态、409 错误、scope/inputs/跨卷保存与技能修订冲突；`pnpm build` 执行 TypeScript strict 与 Vite 构建。真实 HTTP、WS 权限与交互验收由独立测试实例完成，不以请求 mock 代替后端验收。
 
 ## 1. 工程约定
 
@@ -15,7 +43,7 @@
 | 路由 | react-router v7 |
 | Markdown | react-markdown + remark-gfm；代码高亮 shiki（按需加载语言） |
 | 请求 | 原生 fetch 封装（`src/api/client.ts`）：自动带 token、`X-Org-Id`（从 URL/状态推导）、统一错误信封解包、401 跳登录 |
-| 测试 | vitest（仅关键工具函数与 mux 客户端） |
+| 测试 | Node test runner + esbuild（关键状态、请求契约、权限边界和 mux 投影） |
 
 开发代理：vite dev server `server.proxy` 把 `/api` 转发到本地 Go 服务 `:8080`。
 

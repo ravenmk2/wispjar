@@ -8,6 +8,7 @@
 > - `docs/design/api.md`：REST API 完整规格（全部端点请求/响应/权限/错误码）
 > - `docs/design/protocol.md`：WebSocket 实时协议（mux 帧、follow 订阅、StreamChunk、会话事件词表、重连对账）
 > - `docs/design/runtime.md`：Agent 运行时（eino 集成、工具规格、task 委派、Skills、审批、沙箱管理）
+> - `docs/design/computers.md`：用户云电脑与持久卷（目录、命名配置、并行执行、技能同步、迁移及实施验收）
 > - `docs/design/frontend.md`：前端工程与界面详细规格
 
 ---
@@ -21,7 +22,7 @@ Wispjar 是一个多租户智能体平台：
 - **多智能体**：机构管理员创建/发布智能体（提示词 + 模型 + 工具 + Skills + 子智能体 + 沙箱镜像）；普通用户仅对话使用。
 - **子智能体委派**：主 Agent 通过一个统一的 `task` 工具把自包含任务委派给机构内其他智能体（supervisor 模式）。
 - **Agent Skills**：遵循 agentskills.io 规范，上传 zip 配置，渐进式披露。
-- **沙箱**：基于 OpenSandbox，每会话独占一个沙箱，Agent 可在沙箱内 exec / read / write / edit / glob / grep。
+- **云电脑与存储**：用户在机构内拥有多台云电脑，三类持久卷挂载到 `/storage`、`/agents`、`/sessions`；多会话共享电脑并行执行，subagent 跟随主任务。OpenSandbox 提供底层实例。实施与旧会话迁移见 [云电脑设计](design/computers.md)。
 - **会话与事件**：事件溯源（event sourcing）会话日志（MySQL append-only 事件表）+ 单条 WebSocket 多路复用实时协议；协议骨架、事件词表、增量块协议借鉴 DeepSeek Harness 开源项目并做多租户适配。
 
 ### 1.1 非目标（v1 不做）
@@ -39,18 +40,20 @@ Wispjar 是一个多租户智能体平台：
 | 3 | 密钥归属 | 平台统一配置，加密存储，对机构不可见 |
 | 4 | 模型可见性 | 平台上架模型全局共享，所有机构可用 |
 | 5 | Agent 形态 | 单 Agent ReAct + `task` 工具委派子 Agent（子 Agent 独立上下文执行、返回最终结果） |
-| 6 | 沙箱粒度 | 每会话独占；首次调用沙箱工具时惰性创建，会话内复用，空闲超时自动暂停（按需恢复），硬 TTL 到期回收 |
+| 6 | 云电脑粒度 | 用户拥有电脑；会话绑定并可多会话并行，subagent 跟随；空闲暂停、实例租约与用户数据保留分离；旧会话独占沙箱走迁移兼容路径 |
 | 7 | 前后端协议 | 所有 API 以 `/api` 开头：CRUD/动作走 REST，实时走单条 WebSocket 多路复用流（`/api/ws`） |
 | 8 | 工具确认 | 会话级三模式，用户自行切换：`strict`（exec/write/edit 全确认）/ `default`（仅 exec 确认）/ `auto`（全免确认，新会话默认） |
-| 9 | 普通用户边界 | 仅对话使用 + 管理自己的会话；会话对机构管理员也不可见（仅本人） |
+| 9 | 普通用户边界 | 对话、个人会话/云电脑/存储与 Agent 电脑绑定；私人资源对机构管理员也不可见（仅本人） |
 | 10 | 用量 | 记录 token 用量并按机构/用户/智能体/模型聚合，管理后台报表展示，无硬配额 |
 | 11 | 前端技术栈 | React 18 + Vite + TypeScript + Tailwind + shadcn/ui + Zustand + React Router |
 | 12 | Skills 格式 | 遵循 agentskills.io 规范（SKILL.md + YAML frontmatter + scripts/references/assets） |
-| 13 | 沙箱网络/镜像 | 平台超管统一配置 egress 黑白名单，创建沙箱时应用；每个智能体可配置不同镜像 |
+| 13 | 沙箱网络/镜像 | 平台超管统一配置 egress；电脑持有环境配置，Agent 模板用于创建，不在不同会话运行时覆盖电脑 |
 | 14 | 数据库 | MySQL 8；主键 UUIDv7 时序版、去掉 `-`（32 位 hex，`CHAR(32)`） |
 | 15 | 后端框架 | Go + gin + cloudwego/eino（`adk.ChatModelAgent` + `adk.Runner`）+ eino-ext 模型组件 |
 | 16 | 沙箱接入 | OpenSandbox 官方 Go SDK（lifecycle REST + execd API） |
 | 17 | 缓存命中优先 | 模型上下文缓存按输入前缀命中，system/历史前缀稳定优先于一切动态内容注入；原则清单与评审基线见 runtime.md §12《缓存命中优先设计原则》 |
+| 18 | 用户持久卷 | `(org,user)` 三卷共享于其所有电脑，重要程度 storage > agents > sessions；卷名由部署 YAML 模板生成后落库固定，电脑删除不删卷 |
+| 19 | 工作区与技能 | `/sessions/<sid>` 为 cwd，默认 inputs/outputs；Agent skills 单版本、任务边界更新，技能为会话快照的动态例外 |
 
 ## 3. 术语
 
@@ -67,7 +70,9 @@ Wispjar 是一个多租户智能体平台：
 | 会话（Session） | 某用户在某机构下与某 Agent 的对话，append-only 事件日志 |
 | 事件（Event） | 会话日志条目（`seq` 单调递增），唯一事实源 |
 | Turn / Step | 一轮对话 / 一次模型请求及其触发的工具调用 |
-| 沙箱（Sandbox） | OpenSandbox 容器实例，会话独占 |
+| 云电脑（Computer） | 用户拥有的长期执行资源，可供多会话并行使用 |
+| 沙箱（Sandbox） | 云电脑当前的 OpenSandbox 实例，可替换，generation 区分重建 |
+| 用户卷（User volume） | 机构内用户的 storage/agents/sessions 持久存储，独立于电脑实例 |
 | 确认模式 | 会话级工具审批策略：strict / default / auto |
 | mux 流 | 单条 WebSocket 上按 `streamId` 多路复用的逻辑流 |
 
@@ -116,7 +121,9 @@ internal/
 │   ├── tools/         # 沙箱工具六件套 + skill + task 委派工具
 │   ├── approval/      # 确认模式、interrupt/resume、pending 审批管理
 │   └── checkpoint/    # adk CheckPointStore 的 MySQL 实现
-├── sandbox/           # OpenSandbox 客户端封装、会话沙箱池、空闲暂停/恢复、egress/镜像应用
+├── computer/          # 用户电脑/绑定、生命周期协调、操作、运行登记与工作区
+├── volume/            # 卷命名、后端适配、归属检查、三卷挂载计划
+├── sandbox/           # OpenSandbox 实例句柄、命令/文件、暂停/恢复；兼容旧会话沙箱
 ├── session/           # 会话事件日志（append/read/derive）、投影器（标题/用量/列表）
 ├── gateway/           # gin 路由：REST handlers + WS mux server + 协议编解码
 ├── usage/             # 用量聚合与报表查询
@@ -134,6 +141,8 @@ internal/
 5. **密钥不出 provider 包**：解密仅在 ChatModel 工厂内部发生，API 永不回显明文。
 
 ## 5. 里程碑与验收
+
+下表 M1–M4 为历史基线；用户云电脑改造按 [computers.md §12](design/computers.md#12-实施任务与责任) 的 T0–T6 顺序实施并独立验收，不能以旧的会话独占验收替代共享电脑/持久卷验收。
 
 | 阶段 | 内容 | 验收标准 |
 |---|---|---|

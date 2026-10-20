@@ -1,5 +1,7 @@
 # REST API 规格
 
+> 用户云电脑资源 API 见本文 §8；文件与会话接入按 [computers.md §8](computers.md#8-rest-契约) 的 T4 实施。创建会话将增加 computer_id，旧 sandbox/file(s) 保留兼容代理；下文旧会话独占沙箱行为不适用于已绑定电脑的会话。
+
 > 全部端点以 `/api/v1` 为前缀（WS 实时协议 `/api/ws` 见 protocol.md）。
 > 认证：除 `/api/v1/auth/login` 外全部需要 `Authorization: Bearer <jwt>`。
 > 机构上下文：机构域端点路径内带 `orgId`；中间件校验当前用户是该机构成员并注入 `(uid, org_id, role)`。
@@ -246,10 +248,15 @@
 | 方法/路径 | 说明 |
 |---|---|
 | `POST /admin/skills` | 上传 zip（`multipart/form-data`，字段名 `file`）。限制：≤20MB、解压后 ≤50MB、文件数 ≤200、zip slip 防护。服务端解压校验 SKILL.md frontmatter（agentskills.io 规范：name 合法且与目录一致、description 1..1024）→ 201 返回 skill 对象；失败 422 `skill/invalid`（details 说明） |
+| `PUT /admin/skills/{id}/package` | 替换当前包，multipart 字段 `file` + `expected_revision`（十进制整数 >0）。ID/name 保持不变；成功 200 返回 skill 对象（`revision` 加一、`content_hash` 更新）；修订不一致返回 409，`details.revision` 为当前值；包名变化或非法包返回 422 |
 | `GET /admin/skills` | 列表（`size_bytes` / `uploader_name` / 被哪些智能体引用 `referenced_by`；不返回服务端 `storage_path`） |
 | `GET /admin/skills/{id}` | 详情（meta 全文 + 顶层 `files` 文件清单 + `size_bytes` / `uploader_name` / `referenced_by`） |
 | `GET /admin/skills/{id}/file?path=SKILL.md` | 查看包内文本文件（≤256KB）→ `{ "path", "content", "truncated" }` |
-| `DELETE /admin/skills/{id}` | 删除；被引用时 409（`details.referenced_by` 列出引用者） |
+| `DELETE /admin/skills/{id}` | 删除；被智能体引用、被运行使用、安装远端状态不明确或仍有安装副本时返回 409。解除关联后须在安全任务边界完成副本移除，再删除源包 |
+
+上传后 `revision=1`，`content_hash` 为排序文件路径与文件 SHA256 清单的摘要。`_source.zip` 为平台保留名称，上传包不能包含该文件。API 只公开当前源包；内部隐藏候选目录用于提交恢复，不提供多版本选择。源码读取、替换和回收使用同一跨进程锁，避免替换时在线预览读到已回收目录。
+
+替换源包只建立用户安装更新屏障，不覆盖正在运行的技能目录。`skill/update_pending` 表示等待已有运行（包括审批等待）释放；`skill/sync_failed` 表示同步失败；`skill/sync_blocked` 表示远端结果未知，必须确认同步命令停止后显式恢复。恢复能力由领域 `Coordinator.Recover` 提供并记录审计，不能将租约超时视为停止证明。
 
 ### 沙箱设置（只读）
 
@@ -327,3 +334,84 @@
 
 - `/api/*` 之外的 GET 路径：命中 `web/dist` 内静态文件则返回，否则回退 `index.html`（前端路由）。
 - 静态资源带强缓存头（Vite 产物指纹）；`index.html` `no-cache`。
+
+## 8. 用户云电脑、绑定、卷与操作
+
+以下路径均以 `/api/v1` 为前缀。所有操作要求登录、当前机构成员关系及本人归属；资源 ID 不可见时返回 404，机构管理员不能通过此接口访问他人的私人电脑。列表返回 `{items:[]}`。查询不启动电脑、不创建卷。
+
+| 方法/路径 | 输入与行为 |
+|---|---|
+| `GET /orgs/{orgId}/computers` | 当前用户在机构内的未删除电脑 |
+| `POST /orgs/{orgId}/computers` | `{name, agent_id?, config?}`；保存逻辑电脑和创建意图，再异步准备三卷及实例 |
+| `GET /computers/{id}` | 安全电脑视图 |
+| `PATCH /computers/{id}` | `{name}`，只改名称；环境变更必须通过 rebuild |
+| `POST /computers/{id}/start` | 无需 body；running 幂等完成，paused 恢复；确认实例丢失且无活动运行时以新 generation 重建 |
+| `POST /computers/{id}/pause` | 无需 body；活动任务、后台任务或维护占用返回 409 `computer/busy` |
+| `POST /computers/{id}/rebuild` | 可空 body 或 `{config?}`；空闲时替换实例、增加 generation，保留三卷 |
+| `POST /computers/{id}/recover` | 必需 `{confirm_stop_all:true}`；显式强制终止该电脑所有任务与维护并停止实例，保留三卷及会话／默认绑定，202 异步操作 |
+| `DELETE /computers/{id}` | 有活动任务返回 `computer/busy`；存在未删除会话或 Agent 默认绑定返回 `computer/in_use`；成功仅删除电脑 |
+| `GET /computers/{id}/runs` | 非终态任务及维护占用，租约过期不隐藏记录 |
+| `GET /orgs/{orgId}/agent-bindings` | 本人的 `{org_id,user_id,agent_id,computer_id,created_at,updated_at}` 列表 |
+| `PUT /orgs/{orgId}/agent-bindings/{agentId}` | `{computer_id}`；Agent 必须属于机构且已发布，电脑必须属于本人；只影响后续解析 |
+| `DELETE /orgs/{orgId}/agent-bindings/{agentId}` | 幂等清除本人默认绑定，返回 `{ok:true}`；保留已有会话绑定，已归档的 Agent 偏好也可清理 |
+| `GET /orgs/{orgId}/volumes` | 三类已登记卷摘要，首次创建电脑前可以为空 |
+| `GET /operations/{id}` | 本人电脑操作状态；不触发任何后端操作 |
+
+创建及重建的 `config` 支持：
+
+```json
+{
+  "image": "python:3.12",
+  "resources": {"cpu": "1", "memory": "1Gi"},
+  "env": {"APP_MODE": "development"},
+  "ttl_seconds": 3600
+}
+```
+
+- 创建时优先级：显式配置 → 可选 Agent 模板 → 平台默认。env 按键合并；resources 显式提供时整体替换。
+- 镜像必须是平台默认或 `sandbox.images` 中启用的镜像。resources 仅支持 cpu、memory 的正数资源量；env 沿用沙箱变量校验（最多 64 项，每值最多 4096 字节，保留 WISPJAR 键）。TTL 为 60–604800 秒，表示底层续租时长，不是数据保留期。
+- `network_policy` 由平台 egress 设置决定，普通用户请求中出现该字段会被拒绝；不得通过电脑配置绕过统一出口策略。
+- rebuild 的 config 在已有配置上合并，并在新实例创建时生效；不提供在线修改运行实例的全局环境。
+- env 保存在电脑配置中，但仅注入非 root 任务进程，不传入容器级 root execd/维护环境。EXECD_* 是平台保留变量。电脑强制启用 execd 认证；旧实例缺少安全策略标记时返回 `computer/rebuild_required`，需要显式重建后运行。
+- 响应 config 仅包含 image、resources、ttl_seconds、has_env，不回传 env 值、网络策略、后端地址或卷物理名。
+
+恢复操作用于服务重启、连接中断后遗留占用，也允许用户明确终止健康任务。进入 `recovering` 后拒绝新运行、文件维护、启动和普通生命周期操作。只有按 installation/电脑/generation 校验归属并删除旧实例、再次查询确认不存在后，才终结相关运行并释放技能使用权；随后恢复匹配的技能同步与会话运行状态，最后推进 generation、进入 `stopped`。不会重放中断命令，也不会新建或删除持久卷。删除响应丢失、查询失败或归属不符时维持 `recovering` 与 operation `running`，返回安全的 `error` 说明并由后台重试；未取得停止证明前不释放运行与技能占用。相同幂等键返回原操作，完成后重复请求不再次终止电脑。
+
+电脑视图示例：
+
+```json
+{
+  "id": "<computer_id>",
+  "org_id": "<org_id>",
+  "name": "开发电脑",
+  "status": "running",
+  "generation": 1,
+  "config": {
+    "image": "python:3.12",
+    "resources": {"cpu": "1", "memory": "1Gi"},
+    "ttl_seconds": 3600,
+    "has_env": true
+  },
+  "last_error": "",
+  "last_active_at": "2026-10-20T10:00:00+08:00",
+  "created_at": "2026-10-20T09:00:00+08:00"
+}
+```
+
+所有生命周期写操作返回 `202 Accepted`：
+
+```json
+{"operation_id":"<operation_id>","status":"pending","resource_id":"<computer_id>"}
+```
+
+已经满足目标的 start 可以返回 `status: "completed"`。创建和重建推荐传 `Idempotency-Key`（最多 128 字符），其他生命周期操作也支持。同 `(org,user,action,key)` 且规范化请求摘要相同返回原操作；不同摘要返回 `409 operation/conflict`。摘要包含目标 computer_id，不能把一个键复用于另一台电脑。修改默认配置不重算已落库的电脑配置或卷名。
+
+操作查询返回 `{id,resource_id,resource_type,action,status,error,created_at,updated_at}`，status 为 `pending/running/completed/failed`。内部进度中的实例身份、generation 清理计划和连接信息不对客户端暴露。失败原因经过脱敏；详细后端诊断仅记录服务日志。
+
+卷摘要字段为 `id,org_id,user_id,kind,status,policy,usage,last_error,created_at,updated_at`。不含 Docker socket、backend_name 或宿主路径。此端点不提供卷删除能力。
+
+运行摘要字段为 `id,session_id,agent_id,parent_run_id,status,lease_until`。维护占用的 session_id/agent_id 为空；未知或失效租约仍阻止暂停、重建和删除，直到执行方确认命令已终止。
+
+错误沿用统一信封：`computer/not_found` 404；`computer/invalid` 400；`computer/required`、`computer/busy`、`computer/in_use`、`operation/conflict`、`volume/conflict`、`volume/missing` 为 409；后端未配置或不可用为 `computer/unavailable` 503。异步执行中发生的后端故障记录到 operation，不把“已接收”当作“已启动”。
+
+部署兼容：`opensandbox.legacy_sessions_enabled` 默认 true，保留旧会话管理器。共用 OpenSandbox 的新独立部署必须配置为 false，防止无 installation 标签的旧 `wispjar=1` 实例被扫描。电脑实例始终使用独立的 `wispjar=computer-<installation>` 标签，按机构、用户、电脑、存储域和 generation 完整校验后接管。
