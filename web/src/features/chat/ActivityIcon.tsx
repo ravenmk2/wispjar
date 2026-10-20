@@ -1,18 +1,15 @@
 import { MessageCircleQuestion, Wrench } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+const bulbOutline = "M8.5 17C8.5 15.4 7.4 14.6 6.1 13.2C4.6 11.8 3.7 10.1 3.7 8.3C3.7 4.5 7.3 2 12 2C16.7 2 20.3 4.5 20.3 8.3C20.3 10.1 19.4 11.8 17.9 13.2C16.6 14.6 15.5 15.4 15.5 17Z"
+
 // Split the SVG into semantic parts so the outline stays stable while its details animate.
 const glyphs = {
   reasoning: <>
-    <g transform="rotate(-45 12 12)">
-      <ellipse className="activity-atom-track" cx="12" cy="12" rx="9" ry="5" />
-      <circle className="activity-atom-electron" r="1.35" />
-    </g>
-    <g transform="rotate(45 12 12)">
-      <ellipse className="activity-atom-track" cx="12" cy="12" rx="9" ry="5" />
-      <circle className="activity-atom-electron activity-atom-electron-offset" r="1.35" />
-    </g>
-    <circle className="activity-atom-core" cx="12" cy="12" r="1.9" />
+    <path className="activity-bulb-glow" d={bulbOutline} />
+    <path d={bulbOutline} />
+    <path d="M8.5 19.5h7M10 22h4" />
+    <path className="activity-bulb-filament" d="m8.8 8.8 3.2 3 3.2-3M12 11.8V17" />
   </>,
   search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></>,
   read: <>
@@ -60,7 +57,7 @@ export function ActivityIcon({ name, active = false }: { name: string; active?: 
   const glyph = Object.hasOwn(glyphs, kind) ? glyphs[kind as keyof typeof glyphs] : undefined
   const className = cn("chat-activity-icon", active && "is-running", `chat-activity-${glyph ? kind : "fallback"}`)
   if (glyph) {
-    return <svg aria-hidden="true" viewBox={kind === "reasoning" ? "3 3 18 18" : "0 0 24 24"} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>{glyph}</svg>
+    return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={kind === "reasoning" ? 1.65 : 1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>{glyph}</svg>
   }
   const Icon = name === "question" || name === "ask_user_question" ? MessageCircleQuestion : Wrench
   return <Icon aria-hidden="true" className={className} />

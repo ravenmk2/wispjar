@@ -176,13 +176,13 @@
   50% { opacity: 1; }
 }
 
-@keyframes activity-atom-orbit {
-  from { offset-distance: 0%; }
-  to { offset-distance: 100%; }
+@keyframes activity-bulb-glow {
+  0%, 100% { opacity: .015; }
+  50% { opacity: .15; }
 }
 
-@keyframes activity-atom-core {
-  0%, 100% { opacity: .45; }
+@keyframes activity-bulb-filament {
+  0%, 100% { opacity: .32; }
   50% { opacity: 1; }
 }
 
@@ -276,22 +276,17 @@
   .chat-activity-fallback.is-running {
     animation: activity-fade 1.8s ease-in-out infinite;
   }
-  .activity-atom-track { stroke-width: 1.35; }
-  .activity-atom-electron,
-  .activity-atom-core { fill: currentColor; stroke: none; }
-  .activity-atom-electron {
-    display: none;
-    offset-path: path("M3 12A9 5 0 1 0 21 12A9 5 0 1 0 3 12");
-    offset-rotate: 0deg;
+  .activity-bulb-glow {
+    fill: currentColor;
+    stroke: none;
+    opacity: 0;
   }
-  .activity-atom-electron-offset { offset-distance: 33.333%; }
-  .chat-activity-icon.is-running .activity-atom-electron {
-    display: initial;
-    animation: activity-atom-orbit 2.8s linear infinite;
+  .activity-bulb-filament { opacity: .7; }
+  .chat-activity-icon.is-running .activity-bulb-glow {
+    animation: activity-bulb-glow 2.4s ease-in-out infinite;
   }
-  .chat-activity-icon.is-running .activity-atom-electron-offset { animation-delay: -1.4s; }
-  .chat-activity-icon.is-running .activity-atom-core {
-    animation: activity-atom-core 1.8s ease-in-out infinite;
+  .chat-activity-icon.is-running .activity-bulb-filament {
+    animation: activity-bulb-filament 2.4s ease-in-out infinite;
   }
   .chat-activity-icon.is-running .activity-scan {
     animation: activity-scan 1.8s ease-in-out infinite;
@@ -394,8 +389,4 @@
   .dark .markdown-body .shiki span {
     color: var(--shiki-dark) !important;
   }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .chat-activity-icon.is-running .activity-atom-core { animation: none; }
 }
