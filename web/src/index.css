@@ -140,17 +140,49 @@
   }
 }
 
-@keyframes activity-breathe {
-  0%, 100% { opacity: .4; transform: scale(.9); }
-  50% { opacity: 1; transform: scale(1.1); }
+@keyframes activity-search {
+  0%, 100% { transform: translate(0, 0); }
+  30% { transform: translate(2px, -1.5px); }
+  65% { transform: translate(-1.5px, 1px); }
+}
+
+@keyframes activity-scan {
+  0%, 20%, 100% { opacity: .2; }
+  45%, 65% { opacity: 1; }
+}
+
+@keyframes activity-write {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  30% { transform: translate(-1px, 1px) rotate(-6deg); }
+  65% { transform: translate(1px, -1px) rotate(3deg); }
+}
+
+@keyframes activity-prompt {
+  0%, 100% { transform: translateX(0); opacity: .45; }
+  50% { transform: translateX(1.5px); opacity: 1; }
+}
+
+@keyframes activity-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 @keyframes activity-twinkle {
-  0%, 100% { opacity: .2; transform: scale(.7); }
-  50% { opacity: 1; transform: scale(1.25); }
+  0%, 100% { opacity: .2; transform: scale(.65); }
+  50% { opacity: 1; transform: scale(1.2); }
 }
 
 @keyframes activity-fade {
+  0%, 100% { opacity: .25; }
+  50% { opacity: 1; }
+}
+
+@keyframes activity-atom-orbit {
+  from { offset-distance: 0%; }
+  to { offset-distance: 100%; }
+}
+
+@keyframes activity-atom-core {
   0%, 100% { opacity: .45; }
   50% { opacity: 1; }
 }
@@ -224,20 +256,61 @@
   .chat-activity-icon {
     @apply size-[18px] shrink-0 text-fg-process;
     transform-origin: center;
+    overflow: visible;
   }
   .chat-activity-icon.is-running {
-    animation: activity-breathe 1.5s ease-in-out infinite;
+    color: var(--text-process-hover);
   }
-  .chat-activity-skill.is-running {
-    animation: none;
+  .chat-activity-search.is-running {
+    animation: activity-search 1.8s ease-in-out infinite;
   }
-  .chat-activity-skill.is-running .activity-star {
+  .chat-activity-icon.is-running .activity-signal,
+  .chat-activity-fallback.is-running {
+    animation: activity-fade 1.8s ease-in-out infinite;
+  }
+  .activity-atom-track { stroke-width: 1.35; }
+  .activity-atom-electron,
+  .activity-atom-core { fill: currentColor; stroke: none; }
+  .activity-atom-electron {
+    display: none;
+    offset-path: path("M3 12A9 5 0 1 0 21 12A9 5 0 1 0 3 12");
+    offset-rotate: 0deg;
+  }
+  .activity-atom-electron-offset { offset-distance: 33.333%; }
+  .chat-activity-icon.is-running .activity-atom-electron {
+    display: initial;
+    animation: activity-atom-orbit 2.8s linear infinite;
+  }
+  .chat-activity-icon.is-running .activity-atom-electron-offset { animation-delay: -1.4s; }
+  .chat-activity-icon.is-running .activity-atom-core {
+    animation: activity-atom-core 1.8s ease-in-out infinite;
+  }
+  .chat-activity-icon.is-running .activity-scan {
+    animation: activity-scan 1.8s ease-in-out infinite;
+  }
+  .chat-activity-icon.is-running .activity-scan-middle { animation-delay: -1.2s; }
+  .chat-activity-icon.is-running .activity-scan-last { animation-delay: -.6s; }
+  .chat-activity-icon.is-running .activity-pen {
+    transform-origin: center;
+    animation: activity-write 1.8s ease-in-out infinite;
+  }
+  .chat-activity-icon.is-running .activity-prompt {
+    animation: activity-prompt 1.8s ease-in-out infinite;
+  }
+  .chat-activity-icon.is-running .activity-cursor {
+    animation: activity-blink 1s steps(1) infinite;
+  }
+  .chat-activity-icon.is-running .activity-eye {
+    animation: activity-fade 1.4s ease-in-out infinite;
+  }
+  .chat-activity-icon.is-running .activity-eye-offset { animation-delay: -.7s; }
+  .chat-activity-icon.is-running .activity-star {
     transform-box: fill-box;
     transform-origin: center;
     animation: activity-twinkle 1.8s ease-in-out infinite;
   }
-  .chat-activity-skill .activity-star:nth-of-type(2) { animation-delay: .6s; }
-  .chat-activity-skill .activity-star:nth-of-type(3) { animation-delay: 1.2s; }
+  .chat-activity-icon.is-running .activity-star-middle { animation-delay: -.6s; }
+  .chat-activity-icon.is-running .activity-star-last { animation-delay: -1.2s; }
   .chat-disclosure-icon {
     @apply size-3.5 shrink-0;
   }
@@ -311,7 +384,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-activity-icon.is-running { animation: activity-fade 2.4s ease-in-out infinite; }
-  .chat-activity-skill.is-running { animation: none; }
-  .chat-activity-skill.is-running .activity-star { animation: activity-fade 2.4s ease-in-out infinite; }
+  .chat-activity-icon.is-running .activity-atom-core { animation: none; }
 }
