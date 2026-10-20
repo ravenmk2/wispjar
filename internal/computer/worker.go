@@ -90,7 +90,7 @@ func (s *Service) Process(ctx context.Context, operationID string) (err error) {
 	}
 	finish := func(sid *string, status string, cause error) error {
 		if cause != nil {
-			log.Printf("computer: %s %s: %v", c.ID, op.Action, cause)
+			log.Printf("computer: operation=%s computer=%s action=%s: %v", op.ID, c.ID, op.Action, cause)
 		}
 		// Interrupted workers leave their intent recoverable, including an
 		// ambiguous create. Never erase the creation-attempt marker.

@@ -202,9 +202,16 @@ func (h *ExecutionHandle) fileOp(ctx context.Context, op string, args map[string
 	return []byte(result.Stdout), nil
 }
 
-// RunPayload uses a platform-owned transfer directory instead of putting large
-// file bodies in argv (Linux limits a single argument to about 128 KiB).
+// RunPayload pipes small requests to the child and stages large file bodies in
+// a platform-owned directory (Linux limits a single argument to about 128 KiB).
 func (h *ExecutionHandle) RunPayload(ctx context.Context, script string, payload []byte, timeoutMs int64) (*sandbox.CommandResult, error) {
+	// Directory listings and reads carry only a small JSON request. Pipe it to
+	// the unprivileged child instead of staging it through four remote calls.
+	// Keep argv well below Linux's per-argument limit after supervisor encoding.
+	if len(payload) <= 16*1024 {
+		command := "printf %s " + shellQuote(string(payload)) + " | python3 -I -c " + shellQuote(script) + " /dev/stdin"
+		return h.RunCommand(ctx, command, "/", nil, timeoutMs, nil)
+	}
 	token := id.New()
 	stage := "/tmp/.wispjar-transfer/" + token
 	prepared, err := h.Handle.RunCommand(ctx, "python3 -I -c "+shellQuote(transferPython)+" prepare "+shellQuote(token), "/", PlatformEnv(), 10000, nil)

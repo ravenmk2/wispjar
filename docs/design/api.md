@@ -406,7 +406,9 @@
 
 已经满足目标的 start 可以返回 `status: "completed"`。创建和重建推荐传 `Idempotency-Key`（最多 128 字符），其他生命周期操作也支持。同 `(org,user,action,key)` 且规范化请求摘要相同返回原操作；不同摘要返回 `409 operation/conflict`。摘要包含目标 computer_id，不能把一个键复用于另一台电脑。修改默认配置不重算已落库的电脑配置或卷名。
 
-操作查询返回 `{id,resource_id,resource_type,action,status,error,created_at,updated_at}`，status 为 `pending/running/completed/failed`。内部进度中的实例身份、generation 清理计划和连接信息不对客户端暴露。失败原因经过脱敏；详细后端诊断仅记录服务日志。
+操作查询返回 `{id,resource_id,resource_type,action,status,error,error_detail,created_at,updated_at}`，status 为 `pending/running/completed/failed`。电脑视图失败时也提供可选 `error_detail`，`last_error` 和操作 `error` 保持为面向用户的原因摘要。`error_detail` 包含 `{code,message,suggestion,operation_id?}`，分别用于失败原因、处理建议与日志定位；成功时省略或为 null。稳定错误码区分 `computer/backend_dns`、`computer/network_not_ready`、`computer/image_unavailable`、`computer/backend_auth`、`computer/backend_timeout`、`computer/instance_missing`、`computer/identity_mismatch`、`computer/rebuild_required`、`volume/missing`、`volume/conflict`；未分类故障为 `computer/backend_failed`。旧记录未保存具体原因时返回 `computer/legacy_failure` 与安全的通用说明，不推断历史原因。管理页和聊天页显示原因与建议，错误码和操作编号收纳在“排查信息”中。
+
+内部进度中的实例身份、generation 清理计划和连接信息不对客户端暴露。公开说明使用预定义分类，不回显原始后端地址、请求头、凭据或调用堆栈；详细后端诊断仅记录服务日志。底层故障分类保留在恢复操作中，`recovering` 仍维持恢复门禁与后台重试，不因显示错误而释放占用。
 
 卷摘要字段为 `id,org_id,user_id,kind,status,policy,usage,last_error,created_at,updated_at`。不含 Docker socket、backend_name 或宿主路径。此端点不提供卷删除能力。
 

@@ -1,6 +1,9 @@
 import test, { afterEach } from "node:test"
 import assert from "node:assert/strict"
-import { canMutateComputer, resolveComputerSelection, type Computer } from "./computers"
+import { canMutateComputer, computerFailure, computerOperationError, resolveComputerSelection, type Computer } from "./computers"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
+import { ComputerFailure } from "@/features/computers/ComputerFailure"
 import { useComputerStore } from "@/stores/computers"
 import { computersApi } from "@/api/computers"
 import { ApiError, errorMessage } from "@/api/client"
@@ -14,6 +17,22 @@ const fixture = (id = "computer", org = "org", status = "running"): Computer => 
 })
 const originalFetch = globalThis.fetch
 const originalWindow = globalThis.window
+
+test("computer failures show the cause, remedy and a traceable operation", () => {
+  const computer = { ...fixture("computer", "org", "failed"), last_error: "实例不存在", error_detail: {
+    code: "computer/instance_missing", message: "云电脑实例不存在，上次创建或启动未成功。", suggestion: "请使用编辑 / 重建，已有持久文件会保留。", operation_id: "operation-123",
+  } }
+  const html = renderToStaticMarkup(createElement(ComputerFailure, { computer }))
+  for (const expected of ["实例不存在", "重建", "持久文件", "operation-123", "computer/instance_missing"]) assert.ok(html.includes(expected))
+  assert.match(computerOperationError({ id: "op", resource_id: "computer", action: "computer/start", status: "failed", error: computer.last_error, error_detail: computer.error_detail }), /实例不存在.*重建/)
+  assert.equal(renderToStaticMarkup(createElement(ComputerFailure, { computer: fixture() })), "")
+})
+
+test("legacy errors do not invent a cause or render raw backend credentials", () => {
+  const detail = computerFailure({ last_error: "http://admin:secret@private.invalid/internal" })
+  assert.match(detail!.message, /旧记录未保存具体原因/)
+  assert.ok(!JSON.stringify(detail).includes("secret"))
+})
 afterEach(() => {
   globalThis.fetch = originalFetch
   globalThis.window = originalWindow

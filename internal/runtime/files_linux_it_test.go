@@ -20,9 +20,15 @@ import (
 	"github.com/ravenmk2/wispjar/internal/store"
 )
 
-type localFileHandle struct{ tools.Handle }
+type localFileHandle struct {
+	tools.Handle
+	commands, uploads *int
+}
 
-func (localFileHandle) RunCommand(ctx context.Context, command, cwd string, env map[string]string, _ int64, _ func(string, string)) (*sandbox.CommandResult, error) {
+func (h localFileHandle) RunCommand(ctx context.Context, command, cwd string, env map[string]string, _ int64, _ func(string, string)) (*sandbox.CommandResult, error) {
+	if h.commands != nil {
+		*h.commands++
+	}
 	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", command)
 	cmd.Dir = cwd
 	cmd.Env = os.Environ()
@@ -43,7 +49,10 @@ func (localFileHandle) RunCommand(ctx context.Context, command, cwd string, env 
 	}
 	return &sandbox.CommandResult{ExitCode: code, Stdout: stdout.String(), Stderr: stderr.String()}, nil
 }
-func (localFileHandle) UploadFile(_ context.Context, name string, data []byte) error {
+func (h localFileHandle) UploadFile(_ context.Context, name string, data []byte) error {
+	if h.uploads != nil {
+		*h.uploads++
+	}
 	return os.WriteFile(name, data, 0600)
 }
 
@@ -61,12 +70,45 @@ func TestScopedFilesIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := session.WorkspaceDir(sid)
-	handle := tools.NewExecutionHandle(raw)
+	commands, uploads := 0, 0
+	handle := tools.NewExecutionHandle(localFileHandle{commands: &commands, uploads: &uploads})
+	listing, err := remoteFileOperation(ctx, handle, root, ".", "list", nil)
+	if err != nil || len(listing.Items) != 2 || commands != 1 || uploads != 0 || !handle.CommandsStopped() {
+		t.Fatalf("listing must need one supervised command without uploads: %+v commands=%d uploads=%d err=%v", listing, commands, uploads, err)
+	}
+	// Shell metacharacters and UTF-8 must survive the inline stdin path literally.
+	name := "outputs/quote'\"$().txt"
+	small := []byte("literal ' \" $(id) `id` \\ 中文\n")
+	_, err = remoteFileOperation(ctx, handle, root, name, "write", map[string]any{"data": base64.StdEncoding.EncodeToString(small)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands, uploads = 0, 0
+	smallRead, err := remoteFileOperation(ctx, handle, root, name, "read", nil)
+	decoded, decodeErr := base64.StdEncoding.DecodeString(smallRead.Data)
+	if err != nil || decodeErr != nil || !bytes.Equal(decoded, small) || commands != 1 || uploads != 0 {
+		t.Fatalf("inline read: %v %v commands=%d uploads=%d", err, decodeErr, commands, uploads)
+	}
+	if err = os.Remove(path.Join(root, name)); err != nil {
+		t.Fatal(err)
+	}
+	_, err = remoteFileOperation(ctx, handle, root, "missing", "read", nil)
+	var missing *session.Error
+	if !errors.As(err, &missing) || missing.Code != "file/not_found" {
+		t.Fatalf("missing child must not request workspace initialization: %v", err)
+	}
+	_, err = remoteFileOperation(ctx, handle, root+"/missing-root", ".", "list", nil)
+	if !errors.As(err, &missing) || missing.Code != "file/root_not_found" {
+		t.Fatalf("missing workspace root: %v", err)
+	}
 	payload := bytes.Repeat([]byte("transfer-content\n"), 100000)
 	encoded := base64.StdEncoding.EncodeToString(payload)
 	result, err := remoteFileOperation(ctx, handle, root, "inputs/a.txt", "write", map[string]any{"data": encoded})
 	if err != nil || result.Bytes != int64(len(payload)) {
 		t.Fatalf("upload: %+v %v", result, err)
+	}
+	if uploads != 1 {
+		t.Fatalf("large upload must retain staged transfer: uploads=%d", uploads)
 	}
 	_, err = remoteFileOperation(ctx, handle, root, "inputs/a.txt", "write", map[string]any{"data": "eA=="})
 	var conflict *session.Error
@@ -96,6 +138,10 @@ func TestScopedFilesIntegration(t *testing.T) {
 	}
 	if err := os.Symlink("../private.txt", path.Join(root, "inputs", "link")); err != nil {
 		t.Fatal(err)
+	}
+	listing, err = remoteFileOperation(ctx, handle, root, "inputs", "list", nil)
+	if err != nil || len(listing.Items) != 1 || listing.Items[0]["name"] != "a.txt" {
+		t.Fatalf("listing advertised a symlink: %+v %v", listing, err)
 	}
 	_, err = remoteFileOperation(ctx, handle, path.Join(root, "inputs"), "link", "read", nil)
 	if err == nil {

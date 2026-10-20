@@ -55,16 +55,18 @@ func fail(c *gin.Context, err error) {
 func View(row store.Computer) any {
 	var config Config
 	_ = json.Unmarshal(row.Config, &config)
+	detail := publicFailure(row.LastError)
 	return struct {
-		ID           string `json:"id"`
-		OrgID        string `json:"org_id"`
-		Name         string `json:"name"`
-		Status       string `json:"status"`
-		Generation   uint64 `json:"generation"`
-		Config       any    `json:"config"`
-		LastError    string `json:"last_error"`
-		LastActiveAt any    `json:"last_active_at"`
-		CreatedAt    any    `json:"created_at"`
+		ID           string       `json:"id"`
+		OrgID        string       `json:"org_id"`
+		Name         string       `json:"name"`
+		Status       string       `json:"status"`
+		Generation   uint64       `json:"generation"`
+		Config       any          `json:"config"`
+		LastError    string       `json:"last_error"`
+		ErrorDetail  *ErrorDetail `json:"error_detail,omitempty"`
+		LastActiveAt any          `json:"last_active_at"`
+		CreatedAt    any          `json:"created_at"`
 	}{row.ID, row.OrgID, row.Name, row.Status, row.Generation,
 		struct {
 			Image     string            `json:"image"`
@@ -72,7 +74,7 @@ func View(row store.Computer) any {
 			TTL       int               `json:"ttl_seconds"`
 			HasEnv    bool              `json:"has_env"`
 		}{config.Image, config.Resources, config.TTLSeconds, len(config.Env) > 0},
-		row.LastError, row.LastActiveAt, row.CreatedAt}
+		publicErrorMessage(detail), detail, row.LastActiveAt, row.CreatedAt}
 }
 func accepted(c *gin.Context, op store.ResourceOperation) {
 	c.JSON(http.StatusAccepted, gin.H{"operation_id": op.ID, "status": op.Status, "resource_id": op.ResourceID})
@@ -207,5 +209,9 @@ func (h *Handler) Operation(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"id": op.ID, "resource_id": op.ResourceID, "resource_type": op.ResourceType, "action": op.Action, "status": op.Status, "error": op.Error, "created_at": op.CreatedAt, "updated_at": op.UpdatedAt})
+	detail := publicFailure(op.Error)
+	if detail != nil {
+		detail.OperationID = op.ID
+	}
+	c.JSON(200, gin.H{"id": op.ID, "resource_id": op.ResourceID, "resource_type": op.ResourceType, "action": op.Action, "status": op.Status, "error": publicErrorMessage(detail), "error_detail": detail, "created_at": op.CreatedAt, "updated_at": op.UpdatedAt})
 }

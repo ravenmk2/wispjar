@@ -6,6 +6,7 @@ export interface Computer {
   generation: number
   config: { image: string; resources: Record<string, string>; ttl_seconds: number; has_env: boolean }
   last_error: string
+  error_detail?: ComputerErrorDetail | null
   last_active_at: string | null
   created_at: string
 }
@@ -16,7 +17,8 @@ export interface ComputerConfig {
   env?: Record<string, string>
   ttl_seconds?: number
 }
-export interface ComputerOperation { id: string; resource_id: string; action: string; status: string; error: string }
+export interface ComputerErrorDetail { code: string; message: string; suggestion: string; operation_id?: string }
+export interface ComputerOperation { id: string; resource_id: string; action: string; status: string; error: string; error_detail?: ComputerErrorDetail | null }
 export interface OperationAccepted { operation_id: string; resource_id: string; status: string }
 export interface ComputerRun { id: string; session_id: string; agent_id: string; parent_run_id: string | null; status: string; lease_until: string | null }
 export interface AgentBinding { agent_id: string; computer_id: string }
@@ -38,6 +40,21 @@ export function canMutateComputer(computer: Computer, runs: ComputerRun[]): bool
   return !computerTransitioning(computer.status) && computer.status !== "deleted" && runs.length === 0
 }
 export function workspaceRoot(sessionId: string): string { return `/sessions/${sessionId}` }
+
+export function computerFailure(computer: Pick<Computer, "last_error" | "error_detail">): ComputerErrorDetail | null {
+  if (computer.error_detail) return computer.error_detail
+  if (!computer.last_error) return null
+  return {
+    code: "computer/backend_failed",
+    message: "云电脑上次操作失败，旧记录未保存具体原因。",
+    suggestion: "请联系管理员，提供电脑名称和失败时间排查；已有持久文件继续保留。",
+  }
+}
+
+export function computerOperationError(operation: ComputerOperation): string {
+  const detail = computerFailure({ last_error: operation.error, error_detail: operation.error_detail })
+  return detail ? `${detail.message} ${detail.suggestion}` : "电脑操作失败，请联系管理员检查。"
+}
 
 export const computerErrorMessages: Record<string, string> = {
   "computer/required": "请选择一台云电脑，或先创建云电脑。",

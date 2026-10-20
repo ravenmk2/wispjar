@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { useOrgAgents } from "@/features/agents/AgentPicker"
-import { canMutateComputer, computerStatus, computerTransitioning, selectableComputer, type AgentBinding, type Computer, type ComputerConfig, type ComputerRun, type OperationAccepted, type UserVolume } from "@/lib/computers"
+import { canMutateComputer, computerOperationError, computerStatus, computerTransitioning, selectableComputer, type AgentBinding, type Computer, type ComputerConfig, type ComputerRun, type OperationAccepted, type UserVolume } from "@/lib/computers"
+import { ComputerFailure } from "./ComputerFailure"
 import { uuid } from "@/lib/utils"
 import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 import { useComputerStore } from "@/stores/computers"
@@ -71,7 +72,7 @@ export default function ComputersPage() {
           if (!active) return
           if (["completed", "failed"].includes(result.status)) {
             setOperations((ops) => ops.filter((op) => op.operation_id !== accepted.operation_id))
-            if (result.status === "failed") toast.error("电脑操作失败，请检查电脑状态后重试。")
+            if (result.status === "failed") toast.error(computerOperationError(result))
             else toast.success("电脑操作已完成")
             void load()
           }
@@ -119,7 +120,7 @@ export default function ComputersPage() {
         return <section key={c.id} className="space-y-3 rounded-xl border bg-card p-4">
           <div className="flex items-center gap-2"><Monitor className="size-4" /><h2 className="min-w-0 flex-1 truncate font-medium">{c.name}</h2><span className="text-xs text-muted-foreground">{computerStatus(c.status)}</span></div>
           <p className="truncate text-xs text-muted-foreground" title={c.config.image}>{c.config.image} · {c.config.resources?.cpu ?? "默认"} CPU · {c.config.resources?.memory ?? "默认内存"}</p>
-          {c.last_error && <p role="alert" className="text-sm text-destructive">{c.status === "recovering" ? "正在重试恢复；尚未确认实例终止或状态清理完成，电脑暂不可用，持久文件保留。" : "上次操作失败，请检查后重试；已有持久文件继续保留。"}</p>}
+          <ComputerFailure computer={c} />
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" disabled={busy || pending || computerTransitioning(c.status) || c.status === "running"} onClick={() => void act(c, "start")}>启动</Button>
             <Button size="sm" variant="outline" disabled={busy || !mutable || c.status !== "running"} onClick={() => void act(c, "pause")}>暂停</Button>

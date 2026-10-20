@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -50,9 +51,11 @@ func relativeFilePath(value string) (string, error) {
 	return path.Clean(value), nil
 }
 
-// withFiles keeps a durable maintenance occupant from initialization through
-// the final file operation; pause/delete cannot race a detached HTTP handler.
-func (h *Handler) withFiles(c *gin.Context, fn func(*session.Detail, *tools.ExecutionHandle, string)) {
+type scopedFileOperation func(root, relative, op string, extra map[string]any) (fileResponse, error)
+
+// withFiles keeps a durable maintenance occupant through any lazy initialization
+// and the final file operation; pause/delete cannot race a detached HTTP handler.
+func (h *Handler) withFiles(c *gin.Context, fn func(*session.Detail, scopedFileOperation, string)) {
 	sess, err := h.sessions.Get(c.Request.Context(), auth.UID(c), c.Param("id"))
 	if err != nil {
 		fail(c, err)
@@ -93,19 +96,32 @@ func (h *Handler) withFiles(c *gin.Context, fn func(*session.Detail, *tools.Exec
 		fail(c, err)
 		return
 	}
-	if err = h.initializeFileWorkspace(c.Request.Context(), handle, sess, runID); err != nil {
-		fail(c, err)
-		return
-	}
 	execution := tools.NewExecutionHandle(handle)
+	initializationOK := true
 	defer func() {
-		if execution.CommandsStopped() {
+		if initializationOK && execution.CommandsStopped() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = h.computers.FinishRun(ctx, runID, sess.UserID, "completed")
 		}
 	}()
-	fn(sess, execution, root)
+	operate := func(root, relative, op string, extra map[string]any) (fileResponse, error) {
+		result, err := remoteFileOperation(c.Request.Context(), execution, root, relative, op, extra)
+		var fileErr *session.Error
+		if !errors.As(err, &fileErr) || fileErr.Code != "file/root_not_found" {
+			return result, err
+		}
+		// Existing workspaces are read without root maintenance. A new session
+		// may not have its directories yet; initialize only on that cold path.
+		if err = h.initializeFileWorkspace(c.Request.Context(), handle, sess, runID); err != nil {
+			// initializeFileWorkspace releases a confirmed failure itself, and
+			// retains occupancy when remote completion is unknown.
+			initializationOK = false
+			return fileResponse{}, err
+		}
+		return remoteFileOperation(c.Request.Context(), execution, root, relative, op, extra)
+	}
+	fn(sess, operate, root)
 }
 
 func (h *Handler) initializeFileWorkspace(ctx context.Context, handle tools.Handle, sess *session.Detail, runID string) error {
@@ -146,6 +162,9 @@ func remoteFileOperation(ctx context.Context, h *tools.ExecutionHandle, root, re
 		if res.ExitCode == 44 {
 			code, status, msg = "file/not_found", 404, "文件不存在"
 		}
+		if res.ExitCode == 45 {
+			code, status, msg = "file/root_not_found", 404, "文件根目录尚未创建"
+		}
 		if res.ExitCode == 49 {
 			code, status, msg = "file/conflict", 409, "目标已存在"
 		}
@@ -171,8 +190,8 @@ func (h *Handler) Files(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.withFiles(c, func(_ *session.Detail, handle *tools.ExecutionHandle, root string) {
-		result, err := remoteFileOperation(c.Request.Context(), handle, root, relative, "list", nil)
+	h.withFiles(c, func(_ *session.Detail, operate scopedFileOperation, root string) {
+		result, err := operate(root, relative, "list", nil)
 		if err != nil {
 			fail(c, err)
 			return
@@ -199,8 +218,8 @@ func (h *Handler) File(c *gin.Context) {
 		}
 		limit = n
 	}
-	h.withFiles(c, func(_ *session.Detail, handle *tools.ExecutionHandle, root string) {
-		result, err := remoteFileOperation(c.Request.Context(), handle, root, relative, "read", map[string]any{"max_bytes": limit})
+	h.withFiles(c, func(_ *session.Detail, operate scopedFileOperation, root string) {
+		result, err := operate(root, relative, "read", map[string]any{"max_bytes": limit})
 		if err != nil {
 			fail(c, err)
 			return
@@ -274,8 +293,8 @@ func (h *Handler) UploadFile(c *gin.Context) {
 		respond.Error(c, 413, "file/too_large", "文件超过 32MB", nil)
 		return
 	}
-	h.withFiles(c, func(_ *session.Detail, handle *tools.ExecutionHandle, root string) {
-		result, err := remoteFileOperation(c.Request.Context(), handle, root, relative, "write", map[string]any{"data": base64.StdEncoding.EncodeToString(data)})
+	h.withFiles(c, func(_ *session.Detail, operate scopedFileOperation, root string) {
+		result, err := operate(root, relative, "write", map[string]any{"data": base64.StdEncoding.EncodeToString(data)})
 		if err != nil {
 			fail(c, err)
 			return
@@ -300,8 +319,8 @@ func (h *Handler) SaveToStorage(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.withFiles(c, func(sess *session.Detail, handle *tools.ExecutionHandle, _ string) {
-		result, err := remoteFileOperation(c.Request.Context(), handle, session.WorkspaceDir(sess.ID), source, "copy", map[string]any{"destination": destination})
+	h.withFiles(c, func(sess *session.Detail, operate scopedFileOperation, _ string) {
+		result, err := operate(session.WorkspaceDir(sess.ID), source, "copy", map[string]any{"destination": destination})
 		if err != nil {
 			fail(c, err)
 			return
@@ -322,7 +341,9 @@ def parts(value):
 def rootfd(root):
     fd=os.open("/",flags)
     for part in parts(root.lstrip("/")):
-        nxt=os.open(part,flags,dir_fd=fd);os.close(fd);fd=nxt
+        try: nxt=os.open(part,flags,dir_fd=fd)
+        except FileNotFoundError: os.close(fd);sys.exit(45)
+        os.close(fd);fd=nxt
     return fd
 def parent(root,relative,create=False):
     fd=rootfd(root);components=parts(relative)

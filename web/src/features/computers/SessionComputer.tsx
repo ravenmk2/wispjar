@@ -5,6 +5,7 @@ import { sessionsApi } from "@/api/sessions"
 import { errorMessage } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { ComputerPicker } from "./ComputerPicker"
+import { ComputerFailure } from "./ComputerFailure"
 import { computerStatus, computerTransitioning, workspaceRoot, type Computer } from "@/lib/computers"
 import { uuid } from "@/lib/utils"
 import type { SessionDetail } from "@/lib/types"
@@ -40,5 +41,6 @@ export function SessionComputer({ detail, busy, onChanged }: { detail: SessionDe
     {computer && ["paused", "stopped", "failed"].includes(computer.status) && <Button size="sm" variant="outline" onClick={() => void start()} disabled={switching}>启动电脑</Button>}
     <code className="text-xs text-muted-foreground" title="会话工作空间">{workspaceRoot(detail.id)}</code>
     {busy && <span className="text-xs text-muted-foreground">任务执行期间无法切换电脑</span>}
+    {computer && <ComputerFailure computer={computer} />}
   </div>
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -389,6 +390,8 @@ func (h *Handle) Renew(ctx context.Context) (time.Time, error) {
 	return resp.ExpiresAt, nil
 }
 
+var errCommandComplete = errors.New("sandbox command stream complete")
+
 func (h *Handle) RunCommand(ctx context.Context, cmd, cwd string, env map[string]string, timeoutMs int64, onEvent func(stream, chunk string)) (*CommandResult, error) {
 	h.Touch()
 	var stdout, stderr, merged strings.Builder
@@ -402,6 +405,10 @@ func (h *Handle) RunCommand(ctx context.Context, cmd, cwd string, env map[string
 		*n++
 	}
 	handlers := &opensandbox.ExecutionHandlers{
+		// Execd can keep the HTTP stream open for a heartbeat interval after
+		// execution_complete. The SDK has already recorded output and exit
+		// status before this callback; stop reading at that terminal event.
+		OnComplete: func(opensandbox.ExecutionComplete) error { return errCommandComplete },
 		OnStdout: func(m opensandbox.OutputMessage) error {
 			writeLine(&stdout, &outLines, m.Text)
 			writeLine(&merged, &mergedLines, m.Text)
@@ -425,6 +432,9 @@ func (h *Handle) RunCommand(ctx context.Context, cmd, cwd string, env map[string
 		Envs:    env,
 		Timeout: timeoutMs,
 	}, handlers)
+	if errors.Is(err, errCommandComplete) {
+		err = nil
+	}
 	res := &CommandResult{
 		ExitCode: -1,
 		Stdout:   stdout.String(),

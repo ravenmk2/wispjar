@@ -292,14 +292,12 @@ func (r *GORMRepository) Complete(ctx context.Context, op store.ResourceOperatio
 		msg := ""
 		if cause != nil {
 			fields["status"] = "failed"
-			fields["last_error"] = "computer backend operation failed"
+			msg = operationError(cause, op.ID)
+			fields["last_error"] = msg
 			opStatus = "failed"
-			msg = "computer backend operation failed"
 			if op.Action == "computer/recover" {
 				fields["status"] = "recovering"
-				fields["last_error"] = "recovery pending: termination or cleanup not yet confirmed"
 				opStatus = "running"
-				msg = "recovery pending: termination or cleanup not yet confirmed"
 			}
 		}
 		if cause == nil {
