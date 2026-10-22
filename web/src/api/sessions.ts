@@ -56,8 +56,8 @@ export const sessionsApi = {
   cancel(id: string) {
     return api<{ ok: boolean }>(`/sessions/${id}/cancel`, { method: "POST" })
   },
-  fork(id: string, atSeq: number) {
-    return api<ForkResponse>(`/sessions/${id}/fork`, { method: "POST", body: { at_seq: atSeq } })
+  fork(id: string, atSeq: number, title?: string) {
+    return api<ForkResponse>(`/sessions/${id}/fork`, { method: "POST", body: { at_seq: atSeq, title } })
   },
   events(id: string, afterSeq: number, limit = 500) {
     return api<SessionEventsResponse>(`/sessions/${id}/events`, {

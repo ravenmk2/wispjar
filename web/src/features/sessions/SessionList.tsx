@@ -1,10 +1,11 @@
-import { Archive, ChevronDown, ChevronUp, CopyPlus, MoreHorizontal, Pencil, Search, Trash2 } from "lucide-react"
+import { Archive, ChevronDown, ChevronUp, GitFork, MoreHorizontal, Pencil, Search, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { NavLink, useNavigate, useParams } from "react-router"
 import { toast } from "sonner"
 import { errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
 import { ConfirmDialog } from "@/components/common"
+import { ForkDialog } from "@/features/chat/ForkDialog"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -54,6 +55,7 @@ export function SessionList() {
   const [renameTarget, setRenameTarget] = useState<ListItem | null>(null)
   const [renameValue, setRenameValue] = useState("")
   const [deleteTarget, setDeleteTarget] = useState<ListItem | null>(null)
+  const [forkTarget, setForkTarget] = useState<ListItem | null>(null)
   const [acting, setActing] = useState(false)
 
   const projected = useMemo<ListItem[]>(
@@ -142,17 +144,6 @@ export function SessionList() {
     }
   }
 
-  async function forkFromEnd(item: ListItem) {
-    try {
-      const { last_seq } = await sessionsApi.events(item.id, Number.MAX_SAFE_INTEGER)
-      const res = await sessionsApi.fork(item.id, last_seq)
-      toast.success("已创建聊天副本")
-      navigate(`/c/${res.id}`)
-    } catch (e) {
-      toast.error(errorMessage(e))
-    }
-  }
-
   async function remove() {
     if (!deleteTarget || acting) return
     setActing(true)
@@ -195,7 +186,7 @@ export function SessionList() {
                   setRenameTarget(item)
                   setRenameValue(item.title)
                 }}
-                onFork={() => void forkFromEnd(item)}
+                onFork={() => setForkTarget(item)}
                 onArchive={() => void archive(item)}
                 onDelete={() => setDeleteTarget(item)}
               />
@@ -248,6 +239,8 @@ export function SessionList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {forkTarget && <ForkDialog sessionId={forkTarget.id} sourceTitle={forkTarget.title} onClose={() => setForkTarget(null)} />}
 
       <ConfirmDialog
         open={deleteTarget !== null}
@@ -347,7 +340,7 @@ function SessionRow({
             重命名
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onFork}>
-            <CopyPlus className="size-3.5" />
+            <GitFork className="size-3.5" />
             创建聊天副本
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onArchive}>

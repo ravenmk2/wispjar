@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -14,7 +15,7 @@ import (
 
 // Fork 从 at_seq 事件点分叉新会话（api.md §3）：复制 seq<=at_seq 的事件，
 // 复制不触发 Store.AfterAppend（用量聚合）挂钩。
-func (s *Service) Fork(ctx context.Context, uid, sessionID string, atSeq int64) (string, error) {
+func (s *Service) Fork(ctx context.Context, uid, sessionID string, atSeq int64, title *string) (string, error) {
 	sess, err := s.ownedSession(ctx, uid, sessionID)
 	if err != nil {
 		return "", err
@@ -26,7 +27,7 @@ func (s *Service) Fork(ctx context.Context, uid, sessionID string, atSeq int64) 
 		Find(&events).Error; err != nil {
 		return "", err
 	}
-	forked, copied, err := planFork(sess, events, atSeq, id.New(), time.Now())
+	forked, copied, err := planFork(sess, events, atSeq, id.New(), time.Now(), title)
 	if err != nil {
 		return "", err
 	}
@@ -47,10 +48,13 @@ func (s *Service) Fork(ctx context.Context, uid, sessionID string, atSeq int64) 
 	if err != nil {
 		return "", err
 	}
+	if s.AfterEvents != nil {
+		s.AfterEvents(forked.ID, nil)
+	}
 	return forked.ID, nil
 }
 
-func planFork(src *store.Session, events []store.SessionEvent, atSeq int64, newID string, now time.Time) (*store.Session, []store.SessionEvent, error) {
+func planFork(src *store.Session, events []store.SessionEvent, atSeq int64, newID string, now time.Time, title *string) (*store.Session, []store.SessionEvent, error) {
 	if atSeq < 1 || atSeq > src.LastSeq {
 		return nil, nil, errInvalid("at_seq 必须在 1..last_seq 范围内",
 			map[string]any{"field": "at_seq", "last_seq": src.LastSeq})
@@ -81,6 +85,16 @@ func planFork(src *store.Session, events []store.SessionEvent, atSeq int64, newI
 		Status:        StatusActive,
 		LastActiveAt:  now,
 		ComputerID:    src.ComputerID,
+	}
+	if title != nil {
+		customTitle := strings.TrimSpace(*title)
+		if utf8.RuneCountInString(customTitle) > 256 {
+			return nil, nil, errInvalid("title 不超过 256 字符", map[string]any{"field": "title"})
+		}
+		if customTitle != "" {
+			forked.Title = customTitle
+			forked.TitlePinned = true
+		}
 	}
 	if src.ComputerID != nil {
 		forked.Workspace = newWorkspace()

@@ -58,7 +58,8 @@ type Service struct {
 	computers        ComputerBindings
 	computerRequired bool
 
-	// AfterEvents 在 PATCH 附带的事件随事务提交后调用（WS 广播挂钩；生产接线，测试可为 nil）。
+	// AfterEvents 在 PATCH 或 fork 事务提交后调用（WS 广播挂钩；生产接线，测试可为 nil）。
+	// fork 只刷新 control 投影，events 为 nil，避免重新广播复制的历史事件。
 	AfterEvents func(sessionID string, events []Event)
 }
 

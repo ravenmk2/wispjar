@@ -102,7 +102,8 @@ func (h *Handler) PatchSession(c *gin.Context) {
 }
 
 type forkSessionRequest struct {
-	AtSeq int64 `json:"at_seq" binding:"required"`
+	AtSeq int64   `json:"at_seq" binding:"required"`
+	Title *string `json:"title"`
 }
 
 func (h *Handler) ForkSession(c *gin.Context) {
@@ -111,7 +112,7 @@ func (h *Handler) ForkSession(c *gin.Context) {
 		respond.Error(c, http.StatusBadRequest, respond.CodeInvalid, "at_seq 必填", nil)
 		return
 	}
-	newID, err := h.svc.Fork(c.Request.Context(), auth.UID(c), c.Param("id"), req.AtSeq)
+	newID, err := h.svc.Fork(c.Request.Context(), auth.UID(c), c.Param("id"), req.AtSeq, req.Title)
 	if err != nil {
 		fail(c, err)
 		return

@@ -37,7 +37,7 @@ func TestPlanFork(t *testing.T) {
 		{SessionID: "src", Seq: 4, Type: EventTurnEnd, TimeMs: 1004, Data: json.RawMessage(`{}`)},
 	}
 	now := time.Now()
-	forked, copied, err := planFork(src, events[:2], 2, "fork-1", now)
+	forked, copied, err := planFork(src, events[:2], 2, "fork-1", now, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestPlanForkUsageRecompute(t *testing.T) {
 		{SessionID: "src", Seq: 2, Type: EventToolCall, TimeMs: 1002, Data: json.RawMessage(`{"usage":{"input_tokens":999}}`)},
 		assistantEvent(3, nil),
 	}
-	forked, _, err := planFork(src, events, 3, "fork-1", time.Now())
+	forked, _, err := planFork(src, events, 3, "fork-1", time.Now(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,9 +102,44 @@ func TestPlanForkUsageRecompute(t *testing.T) {
 func TestPlanForkInvalidSeq(t *testing.T) {
 	src := &store.Session{ID: "src", LastSeq: 3}
 	for _, atSeq := range []int64{0, -1, 4} {
-		if _, _, err := planFork(src, nil, atSeq, "fork-1", time.Now()); err == nil {
+		if _, _, err := planFork(src, nil, atSeq, "fork-1", time.Now(), nil); err == nil {
 			t.Fatalf("want error for at_seq=%d", atSeq)
 		}
+	}
+}
+
+func TestPlanForkCustomTitle(t *testing.T) {
+	src := &store.Session{ID: "src", Title: "原始标题", LastSeq: 1}
+	for _, tc := range []struct {
+		name    string
+		title   string
+		want    string
+		pinned  bool
+		invalid bool
+	}{
+		{name: "custom title is trimmed and pinned", title: "  新的方向  ", want: "新的方向", pinned: true},
+		{name: "blank uses default", title: " \t ", want: "原始标题（副本）"},
+		{name: "unicode limit", title: strings.Repeat("题", 256), want: strings.Repeat("题", 256), pinned: true},
+		{name: "over limit", title: strings.Repeat("题", 257), invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			forked, _, err := planFork(src, nil, 1, "new", time.Now(), &tc.title)
+			if tc.invalid {
+				if err == nil {
+					t.Fatal("want invalid title error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if forked.Title != tc.want || forked.TitlePinned != tc.pinned {
+				t.Fatalf("title=%q pinned=%v", forked.Title, forked.TitlePinned)
+			}
+			if src.Title != "原始标题" || src.TitlePinned {
+				t.Fatal("source session was changed")
+			}
+		})
 	}
 }
 
