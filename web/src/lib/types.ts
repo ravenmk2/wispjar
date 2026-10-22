@@ -116,6 +116,8 @@ export interface Provider {
 export const REASONING_EFFORT_OPTIONS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
 
 export interface ModelCapabilities {
+  api_protocol?: "chat_completions" | "responses"
+  tool_images?: boolean
   tools: boolean
   reasoning: boolean
   vision: boolean

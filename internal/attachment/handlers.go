@@ -87,7 +87,7 @@ func (h *Handler) Download(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	member, err := h.svc.IsMember(ctx, row.OrgID, auth.UID(c))
+	member, err := h.svc.CanDownload(ctx, row.ID, auth.UID(c))
 	if err != nil {
 		fail(c, err)
 		return

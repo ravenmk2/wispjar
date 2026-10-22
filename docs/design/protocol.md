@@ -191,6 +191,8 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 
 ### 6.3 会话事件
 
+`assistant/message.message` 可选 `provider_replay` 字符串，保存 Responses 原生 output 与连接/模型作用域，用于恢复推理状态和调用 ID。客户端不解析或展示；历史投影必须保留。此字段不是图片存储，工具图片仍只记录 attachments，详见 [media.md](media.md)。
+
 | type | data |
 |---|---|
 | `session/title` | `{title, auto: true\|false}`（latest-wins；用户改名 auto=false 且 pinned） |

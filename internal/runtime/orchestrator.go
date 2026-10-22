@@ -54,8 +54,7 @@ type Deps struct {
 	Attachments AttachmentReader
 	// ImageSaver read_media 图片入库（*attachment.Service；nil 时 read_media 拒绝执行）。
 	ImageSaver tools.ImageSaver
-	// Vision 按 model_id 查 capabilities.vision（read_media 门控；nil 按不支持处理）。
-	Vision func(ctx context.Context, modelID string) bool
+	ToolImages func(ctx context.Context, modelID string) bool
 	// QuestionWaitTimeout 提问工具前台等待窗口（0 = 默认 10 分钟；测试注入小值）。
 	QuestionWaitTimeout time.Duration
 }
@@ -186,6 +185,7 @@ func (o *orchestrator) StartTurn(ctx context.Context, sessionID string) error {
 	}
 
 	iterCtx := tools.WithContext(rs.runContext, rs.toolCtx)
+	iterCtx = provider.WithMediaOrg(iterCtx, rs.toolCtx.OrgID)
 	iterCtx = provider.WithUsageSink(iterCtx, rs.usageSink)
 	cancelOpt, cancelFn := adk.WithCancel()
 	o.mu.Lock()
@@ -276,7 +276,11 @@ func (o *orchestrator) history(ctx context.Context, sessionID string) ([]*schema
 					Function: schema.FunctionCall{Name: tc.Name, Arguments: tc.Arguments},
 				})
 			}
-			msgs = append(msgs, schema.AssistantMessage(m.Content, calls))
+			msg := schema.AssistantMessage(m.Content, calls)
+			if m.ProviderReplay != "" {
+				msg.Extra = map[string]any{provider.ReplayKey: m.ProviderReplay}
+			}
+			msgs = append(msgs, msg)
 		case session.RoleTool:
 			if len(m.Attachments) > 0 {
 				msg, err := o.buildToolMessage(ctx, m, offloaded[i])
@@ -310,7 +314,7 @@ func (o *orchestrator) trimContext(ctx context.Context, sessionID string, msgs [
 			total += len(m.Content) + len(m.ReasoningContent)
 			for _, p := range m.UserInputMultiContent {
 				total += len(p.Text)
-				if p.Image != nil && p.Image.Base64Data != nil {
+				if p.Image != nil {
 					// 视觉模型按像素折算 token（DeepSeek ≤512、ark high 1280 tok/图），
 					// 与 base64 体积无关；取最保守值计入。卸载后的占位文本按文本计。
 					total += imageTokenEstimate * 4

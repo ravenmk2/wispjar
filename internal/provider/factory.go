@@ -24,10 +24,15 @@ type ChatModelFactory struct {
 	db        *gorm.DB
 	masterKey []byte
 	cache     sync.Map // key: modelID+"|"+paramsHash -> model.ToolCallingChatModel
+	media     *mediaStore
 }
 
-func NewChatModelFactory(db *gorm.DB, masterKey []byte) *ChatModelFactory {
-	return &ChatModelFactory{db: db, masterKey: masterKey}
+func NewChatModelFactory(db *gorm.DB, masterKey []byte, readers ...MediaReader) *ChatModelFactory {
+	media := &mediaStore{db: db}
+	if len(readers) > 0 {
+		media.reader = readers[0]
+	}
+	return &ChatModelFactory{db: db, masterKey: masterKey, media: media}
 }
 
 func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, params map[string]any) (model.ToolCallingChatModel, error) {
@@ -51,7 +56,7 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 	}
 
 	merged := mergeParams(row.DefaultParams, params)
-	key := modelID + "|" + paramsHash(merged)
+	key := modelID + "|" + paramsHash(map[string]any{"params": merged, "endpoint": row.BaseURL, "key": row.APIKeyEnc, "caps": row.Capabilities, "model": row.ModelCode, "provider": row.ProviderType})
 	if v, ok := f.cache.Load(key); ok {
 		return v.(model.ToolCallingChatModel), nil
 	}
@@ -59,6 +64,18 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 	apiKey, err := Decrypt(f.masterKey, row.APIKeyEnc)
 	if err != nil {
 		return nil, err
+	}
+	var caps Capabilities
+	if err := json.Unmarshal(row.Capabilities, &caps); err != nil {
+		return nil, err
+	}
+	if caps.APIProtocol == "responses" {
+		if row.ProviderType != "deepseek" && row.ProviderType != "ark" && row.ProviderType != "openai_compat" {
+			return nil, fmt.Errorf("provider: Responses adapter unavailable for %s", row.ProviderType)
+		}
+		cm := &responsesModel{baseURL: row.BaseURL, apiKey: apiKey, providerID: row.ProviderID, providerType: row.ProviderType, modelCode: row.ModelCode, params: merged, caps: caps, media: f.media, client: mediaHTTPClient()}
+		actual, _ := f.cache.LoadOrStore(key, model.ToolCallingChatModel(cm))
+		return actual.(model.ToolCallingChatModel), nil
 	}
 	adapter := AdapterFor(row.ProviderType)
 	cfg := &openai.ChatModelConfig{
@@ -74,7 +91,8 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 	if err != nil {
 		return nil, fmt.Errorf("provider: 构建模型实例失败: %w", err)
 	}
-	actual, _ := f.cache.LoadOrStore(key, model.ToolCallingChatModel(cm))
+	wrapped := &inlineMediaModel{ToolCallingChatModel: cm, media: f.media}
+	actual, _ := f.cache.LoadOrStore(key, model.ToolCallingChatModel(wrapped))
 	return actual.(model.ToolCallingChatModel), nil
 }
 

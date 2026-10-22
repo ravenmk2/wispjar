@@ -158,8 +158,8 @@ func TestBuildUserMessageOrder(t *testing.T) {
 	if parts[2].Type != schema.ChatMessagePartTypeText || parts[2].Text != "描述这两张图" {
 		t.Fatalf("text part must be last: %+v", parts[2])
 	}
-	if parts[0].Image == nil || parts[0].Image.Base64Data == nil || parts[0].Image.MIMEType != "image/png" {
-		t.Fatalf("image part must carry Base64Data + MIME: %+v", parts[0].Image)
+	if parts[0].Image == nil || parts[0].Image.URL == nil || parts[0].Image.Base64Data != nil || parts[0].Image.MIMEType != "image/png" {
+		t.Fatalf("image part must carry reference + MIME: %+v", parts[0].Image)
 	}
 
 	// 卸载位：最旧图替换为占位文本，顺序不变

@@ -295,6 +295,7 @@ func (o *orchestrator) resume(p *pendingApproval, allow bool) {
 			base = context.Background()
 		}
 		ctx := tools.WithContext(base, rs.toolCtx)
+		ctx = provider.WithMediaOrg(ctx, rs.toolCtx.OrgID)
 		ctx = provider.WithUsageSink(ctx, rs.usageSink)
 		runner := adk.NewRunner(ctx, adk.RunnerConfig{
 			Agent:           rs.agent,

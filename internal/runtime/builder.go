@@ -132,10 +132,10 @@ func sessionEffort(raw json.RawMessage) (string, bool) {
 // visionOf 查模型图片输入能力（read_media 门控；Deps.Vision 未配置时按不支持处理——
 // 未知能力在文件系统与附件工作之前拒绝，对齐 DSH 的严格拒绝语义）。
 func (o *orchestrator) visionOf(ctx context.Context, modelID string) bool {
-	if o.deps.Vision == nil {
+	if o.deps.ToolImages == nil {
 		return false
 	}
-	return o.deps.Vision(ctx, modelID)
+	return o.deps.ToolImages(ctx, modelID)
 }
 
 // buildAgent 按会话快照构建 adk.ChatModelAgent（runtime.md §2）。

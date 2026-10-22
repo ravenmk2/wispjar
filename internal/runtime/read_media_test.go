@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"image"
@@ -116,7 +115,7 @@ func newReadMediaEnv(t *testing.T, vision bool, files map[string][]byte,
 		Bus:         bus,
 		Attachments: saver,
 		ImageSaver:  saver,
-		Vision:      func(_ context.Context, _ string) bool { return vision },
+		ToolImages:  func(_ context.Context, _ string) bool { return vision },
 		ToolContextFactory: func(sess *store.Session, snap *agent.Snapshot) *tools.Context {
 			tc := tools.NewContext(sess.ID, sess.OrgID)
 			tc.Sandbox = fakeSandboxProvider{h: handle}
@@ -208,9 +207,8 @@ func TestReadMediaEndToEnd(t *testing.T) {
 		parts[1].Type != schema.ChatMessagePartTypeImageURL {
 		t.Fatalf("in-run tool message must be [text, image]: %+v", parts)
 	}
-	decoded, err := base64.StdEncoding.DecodeString(*parts[1].Image.Base64Data)
-	if err != nil || !reflect.DeepEqual(decoded, pngBytes) {
-		t.Fatalf("in-run image bytes mismatch (err=%v)", err)
+	if parts[1].Image.URL == nil || *parts[1].Image.URL != "wispjar-attachment:"+tr.Attachments[0].ID || parts[1].Image.Base64Data != nil {
+		t.Fatalf("in-run image must be a persistent reference: %+v", parts[1].Image)
 	}
 
 	// 回放：history 从事件 + 附件存储重组多模态 tool 消息，与 in-run 字节一致。
@@ -233,7 +231,7 @@ func TestReadMediaEndToEnd(t *testing.T) {
 		t.Fatalf("replayed text part mismatch: %+v", rp)
 	}
 	if rp[1].Type != schema.ChatMessagePartTypeImageURL ||
-		*rp[1].Image.Base64Data != *parts[1].Image.Base64Data {
+		*rp[1].Image.URL != *parts[1].Image.URL {
 		t.Fatal("replayed image must be byte-identical to in-run image")
 	}
 	if replayed.ToolName != "read_media" {
@@ -263,7 +261,7 @@ func TestReadMediaVisionGateEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(results[0].Data, &tr); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(tr.Content, "does not support image input") {
+	if !strings.Contains(tr.Content, "requires vision, tools, tool_images") {
 		t.Fatalf("vision gate content: %q", tr.Content)
 	}
 	if len(tr.Attachments) != 0 {

@@ -2,11 +2,11 @@ package runtime
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"strings"
 
 	"github.com/cloudwego/eino/schema"
+	"github.com/ravenmk2/wispjar/internal/attachment"
 
 	"github.com/ravenmk2/wispjar/internal/session"
 )
@@ -14,7 +14,7 @@ import (
 // image-offload-v1 卸载规则（版本化常量）。
 // 规则只依赖已提交历史，同一历史前缀永远产出同一请求前缀（缓存稳定）；
 // 任何规则变更 = 历史前缀失效，必须整体更换版本号并在《缓存命中优先设计原则》下重审。
-const imageOffloadVersion = "image-offload-v1"
+const imageOffloadVersion = "file-reference-v1"
 
 const (
 	offloadMaxImages    = 8        // 每请求最多随历史发送的图片张数
@@ -84,18 +84,14 @@ func offloadedImageText(ref session.AttachmentRef) string {
 	if len(short) > 8 {
 		short = short[:8]
 	}
-	return fmt.Sprintf("[image offloaded] %q (sha256:%s): not sent with history because it exceeded the per-request image budget; if you need to see this image, ask the user to resend it.", ref.Name, short)
+	return fmt.Sprintf("[image offloaded] %q (sha256:%s): attachment_id=%s; use read_media with attachment_id to view again.", ref.Name, short, ref.ID)
 }
 
 // offloadedToolImageText tool 消息图片卸载位的确定性占位文本：文件名 + sha256 前 8 位，
 // 并指示模型可用 read_media 重新读取（完整沙箱路径在同条工具结果的文本信封 path 字段中；
 // 读回闭环：同字节内容寻址去重，重读命中同一引用）。
 func offloadedToolImageText(ref session.AttachmentRef) string {
-	short := strings.TrimPrefix(ref.ID, "sha256:")
-	if len(short) > 8 {
-		short = short[:8]
-	}
-	return fmt.Sprintf("[image offloaded] %q (sha256:%s): not sent with history because it exceeded the per-request image budget; re-read it with the read_media tool (path in the path field of this tool result).", ref.Name, short)
+	return offloadedImageText(ref)
 }
 
 // toolMessageContent 取 tool 消息的文本内容：enhanced 工具（read_media）的消息 Content 为空、
@@ -129,15 +125,10 @@ func (o *orchestrator) buildToolMessage(ctx context.Context, m session.Message, 
 			})
 			continue
 		}
-		data, err := o.deps.Attachments.ReadBytes(ctx, ref.ID)
-		if err != nil {
-			return nil, fmt.Errorf("读取附件 %s 失败: %w", ref.ID, err)
-		}
-		b64 := base64.StdEncoding.EncodeToString(data)
 		parts = append(parts, schema.MessageInputPart{
 			Type: schema.ChatMessagePartTypeImageURL,
 			Image: &schema.MessageInputImage{
-				MessagePartCommon: schema.MessagePartCommon{Base64Data: &b64, MIMEType: ref.MIME},
+				MessagePartCommon: attachment.ImageReference(ref),
 			},
 		})
 	}
@@ -163,15 +154,10 @@ func (o *orchestrator) buildUserMessage(ctx context.Context, m session.Message, 
 			})
 			continue
 		}
-		data, err := o.deps.Attachments.ReadBytes(ctx, ref.ID)
-		if err != nil {
-			return nil, fmt.Errorf("读取附件 %s 失败: %w", ref.ID, err)
-		}
-		b64 := base64.StdEncoding.EncodeToString(data)
 		parts = append(parts, schema.MessageInputPart{
 			Type: schema.ChatMessagePartTypeImageURL,
 			Image: &schema.MessageInputImage{
-				MessagePartCommon: schema.MessagePartCommon{Base64Data: &b64, MIMEType: ref.MIME},
+				MessagePartCommon: attachment.ImageReference(ref),
 			},
 		})
 	}

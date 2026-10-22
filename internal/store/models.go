@@ -181,6 +181,24 @@ type Attachment struct {
 
 func (Attachment) TableName() string { return "attachment" }
 
+type AttachmentAccess struct {
+	OrgID        string `gorm:"primaryKey;size:32"`
+	AttachmentID string `gorm:"primaryKey;size:71"`
+	Name         string `gorm:"size:256"`
+	CreatedAt    time.Time
+}
+
+func (AttachmentAccess) TableName() string { return "attachment_access" }
+
+type ProviderMediaFile struct {
+	Scope        string `gorm:"primaryKey;size:64"`
+	AttachmentID string `gorm:"primaryKey;size:71"`
+	FileID       string `gorm:"size:256"`
+	ExpiresAt    int64
+}
+
+func (ProviderMediaFile) TableName() string { return "provider_media_file" }
+
 type AgentCheckpoint struct {
 	ID        string    `gorm:"column:id;primaryKey;size:32" json:"id"`
 	SessionID string    `gorm:"column:session_id;size:32" json:"session_id"`

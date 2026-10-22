@@ -103,6 +103,11 @@ func (s *Service) Upload(ctx context.Context, orgID, actorID, name string, data 
 		return nil, err
 	}
 	ref := refOf(&existing)
+	access := store.AttachmentAccess{OrgID: orgID, AttachmentID: row.ID, Name: name}
+	if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&access).Error; err != nil {
+		return nil, err
+	}
+	ref.Name = name
 	return &ref, nil
 }
 
@@ -124,14 +129,28 @@ func (s *Service) Resolve(ctx context.Context, orgID string, ids []string) ([]se
 		return nil, err
 	}
 	byID := map[string]store.Attachment{}
+	access := map[string]string{}
+	if s.db != nil {
+		var grants []store.AttachmentAccess
+		if err := s.db.WithContext(ctx).Where("org_id = ? AND attachment_id IN ?", orgID, ids).Find(&grants).Error; err != nil {
+			return nil, err
+		}
+		for _, grant := range grants {
+			access[grant.AttachmentID] = grant.Name
+		}
+	}
 	for _, r := range rows {
 		byID[r.ID] = r
 	}
 	refs := make([]session.AttachmentRef, 0, len(ids))
 	for _, id := range ids {
 		row, ok := byID[id]
-		if !ok || row.OrgID != orgID {
+		name, granted := access[id]
+		if !ok || (!granted && row.OrgID != orgID) {
 			return nil, errBadRef("附件不存在或无权访问", map[string]any{"id": id})
+		}
+		if granted {
+			row.Name = name
 		}
 		refs = append(refs, refOf(&row))
 	}
@@ -179,4 +198,21 @@ func (s *Service) ReadBytes(ctx context.Context, id string) ([]byte, error) {
 		return nil, errNotFound("附件不存在")
 	}
 	return s.blobs.Get(strings.TrimPrefix(id, idPrefix))
+}
+
+func (s *Service) ReadForOrg(ctx context.Context, orgID, id string) ([]byte, string, error) {
+	refs, err := s.Resolve(ctx, orgID, []string{id})
+	if err != nil {
+		return nil, "", err
+	}
+	data, err := s.ReadBytes(ctx, id)
+	return data, refs[0].MIME, err
+}
+
+func (s *Service) CanDownload(ctx context.Context, id, uid string) (bool, error) {
+	var count int64
+	err := s.db.WithContext(ctx).Table("attachment_access AS access").
+		Joins("JOIN org_member ON org_member.org_id = access.org_id").
+		Where("access.attachment_id = ? AND org_member.user_id = ?", id, uid).Count(&count).Error
+	return count > 0, err
 }

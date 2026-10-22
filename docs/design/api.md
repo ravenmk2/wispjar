@@ -135,7 +135,7 @@
 
 - `request_id` 幂等：相同 `(session_id, request_id)` 重复投递直接返回 200 + 已存在的 `user/message` seq（乐观对账，见 protocol.md §8）。
 - `content` 允许为空字符串当且仅当携带 `attachments`（纯图消息）；两者皆空 → 400。纯图消息组装时不带空文本 part，首条为纯图时会话标题静态兜底"图片会话"。
-- `attachments`（可选）：附件 id 数组，≤9 个；每个 id 必须已存在于 attachment 表且 `org_id` 与会话一致，任一不满足 → 400 `request/invalid`（整条消息拒绝，不产生任何事件）。
+- `attachments`（可选）：附件 id 数组，≤9 个；每个 id 必须已存在并授权给会话机构（attachment_access；迁移兼容首发机构），任一不满足 → 400 `request/invalid`（整条消息拒绝，不产生任何事件）。
 - vision 门控：携带附件而当前模型 `capabilities.vision=false` → 422 `model/not_vision`（提示换模型；不静默降级，避免"模型假装看不见"）。
 - 会话 `running=1` 时返回 409 `session/running`（v1 不支持排队；steer/queue 在 M4）。
 - 成功 202：`{ "accepted": true, "seq": <user/message 事件 seq> }`。流式输出经 `session.follow` 推送（protocol.md）。
@@ -158,7 +158,7 @@
 
 ### GET /api/v1/attachments/{id}
 
-下载附件字节。登录 + 机构成员校验（`attachment.org_id ∈ 用户机构`，非成员按 404 `attachment/not_found` 处理，防枚举）。
+下载附件字节。登录 + 授权机构成员校验（attachment_access 中存在用户所属机构的授权关系；非成员按 404 `attachment/not_found` 处理，防枚举）。物理内容全局去重不等于跨机构授权。
 按表记录 mime 回字节（读时按 id 校验 sha256），响应头 `Cache-Control: private, immutable` + `ETag: "<sha256 hex>"`（支持 `If-None-Match` → 304）。
 前端 `<img>` 无法带 Authorization 头：fetch 拉 blob 转 objectURL，会话级缓存 attachmentId→objectURL。
 
@@ -319,6 +319,8 @@
 | `DELETE /platform/models/{id}` | 删除；被智能体引用时 409 并列出 |
 
 `capabilities.reasoning_efforts` 可从 `none/minimal/low/medium/high/xhigh/max` 多选，非法值或重复值返回 400；可选 `reasoning_effort_default` 必须属于已选集合。此处与会话保存的都是平台档位，供应商实际请求参数按 runtime.md §3 转换，不回写为供应商枚举或 token 预算；字段缺省/空列表表示不提供选档。
+
+`capabilities.api_protocol` 可选 `chat_completions`（缺省）或 `responses`。`tool_images` 默认为 false，启用需同时满足 responses、vision、tools。仅支持已实现 Responses 适配的供应商。含工具图片历史切换到不支持工具图片的模型返回 409 `session/media_locked`。图片与租户授权、供应商文件有效期规则见 [media.md](media.md)。
 
 ### 平台设置与报表
 

@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -57,6 +57,45 @@ func (s *memSaver) callCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.calls
+}
+
+func (s *memSaver) Resolve(_ context.Context, orgID string, ids []string) ([]session.AttachmentRef, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if orgID != "org-1" || len(ids) != 1 {
+		return nil, fmt.Errorf("denied")
+	}
+	ref := s.bySum[strings.TrimPrefix(ids[0], "sha256:")]
+	if ref == nil {
+		return nil, fmt.Errorf("missing")
+	}
+	return []session.AttachmentRef{*ref}, nil
+}
+
+func TestReadMediaPersistentReference(t *testing.T) {
+	handle := newMemHandle()
+	saver := newMemSaver()
+	ref, err := saver.Upload(context.Background(), "org-1", "user-1", "image.png", encodeTestPNG(t, 4, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := readMediaTestCtx(handle, saver)
+	tool, err := newReadMediaTool(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := invokeEnhanced(t, tool, ctx, fmt.Sprintf(`{"attachment_id":%q}`, ref.ID))
+	if len(result.Parts) != 2 || result.Parts[1].Image.URL == nil || *result.Parts[1].Image.URL != attachment.ReferencePrefix+ref.ID {
+		t.Fatalf("persistent reread failed: %+v", result)
+	}
+	if saver.callCount() != 1 {
+		t.Fatal("persistent reread must not reupload local bytes")
+	}
+	for _, args := range []string{`{}`, fmt.Sprintf(`{"path":"missing.png","attachment_id":%q}`, ref.ID), `{"attachment_id":"sha256:missing"}`} {
+		if len(invokeEnhanced(t, tool, ctx, args).Parts) != 1 {
+			t.Fatal("invalid arguments must return text only")
+		}
+	}
 }
 
 func encodeTestPNG(t *testing.T, w, h int) []byte {
@@ -133,7 +172,7 @@ func TestReadMediaVisionGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := singleText(t, invokeEnhanced(t, rm, ctx, `{"path":"/workspace/a.png"}`))
-	if !strings.Contains(text, "does not support image input") {
+	if !strings.Contains(text, "requires vision, tools, tool_images") {
 		t.Fatalf("vision gate text: %q", text)
 	}
 	if saver.callCount() != 0 {
@@ -257,12 +296,11 @@ func TestReadMediaSuccess(t *testing.T) {
 		t.Fatalf("handle identity mismatch: %+v", handle)
 	}
 	img := res.Parts[1].Image
-	if img == nil || img.Base64Data == nil || img.MIMEType != "image/png" {
-		t.Fatalf("image part must carry Base64Data + MIME: %+v", img)
+	if img == nil || img.URL == nil || img.Base64Data != nil || img.MIMEType != "image/png" {
+		t.Fatalf("image part must carry a persistent reference: %+v", img)
 	}
-	decoded, err := base64.StdEncoding.DecodeString(*img.Base64Data)
-	if err != nil || !bytes.Equal(decoded, pngBytes) {
-		t.Fatalf("image part bytes mismatch (err=%v)", err)
+	if *img.URL != "wispjar-attachment:"+handle.AttachmentID {
+		t.Fatalf("image reference mismatch: %s", *img.URL)
 	}
 
 	// meta 记录附件引用（tool/result 事件与回放用）
@@ -287,7 +325,7 @@ func TestReadMediaSuccess(t *testing.T) {
 	if handle2.AttachmentID != handle.AttachmentID {
 		t.Fatalf("re-read must hit the same ref: %q vs %q", handle2.AttachmentID, handle.AttachmentID)
 	}
-	if *res2.Parts[1].Image.Base64Data != *res.Parts[1].Image.Base64Data {
+	if *res2.Parts[1].Image.URL != *res.Parts[1].Image.URL {
 		t.Fatal("re-read must produce byte-identical image part")
 	}
 }

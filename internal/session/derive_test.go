@@ -23,6 +23,15 @@ func assistantMsg(turn, step int, blocks ...ContentBlock) AssistantMessageData {
 	}
 }
 
+func TestDerivePreservesProviderReplay(t *testing.T) {
+	message := assistantMsg(1, 1, ContentBlock{Type: "text", Text: "answer"})
+	message.Message.ProviderReplay = `{"scope":"connection","model":"model","output":[]}`
+	messages := DeriveMessages([]store.SessionEvent{ev(1, EventAssistantMessage, message), ev(2, EventTurnStart, TurnStartData{Turn: 2})})
+	if len(messages) != 1 || messages[0].ProviderReplay != message.Message.ProviderReplay {
+		t.Fatalf("replay lost: %+v", messages)
+	}
+}
+
 func TestDeriveNormalSequence(t *testing.T) {
 	events := []store.SessionEvent{
 		ev(1, EventTurnStart, TurnStartData{Turn: 1, RequestID: "r1"}),

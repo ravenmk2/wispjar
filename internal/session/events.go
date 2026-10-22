@@ -94,8 +94,9 @@ type UserMessageData struct {
 }
 
 type AssistantMessage struct {
-	Role    string         `json:"role"`
-	Content []ContentBlock `json:"content"`
+	ProviderReplay string         `json:"provider_replay,omitempty"`
+	Role           string         `json:"role"`
+	Content        []ContentBlock `json:"content"`
 }
 
 type AssistantMessageData struct {

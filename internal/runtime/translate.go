@@ -20,16 +20,17 @@ type framedChunk struct {
 
 // attemptState 跟踪一次流式模型调用的瞬态窗口（compactChunks 供重连快照）。
 type attemptState struct {
-	id       string
-	turn     int
-	step     int
-	next     int
-	blocks   []*blockState
-	blockIdx map[int]*blockState // tool call index -> block
-	text     *blockState
-	reason   *blockState
-	chunks   []StreamChunk // 压缩合并后的 chunk（连续同块 delta 合并，保序）
-	usage    *schema.TokenUsage
+	providerReplay string
+	id             string
+	turn           int
+	step           int
+	next           int
+	blocks         []*blockState
+	blockIdx       map[int]*blockState // tool call index -> block
+	text           *blockState
+	reason         *blockState
+	chunks         []StreamChunk // 压缩合并后的 chunk（连续同块 delta 合并，保序）
+	usage          *schema.TokenUsage
 	// captured 旁路抓取的归一化缓存用量（UsageSink 取数；nil = 未抓取/未消费）。
 	captured *provider.CapturedUsage
 	finish   string
@@ -97,6 +98,9 @@ func (a *attemptState) blockStart(bs *blockState) framedChunk {
 
 // feed 把一个流式消息 chunk 翻译为 0..n 个 StreamChunk。
 func (a *attemptState) feed(msg *schema.Message) []framedChunk {
+	if replay, ok := msg.Extra[provider.ReplayKey].(string); ok {
+		a.providerReplay = replay
+	}
 	out := []framedChunk{}
 	if msg.ReasoningContent != "" {
 		if a.reason == nil {
@@ -196,7 +200,7 @@ func (bs *blockState) contentBlock() session.ContentBlock {
 
 // assistantMessage 组装完整 assistant 消息（content blocks 序 = 块出现序）。
 func (a *attemptState) assistantMessage() session.AssistantMessage {
-	msg := session.AssistantMessage{Role: session.RoleAssistant, Content: []session.ContentBlock{}}
+	msg := session.AssistantMessage{Role: session.RoleAssistant, Content: []session.ContentBlock{}, ProviderReplay: a.providerReplay}
 	for _, bs := range a.blocks {
 		if !bs.started {
 			continue

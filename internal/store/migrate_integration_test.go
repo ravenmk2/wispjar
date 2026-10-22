@@ -35,7 +35,7 @@ func TestMigrationsMySQLIntegration(t *testing.T) {
 	if err := Migrate(db); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"computer", "user_volume", "user_agent_binding", "user_skill_state", "computer_run", "run_skill_lease", "resource_operation"} {
+	for _, table := range []string{"computer", "user_volume", "user_agent_binding", "user_skill_state", "computer_run", "run_skill_lease", "resource_operation", "attachment_access", "provider_media_file"} {
 		if !db.Migrator().HasTable(table) {
 			t.Errorf("missing table %s", table)
 		}

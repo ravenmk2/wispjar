@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"path"
@@ -24,7 +23,8 @@ type ImageSaver interface {
 }
 
 type readMediaArgs struct {
-	Path string `json:"path" jsonschema:"description=image file path, absolute or relative to the session workspace"`
+	Path         string `json:"path,omitempty" jsonschema:"description=image file path; provide either path or attachment_id"`
+	AttachmentID string `json:"attachment_id,omitempty" jsonschema:"description=persistent attachment ID from an earlier image result; mutually exclusive with path"`
 }
 
 // textResult 可恢复的域拒绝（vision 门控/非图/超限）：以文本工具结果回喂模型而非 Go error
@@ -47,10 +47,31 @@ func newReadMediaTool(vision bool) (tool.BaseTool, error) {
 
 			// vision 门控先于任何 I/O（读图只为让模型看见；纯文本模型看见的是空气）。
 			if !vision {
-				return textResult("the current model does not support image input (capabilities.vision=false); read_media is unavailable - switch to a vision-capable model and retry"), nil
+				return textResult("read_media requires vision, tools, tool_images and a supported Responses file_id protocol; switch models and retry"), nil
 			}
 			if tc.Images == nil {
 				return textResult("attachment service is not configured; read_media is unavailable"), nil
+			}
+			if (in.Path == "") == (in.AttachmentID == "") {
+				return textResult("provide exactly one of path or attachment_id"), nil
+			}
+			if in.AttachmentID != "" {
+				reader, ok := tc.Images.(interface {
+					Resolve(context.Context, string, []string) ([]session.AttachmentRef, error)
+				})
+				if !ok {
+					return textResult("persistent attachment reader is unavailable"), nil
+				}
+				refs, err := reader.Resolve(ctx, tc.OrgID, []string{in.AttachmentID})
+				if err != nil {
+					return textResult("attachment does not exist or is not accessible"), nil
+				}
+				meta.Attachments = refs
+				handle, err := marshalResult(map[string]any{"attachment_id": refs[0].ID, "mime": refs[0].MIME, "bytes": refs[0].Bytes})
+				if err != nil {
+					return nil, err
+				}
+				return mediaResult(handle, refs[0]), nil
 			}
 			h, sid, err := tc.sandboxHandle(ctx)
 			if err != nil {
@@ -107,14 +128,15 @@ func newReadMediaTool(vision bool) (tool.BaseTool, error) {
 			if err != nil {
 				return nil, err
 			}
-			b64 := base64.StdEncoding.EncodeToString(data)
-			return &schema.ToolResult{Parts: []schema.ToolOutputPart{
-				{Type: schema.ToolPartTypeText, Text: handle},
-				{Type: schema.ToolPartTypeImage, Image: &schema.ToolOutputImage{
-					MessagePartCommon: schema.MessagePartCommon{Base64Data: &b64, MIMEType: mime},
-				}},
-			}}, nil
+			return mediaResult(handle, *ref), nil
 		})
+}
+
+func mediaResult(text string, ref session.AttachmentRef) *schema.ToolResult {
+	return &schema.ToolResult{Parts: []schema.ToolOutputPart{
+		{Type: schema.ToolPartTypeText, Text: text},
+		{Type: schema.ToolPartTypeImage, Image: &schema.ToolOutputImage{MessagePartCommon: attachment.ImageReference(ref)}},
+	}}
 }
 
 // ReadMedia 单独构建 read_media（tools_enabled 启用时由 runtime 注册；vision 按 Agent 模型判定）。

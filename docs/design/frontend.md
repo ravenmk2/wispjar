@@ -209,6 +209,8 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 
 ## 10. 视觉与体验基线
 
+模型编辑增加 API 协议选择（Chat Completions / Responses）和“工具读图”能力；仅在 Responses、视觉、工具调用均启用时允许工具读图。提供方未知或未验证时不默认开启。读图结果仍从平台附件接口预览，不向浏览器暴露供应商 file_id。
+
 - 侧栏、主内容区及思考／工具等原生滚动区域：细灰色滚动条，滚动时出现，停滚 500ms 后以 150ms 淡出；悬停滚动条边缘或拖动时持续可见，预留稳定 gutter，显隐不造成内容横向跳动。减少动态效果模式停用扫光与淡出过渡。
 
 - 主题：浅色默认 + 深色/跟随系统（Tailwind `class` 策略，localStorage `wispjar-theme`）。`primary` 浅 #3A83F7 / 深 #2C67C5，白色按钮内容；链接单独使用 `text-link`（浅 #2C67C5 / 深 #83B5FF）。完整语义色与变量格式见 docs/design/theme.md。

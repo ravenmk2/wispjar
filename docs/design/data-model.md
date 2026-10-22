@@ -272,10 +272,37 @@ CREATE TABLE attachment (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-- 字节本体在库外内容寻址存储（§13），表只存元数据：鉴权（`org_id` 作用域防跨租户读图）、展示（宽高/文件名）、读时校验依据。
-- 同字节内容全局只有一行（首发机构胜出）；上传幂等，重复上传同图直接返回既有行。
+- 字节本体在库外内容寻址存储（§13），表只存元数据；org_id 记录首发机构，当前授权与租户文件名在 attachment_access 中（§10.1），宽高、MIME、大小为全局不变校验依据。
+- 同字节内容全局只有一行；租户权限由 attachment_access 独立保存，不能因为首发机构不同而禁止其他机构上传相同字节。
 - 写入方有两类：用户上传（`POST /sessions/{id}/attachments`）与 read_media 工具（agent 读沙箱图片入库，created_by 记会话所属用户 id；与用户上传同一套魔数/8MB/64M 像素闸门）。
 - **附件永不自动删除**：删除会话不删 blob 与表行（fork 共享同一不可变对象）；引用感知 GC（扫描 `session_event` 引用 + orphan 清理）后续另做。
+
+### 10.1 附件授权与供应商缓存（迁移 000006）
+
+```sql
+CREATE TABLE attachment_access (
+  org_id CHAR(32) NOT NULL,
+  attachment_id CHAR(71) NOT NULL,
+  name VARCHAR(256) NOT NULL DEFAULT '',
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (org_id, attachment_id),
+  CONSTRAINT fk_attachment_access_org FOREIGN KEY (org_id) REFERENCES organization(id),
+  CONSTRAINT fk_attachment_access_blob FOREIGN KEY (attachment_id) REFERENCES attachment(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO attachment_access (org_id, attachment_id, name, created_at)
+SELECT org_id, id, name, created_at FROM attachment;
+
+CREATE TABLE provider_media_file (
+  scope CHAR(64) NOT NULL,
+  attachment_id CHAR(71) NOT NULL,
+  file_id VARCHAR(256) NOT NULL,
+  expires_at BIGINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (scope, attachment_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+scope 为租户、供应商身份、协议端点、凭据及请求版本的 SHA-256，不保存明文凭据。只缓存已经可用的文件；处理中的状态不持久化，失败不写映射。expires_at 为 Unix 秒，0 表示供应商未返回期限；缓存丢失可从本地附件重建。参见 [media.md](media.md)。
 
 ## 11. usage_daily / audit_log
 

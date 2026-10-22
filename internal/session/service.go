@@ -178,6 +178,9 @@ func (s *Service) Create(ctx context.Context, actorID, orgID string, in CreateIn
 
 // capabilities 是会话域关心的 model.capabilities 子集（思考强度档位声明、视觉能力）。
 type capabilities struct {
+	APIProtocol            string   `json:"api_protocol"`
+	ToolImages             bool     `json:"tool_images"`
+	Tools                  bool     `json:"tools"`
 	Vision                 bool     `json:"vision"`
 	ReasoningEfforts       []string `json:"reasoning_efforts"`
 	ReasoningEffortDefault string   `json:"reasoning_effort_default"`
@@ -499,6 +502,15 @@ func (s *Service) planUpdate(ctx context.Context, uid string, sess *store.Sessio
 		}
 		caps := capabilities{}
 		_ = json.Unmarshal(m.Capabilities, &caps)
+		if !(caps.Vision && caps.Tools && caps.ToolImages && caps.APIProtocol == "responses") {
+			var count int64
+			if err := s.db.WithContext(ctx).Model(&store.SessionEvent{}).Where("session_id = ? AND type = ? AND JSON_LENGTH(JSON_EXTRACT(data, '$.attachments')) > 0", sess.ID, EventToolResult).Count(&count).Error; err != nil {
+				return nil, nil, err
+			}
+			if count > 0 {
+				return nil, nil, &Error{Status: http.StatusConflict, Code: "session/media_locked", Message: "会话包含工具图片，目标模型须支持 Responses 工具图片", Details: map[string]any{"model_id": modelID}}
+			}
+		}
 		if !caps.Vision {
 			has, err := s.hasImageHistory(ctx, sess.ID)
 			if err != nil {

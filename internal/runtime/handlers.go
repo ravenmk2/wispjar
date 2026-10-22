@@ -196,9 +196,7 @@ func (h *Handler) beginTurn(c *gin.Context, sess *session.Detail, content, reque
 		Turn: turn, ProviderID: providerID, ModelID: sess.ModelID, ModelCode: modelCode,
 		Params: reqParams, Tools: toolNames,
 	}
-	if len(attachments) > 0 {
-		headerData.ImageOffload = imageOffloadVersion
-	}
+	headerData.ImageOffload = imageOffloadVersion
 
 	inputs := append([]session.EventInput{}, pre...)
 	inputs = append(inputs,

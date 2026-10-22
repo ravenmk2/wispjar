@@ -147,7 +147,7 @@ func main() {
 		Skills:           skillCoordinator,
 		Events:           eventStore,
 		Sessions:         repo,
-		Models:           provider.NewChatModelFactory(db, cfg.MasterKey()),
+		Models:           provider.NewChatModelFactory(db, cfg.MasterKey(), attachmentSvc),
 		Sandbox:          legacyManager,
 		Checkpoints: func(sessionID string) adk.CheckPointStore {
 			return runtime.NewCheckpointStore(db, sessionID)
@@ -174,14 +174,14 @@ func main() {
 		},
 		Attachments: attachmentSvc,
 		ImageSaver:  attachmentSvc,
-		Vision: func(ctx context.Context, modelID string) bool {
+		ToolImages: func(ctx context.Context, modelID string) bool {
 			var m store.Model
 			if err := db.WithContext(ctx).Select("capabilities").First(&m, "id = ?", modelID).Error; err != nil {
 				return false
 			}
 			caps := provider.Capabilities{}
 			_ = json.Unmarshal(m.Capabilities, &caps)
-			return caps.Vision
+			return caps.Vision && caps.Tools && caps.ToolImages && caps.APIProtocol == "responses"
 		},
 	})
 	if sandboxSvc != nil {

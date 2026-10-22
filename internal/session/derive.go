@@ -15,12 +15,13 @@ type ToolCall struct {
 }
 
 type Message struct {
-	Role        string          `json:"role"`
-	Content     string          `json:"content"`
-	Attachments []AttachmentRef `json:"attachments,omitempty"`
-	ToolCalls   []ToolCall      `json:"tool_calls,omitempty"`
-	ToolCallID  string          `json:"tool_call_id,omitempty"`
-	ToolName    string          `json:"tool_name,omitempty"`
+	ProviderReplay string          `json:"provider_replay,omitempty"`
+	Role           string          `json:"role"`
+	Content        string          `json:"content"`
+	Attachments    []AttachmentRef `json:"attachments,omitempty"`
+	ToolCalls      []ToolCall      `json:"tool_calls,omitempty"`
+	ToolCallID     string          `json:"tool_call_id,omitempty"`
+	ToolName       string          `json:"tool_name,omitempty"`
 }
 
 func DeriveMessages(events []store.SessionEvent) []Message {
@@ -111,7 +112,7 @@ func DeriveMessages(events []store.SessionEvent) []Message {
 			if err := json.Unmarshal(ev.Data, &d); err != nil {
 				continue
 			}
-			m := Message{Role: RoleAssistant}
+			m := Message{Role: RoleAssistant, ProviderReplay: d.Message.ProviderReplay}
 			for _, b := range d.Message.Content {
 				switch b.Type {
 				case "text":

@@ -37,13 +37,14 @@ import { formatNumber } from "@/lib/format"
 import { REASONING_EFFORT_OPTIONS } from "@/lib/types"
 import type { Model, ModelCapabilities, Provider } from "@/lib/types"
 
-type CapabilityFlag = "tools" | "reasoning" | "vision" | "streaming"
+type CapabilityFlag = "tools" | "reasoning" | "vision" | "streaming" | "tool_images"
 
 const CAPABILITY_LABELS: Array<{ key: CapabilityFlag; label: string }> = [
   { key: "tools", label: "工具调用" },
   { key: "reasoning", label: "推理" },
   { key: "vision", label: "视觉" },
   { key: "streaming", label: "流式" },
+  { key: "tool_images", label: "工具图片（file_id）" },
 ]
 
 export default function ModelsPage() {
@@ -331,6 +332,14 @@ function ModelDialog({
             </div>
           </div>
           <div className="space-y-1.5">
+            <Label>API 协议</Label>
+            <Select value={capabilities.api_protocol ?? "chat_completions"} onValueChange={(value: "chat_completions" | "responses") => setCapabilities((prev) => ({ ...prev, api_protocol: value, tool_images: value === "responses" && prev.tool_images }))}>
+              <SelectTrigger aria-label="API 协议"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="chat_completions">Chat Completions（文本工具结果）</SelectItem>
+                <SelectItem value="responses">Responses（支持原生工具图片）</SelectItem>
+              </SelectContent>
+            </Select>
             <Label>能力</Label>
             <div className="flex flex-wrap gap-4 rounded-md border px-3 py-2">
               {CAPABILITY_LABELS.map((c) => (
@@ -338,11 +347,13 @@ function ModelDialog({
                   <input
                     type="checkbox"
                     className="size-3.5 accent-primary"
-                    checked={capabilities[c.key]}
+                    checked={capabilities[c.key] ?? false}
+                    disabled={c.key === "tool_images" && (capabilities.api_protocol !== "responses" || !capabilities.tools || !capabilities.vision)}
                     onChange={(e) =>
                       setCapabilities((prev) => ({
                         ...prev,
                         [c.key]: e.target.checked,
+                        ...((c.key === "vision" || c.key === "tools") && !e.target.checked ? { tool_images: false } : {}),
                         ...(c.key === "reasoning" && !e.target.checked
                           ? { reasoning_efforts: undefined, reasoning_effort_default: undefined }
                           : {}),

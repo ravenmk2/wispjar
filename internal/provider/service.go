@@ -61,10 +61,12 @@ func NewService(db *gorm.DB, masterKey []byte) *Service {
 }
 
 type Capabilities struct {
-	Tools     bool `json:"tools"`
-	Reasoning bool `json:"reasoning"`
-	Vision    bool `json:"vision"`
-	Streaming bool `json:"streaming"`
+	APIProtocol string `json:"api_protocol,omitempty"`
+	ToolImages  bool   `json:"tool_images,omitempty"`
+	Tools       bool   `json:"tools"`
+	Reasoning   bool   `json:"reasoning"`
+	Vision      bool   `json:"vision"`
+	Streaming   bool   `json:"streaming"`
 	// ReasoningEfforts 从 none/minimal/low/medium/high/xhigh/max 中逐模型多选；
 	// 缺省/空 = 不支持选档。ReasoningEffortDefault 为缺省注入档位，须 ∈ ReasoningEfforts。
 	ReasoningEfforts       []string `json:"reasoning_efforts,omitempty"`
@@ -507,6 +509,12 @@ func parseCapabilities(raw json.RawMessage) (json.RawMessage, error) {
 		if err := json.Unmarshal(raw, &caps); err != nil {
 			return nil, errInvalid("capabilities 必须是 {tools, reasoning, vision, streaming} 布尔对象（可选 reasoning_efforts/reasoning_effort_default）", nil)
 		}
+	}
+	if caps.APIProtocol != "" && caps.APIProtocol != "chat_completions" && caps.APIProtocol != "responses" {
+		return nil, errInvalid("api_protocol 仅支持 chat_completions|responses", nil)
+	}
+	if caps.ToolImages && !(caps.APIProtocol == "responses" && caps.Tools && caps.Vision) {
+		return nil, errInvalid("tool_images 需要 responses 协议、tools 与 vision", nil)
 	}
 	seen := map[string]bool{}
 	for _, e := range caps.ReasoningEfforts {
