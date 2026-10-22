@@ -44,8 +44,9 @@ type Config struct {
 		MasterKey string `yaml:"master_key"`
 	} `yaml:"crypto"`
 	Storage struct {
-		DataDir string        `yaml:"data_dir"`
-		Volumes VolumesConfig `yaml:"volumes"`
+		DataDir   string          `yaml:"data_dir"`
+		Volumes   VolumesConfig   `yaml:"volumes"`
+		Downloads DownloadsConfig `yaml:"downloads"`
 	} `yaml:"storage"`
 	Runtime struct {
 		MaxParallelTasks int `yaml:"max_parallel_tasks"`
@@ -70,6 +71,7 @@ func Load(path string) (*Config, error) {
 	cfg.Auth.TokenTTL = Duration(24 * time.Hour)
 	cfg.Storage.DataDir = "./data"
 	cfg.Storage.Volumes = DefaultVolumesConfig()
+	cfg.Storage.Downloads = DownloadsConfig{MaxBytes: 20 << 30, MaxStagedBytes: 40 << 30, MaxEntries: 100000, TTL: Duration(30 * time.Minute), PrepareTimeout: Duration(30 * time.Minute)}
 	cfg.Runtime.MaxParallelTasks = 4
 	cfg.OpenSandbox.IdleTTLSeconds = 28800
 	cfg.OpenSandbox.SandboxTTLSeconds = 3600
@@ -105,6 +107,10 @@ func Load(path string) (*Config, error) {
 	if err := cfg.Storage.Volumes.Validate(); err != nil {
 		return nil, fmt.Errorf("storage.volumes: %w", err)
 	}
+	d := cfg.Storage.Downloads
+	if d.MaxBytes < 1 || d.MaxBytes > 1<<50 || d.MaxStagedBytes < d.MaxBytes || d.MaxEntries < 1 || d.MaxEntries > 1000000 || d.TTL < Duration(time.Minute) || d.TTL > Duration(24*time.Hour) || d.PrepareTimeout < Duration(time.Second) || d.PrepareTimeout > Duration(time.Hour) {
+		return nil, errors.New("storage.downloads: invalid size, entry count or timeout limit")
+	}
 
 	if cfg.Crypto.MasterKey != "" {
 		key, err := DecodeMasterKey(cfg.Crypto.MasterKey)
@@ -114,6 +120,14 @@ func Load(path string) (*Config, error) {
 		cfg.masterKey = key
 	}
 	return cfg, nil
+}
+
+type DownloadsConfig struct {
+	MaxBytes       int64    `yaml:"max_bytes"`
+	MaxStagedBytes int64    `yaml:"max_staged_bytes"`
+	MaxEntries     int      `yaml:"max_entries"`
+	TTL            Duration `yaml:"ttl"`
+	PrepareTimeout Duration `yaml:"prepare_timeout"`
 }
 
 type VolumesConfig struct {

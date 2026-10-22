@@ -297,9 +297,10 @@ type Handle struct {
 	SandboxID string
 	ExecdURL  string
 
-	sandbox    *opensandbox.Sandbox
-	sessionID  string
-	ttlSeconds int
+	sandbox        *opensandbox.Sandbox
+	downloadClient *opensandbox.ExecdClient
+	sessionID      string
+	ttlSeconds     int
 
 	lastActive atomic.Int64
 	expiresAt  atomic.Int64
@@ -494,6 +495,16 @@ func (h *Handle) DownloadFile(ctx context.Context, remotePath string) ([]byte, e
 	}
 	defer func() { _ = rc.Close() }()
 	return io.ReadAll(rc)
+}
+
+// DownloadFileStream is reserved for platform-owned immutable export artifacts.
+// Callers must not pass an agent-controlled source path here.
+func (h *Handle) DownloadFileStream(ctx context.Context, remotePath string) (io.ReadCloser, error) {
+	h.Touch()
+	if h.downloadClient != nil {
+		return h.downloadClient.DownloadFile(ctx, remotePath, "")
+	}
+	return h.sandbox.DownloadFile(ctx, remotePath, "")
 }
 
 func (h *Handle) ReplaceInFile(ctx context.Context, remotePath, old, new string, replaceAll bool) (int, error) {

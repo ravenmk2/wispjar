@@ -53,75 +53,88 @@ func relativeFilePath(value string) (string, error) {
 
 type scopedFileOperation func(root, relative, op string, extra map[string]any) (fileResponse, error)
 
+type fileAccess struct {
+	handler          *Handler
+	session          *session.Detail
+	handle           tools.Handle
+	execution        *tools.ExecutionHandle
+	root, runID      string
+	controlUncertain bool
+}
+
 // withFiles keeps a durable maintenance occupant through any lazy initialization
 // and the final file operation; pause/delete cannot race a detached HTTP handler.
 func (h *Handler) withFiles(c *gin.Context, fn func(*session.Detail, scopedFileOperation, string)) {
-	sess, err := h.sessions.Get(c.Request.Context(), auth.UID(c), c.Param("id"))
+	access, err := h.openFileAccess(c.Request.Context(), auth.UID(c), c.Param("id"), c.DefaultQuery("scope", "workspace"))
 	if err != nil {
 		fail(c, err)
 		return
+	}
+	defer access.close()
+	fn(access.session, func(root, relative, op string, extra map[string]any) (fileResponse, error) {
+		return access.operate(c.Request.Context(), root, relative, op, extra)
+	}, access.root)
+}
+
+func (h *Handler) openFileAccess(ctx context.Context, uid, sessionID, scope string) (*fileAccess, error) {
+	sess, err := h.sessions.Get(ctx, uid, sessionID)
+	if err != nil {
+		return nil, err
 	}
 	if sess.ComputerID == nil {
-		fail(c, &session.Error{Status: 409, Code: "workspace/migration_required", Message: "此会话仍使用旧工作区，请先迁移"})
-		return
+		return nil, &session.Error{Status: 409, Code: "workspace/migration_required", Message: "此会话仍使用旧工作区，请先迁移"}
 	}
 	if err = workspaceAvailable(sess.Workspace); err != nil {
-		fail(c, err)
-		return
+		return nil, err
 	}
 	if h.computers == nil {
-		fail(c, &session.Error{Status: 503, Code: "computer/unavailable", Message: "云电脑服务不可用"})
-		return
+		return nil, &session.Error{Status: 503, Code: "computer/unavailable", Message: "云电脑服务不可用"}
 	}
-	root, err := fileRoot(sess, c.DefaultQuery("scope", "workspace"))
+	root, err := fileRoot(sess, scope)
 	if err != nil {
-		fail(c, err)
-		return
+		return nil, err
 	}
-	computer, err := h.computers.EnsureRunning(c.Request.Context(), sess.OrgID, sess.UserID, *sess.ComputerID)
+	computer, err := h.computers.EnsureRunning(ctx, sess.OrgID, sess.UserID, *sess.ComputerID)
 	if err != nil {
-		fail(c, err)
-		return
+		return nil, err
 	}
 	// Register against the session, so migrations and binding changes see this
 	// occupant under the same session row lock as normal root turns.
-	runID, err := h.computers.AcquireSessionUse(c.Request.Context(), sess.OrgID, sess.UserID, computer.ID, sess.ID, "files", computer.Generation)
+	runID, err := h.computers.AcquireSessionUse(ctx, sess.OrgID, sess.UserID, computer.ID, sess.ID, "files", computer.Generation)
 	if err != nil {
-		fail(c, err)
-		return
+		return nil, err
 	}
-	handle, err := h.computers.Handle(c.Request.Context(), sess.OrgID, sess.UserID, computer.ID)
+	handle, err := h.computers.Handle(ctx, sess.OrgID, sess.UserID, computer.ID)
 	if err != nil {
 		_ = h.computers.FinishRun(context.Background(), runID, sess.UserID, "failed")
-		fail(c, err)
-		return
+		return nil, err
 	}
-	execution := tools.NewExecutionHandle(handle)
-	initializationOK := true
-	defer func() {
-		if initializationOK && execution.CommandsStopped() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			_ = h.computers.FinishRun(ctx, runID, sess.UserID, "completed")
-		}
-	}()
-	operate := func(root, relative, op string, extra map[string]any) (fileResponse, error) {
-		result, err := remoteFileOperation(c.Request.Context(), execution, root, relative, op, extra)
-		var fileErr *session.Error
-		if !errors.As(err, &fileErr) || fileErr.Code != "file/root_not_found" {
-			return result, err
-		}
-		// Existing workspaces are read without root maintenance. A new session
-		// may not have its directories yet; initialize only on that cold path.
-		if err = h.initializeFileWorkspace(c.Request.Context(), handle, sess, runID); err != nil {
-			// initializeFileWorkspace releases a confirmed failure itself, and
-			// retains occupancy when remote completion is unknown.
-			initializationOK = false
-			return fileResponse{}, err
-		}
-		return remoteFileOperation(c.Request.Context(), execution, root, relative, op, extra)
+	return &fileAccess{handler: h, session: sess, handle: handle, execution: tools.NewExecutionHandle(handle), root: root, runID: runID}, nil
+}
+
+func (a *fileAccess) close() {
+	if !a.controlUncertain && a.execution.CommandsStopped() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = a.handler.computers.FinishRun(ctx, a.runID, a.session.UserID, "completed")
 	}
-	fn(sess, operate, root)
+}
+
+func (a *fileAccess) operate(ctx context.Context, root, relative, op string, extra map[string]any) (fileResponse, error) {
+	result, err := remoteFileOperation(ctx, a.execution, root, relative, op, extra)
+	var fileErr *session.Error
+	if !errors.As(err, &fileErr) || fileErr.Code != "file/root_not_found" {
+		return result, err
+	}
+	// Existing workspaces are read without root maintenance. A new session
+	// may not have its directories yet; initialize only on that cold path.
+	if err = a.handler.initializeFileWorkspace(ctx, a.handle, a.session, a.runID); err != nil {
+		// initializeFileWorkspace releases a confirmed failure itself, and
+		// retains occupancy when remote completion is unknown.
+		a.controlUncertain = true
+		return fileResponse{}, err
+	}
+	return remoteFileOperation(ctx, a.execution, root, relative, op, extra)
 }
 
 func (h *Handler) initializeFileWorkspace(ctx context.Context, handle tools.Handle, sess *session.Detail, runID string) error {
@@ -272,7 +285,7 @@ func (h *Handler) UploadFile(c *gin.Context) {
 		respond.Error(c, 400, respond.CodeInvalid, "文件名无效", nil)
 		return
 	}
-	dir := c.DefaultPostForm("path", "inputs")
+	dir := c.DefaultPostForm("path", ".")
 	relative, ok := requestedRelative(c, dir)
 	if !ok {
 		return
@@ -387,6 +400,12 @@ try:
     elif p["op"]=="read":
         with readfile(p["root"],p["path"]) as f: data=f.read(p["max_bytes"]+1)
         result["truncated"]=len(data)>p["max_bytes"];result["data"]=base64.b64encode(data[:p["max_bytes"]]).decode()
+    elif p["op"]=="stat":
+        directory,name=parent(p["root"],p["path"])
+        fd=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=directory);os.close(directory)
+        s=os.fstat(fd);os.close(fd)
+        if not stat.S_ISREG(s.st_mode) and not stat.S_ISDIR(s.st_mode): raise ValueError("not a file or directory")
+        result["bytes"]=s.st_size
     elif p["op"]=="write":
         data=base64.b64decode(p["data"],validate=True)
         if len(data)>p["max_bytes"]:sys.exit(43)

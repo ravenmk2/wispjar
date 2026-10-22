@@ -1,10 +1,6 @@
 import {
   ChevronDown,
   ChevronRight,
-  FileCode2,
-  FileText,
-  Folder,
-  Image as ImageIcon,
   Loader2,
   RotateCw,
   X,
@@ -15,13 +11,13 @@ import { errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
 import { Button } from "@/components/ui/button"
 import { CloudComputerIcon } from "@/components/CloudComputerIcon"
+import { FileIcon } from "@/components/FileIcon"
 import { formatBytes } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { SandboxFileItem, SandboxStatus } from "@/lib/types"
 import { useSessionStore } from "@/stores/session"
 import { FilePreview } from "./FilePreview"
 import { FilePanel } from "@/features/computers/FilePanel"
-import { previewKind } from "./previewUtils"
 import { SandboxStatusIndicator } from "./SandboxStatusIndicator"
 
 interface TreeNodeState {
@@ -185,17 +181,12 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
               ) : (
                 <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
               )}
-              <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+              <FileIcon name={node.item.name} directory className="size-3.5" />
             </>
           ) : (
             <>
               <span className="w-3 shrink-0" />
-              {(() => {
-                const kind = previewKind(node.item.name)
-                if (kind === "image") return <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                if (kind === "html") return <FileCode2 className="size-3.5 shrink-0 text-muted-foreground" />
-                return <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-              })()}
+              <FileIcon name={node.item.name} className="size-3.5" />
             </>
           )}
           <span className="min-w-0 flex-1 truncate font-mono">{node.item.name}</span>

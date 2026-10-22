@@ -5,6 +5,9 @@ import type { FileScope } from "@/api/sessions"
 import { Markdown } from "@/components/Markdown"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { FileIcon } from "@/components/FileIcon"
+import { PixelImage } from "@/components/PixelImage"
+import type { ReactNode } from "react"
 import { highlightCode } from "@/lib/highlight"
 import type { SandboxFileItem } from "@/lib/types"
 import {
@@ -28,11 +31,15 @@ export function FilePreview({
   item,
   reloadToken,
   scope,
+  actions,
+  navigation,
 }: {
   sessionId: string
   item: SandboxFileItem
   reloadToken: number
   scope?: FileScope
+  actions?: ReactNode
+  navigation?: ReactNode
 }) {
   const kind = previewKind(item.name)
   const [state, setState] = useState<LoadState>({ status: "loading" })
@@ -83,9 +90,8 @@ export function FilePreview({
         }
         if (kind === "other") {
           // 二进制文件：首次打开直接触发下载，自动刷新重载时不重复下载
-          if (!isReload) {
-            if (scope) await downloadWorkspaceFile(sessionId, item.path, scope)
-            else downloadBlob(data.blob, fileName(item.path))
+          if (!scope && !isReload) {
+            downloadBlob(data.blob, fileName(item.path))
             toast.info("二进制文件已开始下载")
           }
           setState({ status: "ready", blob: data.blob, binary: true })
@@ -129,16 +135,12 @@ export function FilePreview({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
-        {kind === "image" ? (
-          <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
-        ) : kind === "html" ? (
-          <FileCode2 className="size-3.5 shrink-0 text-muted-foreground" />
-        ) : (
-          <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
+        {navigation ?? <>
+        <FileIcon name={item.name} className="size-3.5" />
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground" title={item.path}>
           {item.path}
         </span>
+        </>}
         <Badge variant="secondary" className="shrink-0 text-[10px] font-normal">
           {kind === "other" ? (fileExt(item.name)?.toUpperCase() ?? KIND_LABEL.other) : KIND_LABEL[kind]}
         </Badge>
@@ -169,12 +171,14 @@ export function FilePreview({
             </Button>
           </div>
         )}
-        {state.status === "ready" && (
+        {actions}
+        {(scope || state.status === "ready") && (
           <Button
             variant="ghost"
             size="icon"
             className="size-7 shrink-0"
             title="下载文件"
+            aria-label="下载文件"
             onClick={() => void download()}
           >
             <Download className="size-3.5" />
@@ -197,10 +201,10 @@ export function FilePreview({
         {state.status === "ready" && state.binary && (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-xs text-muted-foreground">
             <FileText className="size-8 text-muted-foreground/50" />
-            <span>二进制文件，已通过下载获取</span>
+            <span>{scope ? "此文件暂不支持在线预览，可下载获取" : "二进制文件，已通过下载获取"}</span>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void download()}>
               <Download className="size-3.5" />
-              重新下载
+              {scope ? "下载文件" : "重新下载"}
             </Button>
           </div>
         )}
@@ -215,11 +219,7 @@ export function FilePreview({
               </Button>
             </div>
           ) : (
-            <div className="min-h-0 flex-1 overflow-auto bg-muted/30">
-              <div className="flex min-h-full items-center justify-center p-4">
-                <img src={state.objectUrl} alt={item.name} className="max-h-full max-w-full rounded object-contain" />
-              </div>
-            </div>
+            <PixelImage key={state.objectUrl} src={state.objectUrl!} alt={item.name} />
           )
         )}
         {state.status === "ready" && !state.binary && kind === "html" && mode === "preview" && (

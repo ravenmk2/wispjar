@@ -25,6 +25,14 @@ crypto:
 
 storage:
   data_dir: "./data"
+  downloads:
+    # 单文件及目录 ZIP 上限 20 GiB；源内容和压缩包各自受此限制。
+    max_bytes: 21474836480
+    # 本实例下载暂存总配额 40 GiB；使用 data_dir 下的 .downloads。
+    max_staged_bytes: 42949672960
+    max_entries: 100000
+    ttl: 30m
+    prepare_timeout: 30m
   volumes:
     backend: "docker"
     backend_id: "local" # 稳定存储域标识；已有卷不可跨域自动迁移

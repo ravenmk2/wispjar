@@ -52,8 +52,11 @@ type Handler struct {
 	attachments AttachmentResolver
 	dataDir     string
 
-	skillsMu     sync.Mutex
-	skillsSynced map[string]string // sessionID -> 已完成技能目录同步的 sandboxID
+	skillsMu        sync.Mutex
+	skillsSynced    map[string]string // sessionID -> 已完成技能目录同步的 sandboxID
+	downloadMu      sync.Mutex
+	downloads       map[string]*fileDownload
+	downloadOptions DownloadOptions
 }
 
 func NewHandler(orch Orchestrator, sessions SessionService, events EventStore, repo SessionRepo,

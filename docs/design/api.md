@@ -421,3 +421,15 @@
 错误沿用统一信封：`computer/not_found` 404；`computer/invalid` 400；`computer/required`、`computer/busy`、`computer/in_use`、`operation/conflict`、`volume/conflict`、`volume/missing` 为 409；后端未配置或不可用为 `computer/unavailable` 503。异步执行中发生的后端故障记录到 operation，不把“已接收”当作“已启动”。
 
 部署兼容：`opensandbox.legacy_sessions_enabled` 默认 true，保留旧会话管理器。共用 OpenSandbox 的新独立部署必须配置为 false，防止无 installation 标签的旧 `wispjar=1` 实例被扫描。电脑实例始终使用独立的 `wispjar=computer-<installation>` 标签，按机构、用户、电脑、存储域和 generation 完整校验后接管。
+
+### 8.1 工作区上传与大文件下载
+
+`POST /sessions/{id}/files?scope=workspace|storage|agent` 接受 multipart `file` 和目录 `path`（默认 `.`），写入所选范围的当前目录，不再固定写入 inputs；重名返回 409，大小仍限 32 MiB。
+
+`POST /sessions/{id}/downloads` 使用正常 Bearer 鉴权，请求 `{path:"outputs",scope:"workspace",archive:true}`。path 必须为相对路径，默认 `.`；scope 默认 workspace；archive 默认 false，仅目录打包时设 true。返回 202 `{id,status:"preparing",name,bytes:0}`。
+
+`GET /sessions/{id}/downloads/{downloadId}` 使用正常鉴权并重新校验会话归属；返回 `{id,status,name,bytes,message?,url?,expires_at}`。status 为 preparing/ready/failed/canceled；ready 的 url 为 `/api/v1/downloads/{downloadId}/file`，expires_at 为凭证到期时间。失败保留可读原因，查询不会重新创建任务。`DELETE` 同路径取消准备，或撤销就绪凭证并清理副本；返回 `{ok:true}`。
+
+浏览器直接 GET 下载 url，HEAD 可读长度。downloadId 为加密随机的 256 位限时资源凭证，不是登录 JWT；路由仍检查原用户账号可用、会话归属及机构成员关系。200/206 返回附件流、UTF-8 文件名、ETag、Accept-Ranges/Content-Length；支持单区间或多区间 Range、If-Range 和 416。固定副本不随源文件后续修改变化，可在有效期内续传。默认单文件及目录包上限 20 GiB、本地暂存配额 40 GiB、100,000 条目、准备时限 30 分钟、就绪有效期 30 分钟，可通过 `storage.downloads` 调整。任务状态只在当前应用进程有效，重启后需重新创建。超额并发返回 429 `file/download_busy`；非法、越权、失效或过期凭证返回 404 `file/download_not_found`。
+
+目录包采用 ZIP64，包含顶层目录、隐藏文件及空目录。符号链接、特殊文件、不可读项和导出期间源文件变化导致整次失败。不得使用预览的截断内容作为完整文件；兼容 `GET /sessions/{id}/file?download=1` 保留原有小文件接口，大文件使用上述下载任务。

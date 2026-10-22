@@ -250,8 +250,35 @@ func (b *ComputerBackend) Ensure(ctx context.Context, s ComputerSpec, allowCreat
 		return nil, err
 	}
 	h := &Handle{SandboxID: sb.ID(), ExecdURL: u, sandbox: sb, ttlSeconds: s.Options.TTLSeconds}
+	endpoint, err := sb.GetEndpoint(ctx, opensandbox.DefaultExecdPort)
+	if err != nil {
+		return nil, err
+	}
+	h.downloadClient = fileStreamClient(conn, u, token, endpoint.Headers)
 	h.Touch()
 	return h, nil
+}
+
+// Download bodies can exceed the SDK's ordinary request timeout. Use a separate
+// client with the same transport/auth routing; the download job context bounds
+// its lifetime. Never mutate a shared SDK client while other calls use it.
+func fileStreamClient(conn opensandbox.ConnectionConfig, endpointURL, token string, endpointHeaders map[string]string) *opensandbox.ExecdClient {
+	client := http.Client{}
+	if conn.HTTPClient != nil {
+		client = *conn.HTTPClient
+	} else if conn.Transport != nil {
+		client.Transport = conn.Transport.NewTransport()
+	}
+	client.Timeout = 0
+	headers := make(map[string]string, len(conn.Headers)+len(endpointHeaders)+1)
+	for k, v := range conn.Headers {
+		headers[k] = v
+	}
+	for k, v := range endpointHeaders {
+		headers[k] = v
+	}
+	headers["X-EXECD-ACCESS-TOKEN"] = token
+	return opensandbox.NewExecdClient(endpointURL, token, opensandbox.WithHTTPClient(&client), opensandbox.WithHeaders(headers), opensandbox.WithTimeout(0))
 }
 
 func (b *ComputerBackend) Pause(ctx context.Context, s ComputerSpec) error {

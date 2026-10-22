@@ -73,6 +73,11 @@ func NewRouter(deps Deps) *gin.Engine {
 	authed.POST("/sessions/:id/attachments", attachmentH.Upload)
 	authed.GET("/attachments/:id", attachmentH.Download)
 	if deps.Runtime != nil {
+		v1.GET("/downloads/:downloadId/file", deps.Auth.DownloadRequired(deps.Runtime.DownloadOwner), deps.Runtime.DownloadContent)
+		v1.HEAD("/downloads/:downloadId/file", deps.Auth.DownloadRequired(deps.Runtime.DownloadOwner), deps.Runtime.DownloadContent)
+		authed.POST("/sessions/:id/downloads", deps.Runtime.CreateDownload)
+		authed.GET("/sessions/:id/downloads/:downloadId", deps.Runtime.DownloadStatus)
+		authed.DELETE("/sessions/:id/downloads/:downloadId", deps.Runtime.CancelDownload)
 		authed.DELETE("/sessions/:id", deps.Runtime.DeleteSession)
 		authed.POST("/sessions/:id/prompts", deps.Runtime.Prompt)
 		authed.POST("/sessions/:id/cancel", deps.Runtime.Cancel)

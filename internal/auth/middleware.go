@@ -65,6 +65,22 @@ func (s *Service) AuthRequired() gin.HandlerFunc {
 	}
 }
 
+// DownloadRequired accepts only a narrowly scoped, expiring download capability
+// and still checks the owner's current account state. It never accepts a JWT in
+// a query string or changes normal API authentication.
+func (s *Service) DownloadRequired(owner func(string) string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		uid := owner(c.Param("downloadId"))
+		var user store.User
+		if uid == "" || s.db.WithContext(c.Request.Context()).First(&user, "id = ?", uid).Error != nil || user.Status != "active" || user.MustChangePassword {
+			respond.Error(c, http.StatusNotFound, "file/download_not_found", "下载不存在或已失效", nil)
+			return
+		}
+		c.Set(ctxUID, uid)
+		c.Next()
+	}
+}
+
 func (s *Service) ResolveOrg() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		orgID := c.Param("orgId")

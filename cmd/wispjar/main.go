@@ -209,6 +209,10 @@ func main() {
 			return m.ModelCode, m.ProviderID, caps.Vision, nil
 		}, cfg.Storage.DataDir, attachmentSvc)
 	runtimeH.SetComputers(computerSvc)
+	runtimeH.SetDownloadOptions(runtime.DownloadOptions{
+		MaxBytes: cfg.Storage.Downloads.MaxBytes, MaxStagedBytes: cfg.Storage.Downloads.MaxStagedBytes,
+		MaxEntries: cfg.Storage.Downloads.MaxEntries, TTL: time.Duration(cfg.Storage.Downloads.TTL), PrepareTimeout: time.Duration(cfg.Storage.Downloads.PrepareTimeout),
+	})
 	wsServer := ws.NewServer(ws.Deps{
 		JWTSecret:      []byte(jwtSecret),
 		Store:          ws.NewGormStore(db),

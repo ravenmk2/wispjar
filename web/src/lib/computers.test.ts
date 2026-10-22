@@ -125,7 +125,8 @@ test("recovery explicitly confirms termination and keeps a stable idempotency ke
   assert.equal((await computersApi.recover("computer", "recover-key")).status, "running")
   assert.equal(canMutateComputer(fixture("computer", "org", "recovering"), []), false)
 })
-test("file scope is explicit, uploads go to inputs and saving preserves source", async () => {
+test("file scope is explicit, uploads target the current directory and saving preserves source", async () => {
+  const uploads: Array<{ scope: string | null; path: FormDataEntryValue | null }> = []
   intercept((url, init) => {
     if (url.includes("save-to-storage")) {
       assert.deepEqual(JSON.parse(String(init.body)), { source: "outputs/report.pdf", destination: "reports/report.pdf" })
@@ -133,7 +134,7 @@ test("file scope is explicit, uploads go to inputs and saving preserves source",
     }
     if (init.method === "POST") {
       assert.ok(init.body instanceof FormData)
-      assert.equal(init.body.get("path"), "inputs")
+      uploads.push({ scope: new URL(url, "http://localhost").searchParams.get("scope"), path: init.body.get("path") })
       assert.ok(init.body.get("file") instanceof Blob)
       return new Response("{}")
     }
@@ -143,6 +144,9 @@ test("file scope is explicit, uploads go to inputs and saving preserves source",
   })
   await sessionsApi.files("session", ".", "storage")
   await sessionsApi.uploadFile("session", new File(["hello"], "input.txt"))
+  await sessionsApi.uploadFile("session", new File(["hello"], "input.txt"), "reports/2026", "storage")
+  await sessionsApi.uploadFile("session", new File(["hello"], "input.txt"), "data", "agent")
+  assert.deepEqual(uploads, [{ scope: "workspace", path: "." }, { scope: "storage", path: "reports/2026" }, { scope: "agent", path: "data" }])
   await sessionsApi.saveToStorage("session", "outputs/report.pdf", "reports/report.pdf")
 })
 test("skill replacement sends expected revision and preserves a concurrent-update conflict", async () => {

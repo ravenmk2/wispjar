@@ -187,8 +187,12 @@ T3 实现约定：
 | GET /operations/:id | 操作状态与资源摘要 |
 | GET /sessions/:id/files | 相对 path，默认 "."；返回 root/path/items |
 | GET /sessions/:id/file | 相对 path；沿用预览限制与下载行为 |
-| POST /sessions/:id/files | multipart file + 相对 path，默认 inputs，文件名冲突不静默覆盖 |
+| POST /sessions/:id/files | multipart file + 相对目录 path，默认 "."；scope 显式选择当前会话、storage 或 agent 文件，文件名冲突不静默覆盖 |
 | POST /sessions/:id/files/save-to-storage | source 相对会话路径，destination 相对 storage 路径；复制校验 |
+| POST /sessions/:id/downloads | body path/scope/archive；202 返回后台下载任务 |
+| GET /sessions/:id/downloads/:downloadId | 只读查询 preparing/ready/failed/canceled；ready 含浏览器下载 URL |
+| DELETE /sessions/:id/downloads/:downloadId | 取消准备或撤销就绪任务并清理临时文件 |
+| GET、HEAD /downloads/:downloadId/file | 256 位随机、限时、仅授予固定文件副本的下载凭证；再次核对账号、会话归属和机构成员关系，支持 Range/If-Range |
 | PUT /orgs/:orgId/admin/skills/:id/package | multipart 包替换，预期 revision 防止覆盖并发更新 |
 
 新增电脑/重建等耗时操作返回 202 `{operation_id,status,resource_id}`；创建与重建接受 Idempotency-Key。操作轮询只读，不隐式启动实例。
@@ -198,6 +202,12 @@ T3 实现约定：
 文件端点默认限制在对应资源根，校验绝对/相对路径、`..`、符号链接及实际打开对象；不能把字符串前缀检查当成完整保护。通用文件上传与现有图片 attachment 准入分开。
 
 文件浏览只枚举当前目录及直接子项的元数据，文件内容按预览请求读取。已有工作区不因浏览重复创建目录或修改权限；仅资源根缺失时补做初始化后重试，普通子项不存在仍返回 404。小参数通过 stdin 交给受监督的非 root 进程，单次列目录不创建或上传临时参数文件；大文件传输保留受保护暂存机制。鉴权、会话维护占用、远端停止确认与符号链接限制保持生效。
+
+新下载通道与预览、上传分离：默认单文件、目录原始内容及生成 ZIP 各限 20 GiB，最多 100,000 个条目，目录深度最多 128；应用实例的本地下载暂存总配额 40 GiB。限制由 `storage.downloads` 配置，准备时限及就绪下载有效期各默认 30 分钟。全实例最多 4 个准备任务、同一用户最多 2 个，任务总数最多 128；资源不足明确失败。上传仍限 32 MiB。
+
+准备任务注册会话维护占用；平台进程先创建 root 专属临时文件，再由降权到任务 UID/GID 的子进程通过继承的输出 FD 读取源目录，逐级 NOFOLLOW 打开路径。单文件复制和 ZIP64 打包均有界分块读写，不使用完整 base64/Blob。ZIP 包含顶层目录、空目录、隐藏文件及普通子文件；符号链接、特殊文件、不可读路径或打包期间的文件变化使整次打包失败，不静默漏文件。已经压缩的常见媒体与二进制资源采用 ZIP_STORED，其他文件采用 DEFLATE。
+
+远端父进程监督子进程的超时与取消并等待其终止，确认停止后才释放维护占用；传输不明仍保留占用供恢复。生成的不可变远端文件经 SDK 流读取到应用 `data_dir/.downloads`，边传输边校验长度与计算摘要，随后删除远端副本。浏览器通过固定副本原生下载；HTTP ServeContent 提供 Range/If-Range/ETag 和 64 位文件长度。原有预览与兼容 `download=1` 端点不用于大文件。下载有效期内可重试／续传，过期或撤销清理本地副本；重启会使凭证失效，遗留目录在后续准备任务中按过期时间回收。远端崩溃遗留物在后续导出时按两小时回收。
 
 命令数据流收到 `execution_complete` 后即可结束读取，不继续等待 HTTP 流关闭或下一次心跳。完成事件之前的标准输出、标准错误和退出状态必须完整保留；传输中断仍按未知完成处理，资源释放继续要求监督进程的停止标记。
 

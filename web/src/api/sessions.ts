@@ -20,9 +20,9 @@ export const sessionsApi = {
   files(id: string, path = ".", scope: FileScope = "workspace") {
     return api<SandboxFilesResponse & { root: string }>(`/sessions/${id}/files`, { params: { path, scope } })
   },
-  async uploadFile(id: string, file: File, path = "inputs") {
+  async uploadFile(id: string, file: File, path = ".", scope: FileScope = "workspace") {
     const body = new FormData(); body.append("file", file); body.append("path", path)
-    return (await apiRaw(`/sessions/${id}/files`, { method: "POST", body })).json()
+    return (await apiRaw(`/sessions/${id}/files?${new URLSearchParams({ scope })}`, { method: "POST", body })).json()
   },
   saveToStorage(id: string, source: string, destination: string) {
     return api(`/sessions/${id}/files/save-to-storage`, { method: "POST", body: { source, destination } })

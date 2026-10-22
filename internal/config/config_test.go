@@ -19,6 +19,9 @@ func TestVolumeConfigDefaultsAndValidation(t *testing.T) {
 	if cfg.Runtime.MaxParallelTasks != 4 {
 		t.Fatalf("parallel task default: %d", cfg.Runtime.MaxParallelTasks)
 	}
+	if cfg.Storage.Downloads.MaxBytes != 20<<30 || cfg.Storage.Downloads.MaxStagedBytes != 40<<30 {
+		t.Fatal("large download defaults missing")
+	}
 	for _, value := range []string{
 		`storage: {volumes: {name_pattern: "wj-{kind}"}}`,
 		`storage: {volumes: {name_pattern: "wj-{unknown}-{volume_id}"}}`,
@@ -30,6 +33,9 @@ func TestVolumeConfigDefaultsAndValidation(t *testing.T) {
 		`storage: {volumes: {name_pattern: "{org_id}-{user_id}-{volume_id}"}}`,
 		`runtime: {max_parallel_tasks: 0}`,
 		`runtime: {max_parallel_tasks: 33}`,
+		`storage: {downloads: {max_bytes: 0}}`,
+		`storage: {downloads: {max_bytes: 1073741824, max_staged_bytes: 1}}`,
+		`storage: {downloads: {ttl: 0s}}`,
 	} {
 		if err = os.WriteFile(path, []byte(value), 0600); err != nil {
 			t.Fatal(err)

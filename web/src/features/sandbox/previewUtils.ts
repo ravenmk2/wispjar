@@ -1,4 +1,5 @@
-import { ApiError, apiRaw } from "@/api/client"
+import { ApiError, api } from "@/api/client"
+import { toast } from "sonner"
 import { useIdentityStore } from "@/stores/identity"
 import type { FileScope } from "@/api/sessions"
 
@@ -63,10 +64,46 @@ export function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(a.href)
 }
 
-export async function downloadWorkspaceFile(sessionId: string, path: string, scope: FileScope): Promise<void> {
-  const query = new URLSearchParams({ path, scope, download: "1" })
-  const res = await apiRaw(`/sessions/${sessionId}/file?${query}`)
-  downloadBlob(await res.blob(), fileName(path))
+type DownloadJob = { id: string; status: "preparing" | "ready" | "failed" | "canceled"; name: string; url?: string; message?: string; expires_at?: string }
+
+export async function downloadWorkspaceFile(sessionId: string, path: string, scope: FileScope, archive = false): Promise<void> {
+  const base = `/sessions/${sessionId}/downloads`
+  let job = await api<DownloadJob>(base, { method: "POST", body: { path, scope, archive } })
+  let canceled = false
+  let canceling = false
+  const notification = toast.loading(`正在${archive ? "打包目录" : "准备下载"}：${job.name}`, {
+    duration: Infinity,
+    action: { label: "取消", onClick: () => {
+      if (canceling) return
+      canceling = true
+      void api(`${base}/${job.id}`, { method: "DELETE" }).then(() => { canceled = true; toast.info("已取消下载准备") }).catch((e) => { canceling = false; toast.error(e instanceof Error ? e.message : "取消失败") })
+    } },
+  })
+  try {
+    while (job.status === "preparing" && !canceled) {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      if (!canceled) job = await api<DownloadJob>(`${base}/${job.id}`)
+    }
+    if (canceled || job.status === "canceled") return
+    if (job.status !== "ready" || !job.url) throw new Error(job.message || "下载准备失败")
+    // Let the browser stream directly to disk; never materialize a multi-GB Blob.
+    const ready = job
+    const expiresAt = ready.expires_at ? Date.parse(ready.expires_at) : Date.now() + 5 * 60_000
+    const begin = () => {
+      if (Date.now() >= expiresAt) { toast.error("下载已过期，请重新准备"); return }
+      const anchor = document.createElement("a")
+      anchor.href = ready.url!
+      anchor.download = ready.name
+      anchor.rel = "noreferrer"
+      document.body.append(anchor); anchor.click(); anchor.remove()
+    }
+    // A long preparation can outlive transient browser user activation. Keep
+    // an explicit download action available instead of assuming auto-start.
+    toast.success(`${archive ? "目录已打包" : "文件已准备好"}：${ready.name}`, {
+      duration: Math.max(1000, expiresAt - Date.now()),
+      action: { label: "下载", onClick: begin },
+    })
+  } finally { toast.dismiss(notification) }
 }
 
 export function fileName(path: string): string {
