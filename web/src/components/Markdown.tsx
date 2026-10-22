@@ -2,10 +2,15 @@ import { createContext, memo, useContext, useEffect, useState, type ComponentPro
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { CopyIconButton } from "@/components/CopyIconButton"
+import { MarkdownImage } from "@/components/MarkdownImage"
 import { highlightCode } from "@/lib/highlight"
 import { cn } from "@/lib/utils"
 
 const TableCopyContext = createContext<{ source: string; headerEnd?: number } | null>(null)
+
+function MarkdownImageRenderer({ node: _node, ...props }: ComponentProps<"img"> & { node?: unknown }) {
+  return <MarkdownImage {...props} />
+}
 
 function TableHeaderCell({ sourceEnd, children, ...props }: ComponentProps<"th"> & { sourceEnd?: number }) {
   const table = useContext(TableCopyContext)
@@ -67,6 +72,7 @@ export const Markdown = memo(function Markdown({ content, className }: { content
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          img: MarkdownImageRenderer,
           pre: ({ children }) => <>{children}</>,
           code: ({ className: codeClassName, children }) => {
             const text = String(children).replace(/\n$/, "")

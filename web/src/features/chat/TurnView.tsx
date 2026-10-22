@@ -39,7 +39,7 @@ export function TurnView({ segment, sessionId, latestTurn }: {
   return (
     <section className="space-y-4" data-turn={segment.turn}>
       {segment.user && <NodeView node={segment.user} sessionId={sessionId} depth={0} latestTurn={latestTurn} />}
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="chat-turn-header relative flex min-w-0 items-center gap-2">
         <button
           type="button" data-turn-header={segment.turn} aria-expanded={expanded}
           aria-label={`${expanded ? "收起" : "展开"}第 ${segment.turn} 轮：${timeText}`}

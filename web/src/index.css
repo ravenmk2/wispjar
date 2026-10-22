@@ -255,6 +255,14 @@
   .chat-process-trigger {
     color: var(--text-process);
   }
+  .chat-turn-header::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    height: 1px;
+    pointer-events: none;
+    background: repeating-linear-gradient(to right, var(--divider) 0 8px, transparent 8px 14px);
+  }
   .chat-process-trigger:is(:hover, :focus-visible):not(:disabled) {
     --text-process: var(--text-process-hover);
     --text-process-muted: var(--text-process-hover);
@@ -329,6 +337,12 @@
   }
   .markdown-body p {
     @apply my-4;
+  }
+  .markdown-image {
+    width: auto;
+    height: auto;
+    max-width: min(100%, 720px);
+    max-height: min(480px, 60vh);
   }
   .markdown-body strong {
     @apply font-semibold;

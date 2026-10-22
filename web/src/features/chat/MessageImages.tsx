@@ -58,7 +58,7 @@ function AttachmentImage({
         title={attachment.name}
         onClick={onOpen}
         style={{ width: box.width, height: box.height }}
-        className="relative block shrink-0 overflow-hidden rounded-lg bg-accent"
+        className="relative block shrink-0 cursor-zoom-in overflow-hidden rounded-lg bg-accent"
       >
         {url && <img src={url} alt={attachment.name} className="size-full object-cover" />}
         {!url && !failed && (
@@ -108,7 +108,7 @@ function AttachmentImage({
     )
   }
   return (
-    <button type="button" title={attachment.name} onClick={onOpen} className="block">
+    <button type="button" title={attachment.name} onClick={onOpen} className="block cursor-zoom-in">
       <img
         src={url}
         alt={attachment.name}
@@ -130,7 +130,7 @@ function Lightbox({ attachment, onClose }: { attachment: AttachmentRef; onClose:
   }, [onClose])
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
+      className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-8"
       onClick={onClose}
     >
       {url ? (
