@@ -49,6 +49,16 @@ Agent 编辑器提供“仅保存环境变量”，调用独立 env 补丁接口
 
 开发代理：vite dev server `server.proxy` 把 `/api` 转发到本地 Go 服务 `:8080`。
 
+### 1.1 品牌图形资源
+
+应用默认使用三星瓶身 C 版：三颗星在 32px 画布上整体左移 1.2px，保留粗描边与单道瓶口线，适配侧栏和 favicon 等小尺寸。深浅主题使用同一几何造型。
+
+| 用途 | 资源 |
+|---|---|
+| 应用 LOGO | `web/public/logo.svg`（浅色）、`web/public/logo-dark.svg`（深色）；`docs/logo.svg` 同步保留默认浅色版 |
+| 浏览器与桌面图标 | `web/public/favicon.svg` 根据浏览器深浅配色切换；`favicon-32x32.png` 和 `apple-touch-icon.png` 使用同版图形，Apple 图标带白色背景 |
+| 大尺寸备用图形 | [精灵细节版（浅色）](../logo-detailed.svg)、[精灵细节版（深色）](../logo-detailed-dark.svg)，保留精灵火焰、双星芒与玻璃高光，供大图展示使用 |
+
 ## 2. 目录结构
 
 ```txt

@@ -1,106 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none" role="img" aria-labelledby="title description">
-  <title id="title">Wispjar — bottled wisp favicon</title>
-  <desc id="description">Refined turquoise wisp and bright balanced stars behind the lighter lines of a wide deep-blue jar with a lower lid and thin neck detail. Transparent background.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" role="img" aria-labelledby="title description">
+  <title id="title">Wispjar — three bottled stars favicon</title>
+  <desc id="description">Three turquoise four-point stars inside a bold rounded jar, optimized for small sizes. Transparent background.</desc>
   <style>
     @media (prefers-color-scheme: dark) {
       [stroke="#12384A"] { stroke: #C0DCE5; }
-      [stop-color="#94E1E4"] { stop-color: #8DDDE1; }
-      [stop-color="#7ED3DA"] { stop-color: #69C9D3; }
-      [fill="#079C9F"] { fill: #25AFB4; }
+      [fill="#19AFB8"] { fill: #65CFD6; }
       [fill="#10A8BA"] { fill: #31C4D4; }
-      [stop-color="#CBD7DF"] { stop-color: #48616D; }
-      [stop-color="#9CAEBB"] { stop-color: #7194A4; }
-      [stroke="#CBD6DE"] { stroke: #48616D; }
-      [stroke="#D0DAE2"] { stroke: #3B535F; }
     }
   </style>
-  <defs>
-    <linearGradient id="wisp-fill" x1="670" y1="720" x2="910" y2="1100" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#94E1E4"/>
-      <stop offset="1" stop-color="#7ED3DA"/>
-    </linearGradient>
-    <linearGradient id="glass-highlight" x1="72" y1="376" x2="136" y2="435" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#CBD7DF"/>
-      <stop offset="1" stop-color="#9CAEBB"/>
-    </linearGradient>
-  </defs>
-
-  <!-- The enlarged spirit sits behind the glass and mouth lines. -->
-  <!-- Broad, continuous curves preserve the reference wisp's rising motion. -->
-  <g transform="translate(-246 -227) scale(.614 .58)">
-    <path d="M898 595
-      C865 594 842 613 835 637
-      C828 661 840 672 852 684
-      C869 701 871 715 858 732
-      C844 747 821 753 786 753
-      C701 751 631 794 602 866
-      C573 938 599 1028 650 1075
-      C689 1111 740 1128 801 1124
-      C893 1123 976 1067 1005 959
-      C990 995 964 1015 932 1024
-      C963 978 958 922 922 878
-      C903 855 885 842 897 810
-      C907 790 927 781 935 756
-      C948 716 927 686 896 666
-      C875 651 863 630 871 611
-      C877 600 888 597 898 595Z"
-      fill="#079C9F"/>
-    <path d="M889 597
-      C865 605 851 620 845 638
-      C839 655 847 667 861 680
-      C881 699 886 718 873 738
-      C857 760 831 766 791 766
-      C709 762 646 801 619 870
-      C594 934 614 1015 663 1060
-      C697 1092 742 1110 801 1102
-      C850 1098 903 1074 940 1039
-      C921 1048 900 1057 884 1062
-      Q878 1064 883 1059
-      C911 1031 933 998 931 966
-      C936 926 923 895 901 868
-      C881 844 870 828 880 802
-      C890 776 914 767 920 748
-      C933 716 916 691 892 672
-      C870 656 858 638 865 620
-      C869 610 877 602 889 597Z"
-      fill="url(#wisp-fill)"/>
+  <g transform="translate(-1.2 0)">
+    <path d="M14.4 13.41 C15.3504 17.883 16.182 18.7776 20.34 19.8 C16.182 20.8224 15.3504 21.717 14.4 26.19 C13.4496 21.717 12.618 20.8224 8.46 19.8 C12.618 18.7776 13.4496 17.883 14.4 13.41Z" fill="#19AFB8"/>
+    <path d="M21.9 9.8 C22.524 12.81 23.07 13.412 25.8 14.1 C23.07 14.788 22.524 15.39 21.9 18.4 C21.276 15.39 20.73 14.788 18 14.1 C20.73 13.412 21.276 12.81 21.9 9.8Z" fill="#10A8BA"/>
+    <path d="M23.4 20.5 C23.848 22.67 24.24 23.104 26.2 23.6 C24.24 24.096 23.848 24.53 23.4 26.7 C22.952 24.53 22.56 24.096 20.6 23.6 C22.56 23.104 22.952 22.67 23.4 20.5Z" fill="#19AFB8"/>
   </g>
-
-  <!-- Four-point sparkles. -->
-  <path d="M391 208 C396 235 403 243 432 250 C403 257 396 265 391 292 C386 265 379 257 350 250 C379 243 386 235 391 208Z" fill="#10A8BA"/>
-  <path d="M406 301 C409 316 414 322 430 326 C414 330 409 336 406 351 C403 336 398 330 382 326 C398 322 403 316 406 301Z" fill="#10A8BA"/>
-
-  <!-- Rounded shoulders and broad base; the complete silhouette is almost square. -->
-  <path d="M104 106
-    C125 110 127 129 108 140
-    C70 160 47 184 47 223
-    V395
-    C47 440 75 464 127 464
-    H385
-    C437 464 465 440 465 395
-    V223
-    C465 184 442 160 404 140
-    C385 129 387 110 408 106"
-    stroke="#12384A" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
-
-  <!-- Lid with softly bowed top and lower rim. -->
-  <path d="M100 98 V80
-    C100 69 108 64 124 61
-    C185 49 327 49 388 61
-    C404 64 412 69 412 80
-    V98
-    C412 106 407 109 395 110
-    C329 117 183 117 117 110
-    C105 109 100 106 100 98Z"
-    stroke="#12384A" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M128 83 C203 87 309 87 384 83" stroke="#12384A" stroke-width="8" stroke-linecap="round"/>
-  <path d="M96 107 C169 119 343 119 416 107" stroke="#12384A" stroke-width="11" stroke-linecap="round"/>
-  <path d="M139 136 C191 142 321 142 373 136" stroke="#12384A" stroke-width="6.5" stroke-linecap="round"/>
-
-  <!-- Reflections echo the rounded glass without filling the transparent jar. -->
-  <path d="M143 166 C112 171 86 190 80 216" stroke="#CBD6DE" stroke-width="11" stroke-linecap="round"/>
-  <path d="M386 166 C412 177 430 194 433 216" stroke="#12384A" stroke-width="10" stroke-linecap="round"/>
-  <path d="M79 398 C79 419 94 435 118 440" stroke="url(#glass-highlight)" stroke-width="11" stroke-linecap="round"/>
-  <path d="M139 441 C199 437 313 437 373 441" stroke="#D0DAE2" stroke-width="9" stroke-linecap="round"/>
-  <path d="M390 441 C417 437 434 419 435 398" stroke="#12384A" stroke-width="10" stroke-linecap="round"/>
+  <!-- One continuous outer contour and one mouth line replace the fine glass details. -->
+  <path d="M6.5 7V3.9
+    C6.5 2.6 8 2 16 2
+    C24 2 25.5 2.6 25.5 3.9V7
+    C24.7 7.8 24.7 8.5 26.2 9.2
+    C28.6 10.4 30 12.2 30 14.7V25
+    C30 28.2 28 30 24.5 30H7.5
+    C4 30 2 28.2 2 25V14.7
+    C2 12.2 3.4 10.4 5.8 9.2
+    C7.3 8.5 7.3 7.8 6.5 7Z"
+    stroke="#12384A" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M6.5 6.6C12.8 7.2 19.2 7.2 25.5 6.6"
+    stroke="#12384A" stroke-width="1.6" stroke-linecap="round"/>
 </svg>

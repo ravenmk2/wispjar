@@ -10,7 +10,7 @@
 > - `docs/design/runtime.md`：Agent 运行时（eino 集成、工具规格、task 委派、Skills、审批、沙箱管理）
 > - `docs/design/media.md`：图片工具、供应商文件引用、历史持久化与能力限制
 > - `docs/design/computers.md`：用户云电脑与持久卷（目录、命名配置、并行执行、技能同步、迁移及实施验收）
-> - `docs/design/frontend.md`：前端工程与界面详细规格
+> - `docs/design/frontend.md`：前端工程、界面详细规格与品牌图形资源
 
 ---
 
