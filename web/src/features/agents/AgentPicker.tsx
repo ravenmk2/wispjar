@@ -1,4 +1,4 @@
-import { Bot, MoreHorizontal } from "lucide-react"
+import { Bot, ChevronDown, ChevronUp, MoreHorizontal } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router"
 import { toast } from "sonner"
@@ -12,6 +12,8 @@ import { AgentAvatar, AVATAR_ICONS } from "@/features/agents/AgentAvatar"
 import { AgentComputerSettings } from "@/features/computers/AgentComputerSettings"
 import { useCurrentOrg } from "@/stores/identity"
 import type { AgentSummary } from "@/lib/types"
+
+const PAGE_SIZE = 5
 
 export function useOrgAgents() {
   const currentOrg = useCurrentOrg()
@@ -43,7 +45,11 @@ export function AgentPicker() {
   const navigate = useNavigate()
   const org = useCurrentOrg()
   const [settingsAgent, setSettingsAgent] = useState<AgentSummary | null>(null)
-  useEffect(() => setSettingsAgent(null), [org?.id])
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  useEffect(() => {
+    setSettingsAgent(null)
+    setVisibleCount(PAGE_SIZE)
+  }, [org?.id])
 
   if (!agents) {
     return (
@@ -59,7 +65,7 @@ export function AgentPicker() {
   }
   return (
     <div className="space-y-0.5 px-1">
-      {agents.map((agent) => (
+      {agents.slice(0, visibleCount).map((agent) => (
         <div key={agent.id} className="group flex items-center rounded-[10px] hover:bg-accent focus-within:bg-accent">
         <button
           type="button"
@@ -83,6 +89,18 @@ export function AgentPicker() {
         </DropdownMenu>
         </div>
       ))}
+      {agents.length > visibleCount && (
+        <Button variant="ghost" className="h-8 w-full justify-start gap-2 px-2 text-xs text-fg-tertiary hover:text-foreground"
+          aria-label="展开更多智能体，每次显示 5 个" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>
+          <ChevronDown className="size-3.5" />展开更多
+        </Button>
+      )}
+      {visibleCount > PAGE_SIZE && (
+        <Button variant="ghost" className="h-8 w-full justify-start gap-2 px-2 text-xs text-fg-tertiary hover:text-foreground"
+          aria-label="收起智能体" onClick={() => setVisibleCount(PAGE_SIZE)}>
+          <ChevronUp className="size-3.5" />收起
+        </Button>
+      )}
       {settingsAgent && <AgentComputerSettings key={`${org?.id}-${settingsAgent.id}`} agent={settingsAgent} onClose={() => setSettingsAgent(null)} />}
     </div>
   )
