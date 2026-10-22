@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { FilePreview } from "@/features/sandbox/FilePreview"
+import { FilePanel } from "./FilePanel"
 import { formatBytes } from "@/lib/format"
 import { workspaceRoot } from "@/lib/computers"
 import type { SandboxFileItem } from "@/lib/types"
@@ -59,16 +60,21 @@ export function WorkspaceFiles({ sessionId, running, onClose }: { sessionId: str
     try { await sessionsApi.saveToStorage(sessionId, selected.path, destination.trim()); toast.success("已保存到我的存储"); setDestination(null) }
     catch (e) { toast.error(errorMessage(e)) } finally { setSaving(false) }
   }
-  return <aside className="flex h-full w-[420px] max-w-[90vw] shrink-0 flex-col border-l bg-background" aria-label="会话文件">
-    <div className="flex h-12 items-center gap-2 border-b px-3"><span className="flex-1 text-sm font-medium">文件</span><Button variant="ghost" size="icon" title="刷新文件" onClick={() => void refresh()} disabled={loading}><RefreshCw className="size-4" /></Button><Button variant="ghost" size="icon" title="关闭文件面板" onClick={onClose}><X className="size-4" /></Button></div>
-    <div className="space-y-2 border-b p-3">
-      <label className="sr-only" htmlFor="file-scope">文件范围</label>
-      <select id="file-scope" className="h-8 w-full rounded-md border bg-background px-2 text-sm" value={scope} onChange={(e) => { setScope(e.target.value as FileScope); setPath("."); setSelected(null) }}>
+  return <FilePanel>
+    <div className="flex h-12 shrink-0 items-center gap-1 border-b px-3">
+      <span className="mr-1 text-sm font-medium">文件</span>
+      <label className="sr-only" htmlFor="file-scope">文件目录</label>
+      <select id="file-scope" className="h-7 min-w-0 max-w-36 flex-1 rounded-md border-0 bg-transparent px-1 text-xs text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" value={scope} onChange={(e) => { setScope(e.target.value as FileScope); setPath("."); setSelected(null) }}>
         <option value="workspace">当前会话</option><option value="storage">我的存储</option><option value="agent">智能体文件</option>
       </select>
-      <code className="block break-all text-xs text-muted-foreground">{root}{path === "." ? "" : `/${path}`}</code>
-      {scope === "workspace" && <><Button variant="outline" size="sm" disabled={uploading} onClick={() => uploadRef.current?.click()}><Upload className="size-3" />{uploading ? "正在上传…" : "上传到 inputs"}</Button><input type="file" ref={uploadRef} className="hidden" onChange={(e) => void upload(e.target.files?.[0])} /></>}
+      <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        <Button variant="ghost" size="icon" className="size-7" title={uploading ? "正在上传…" : "上传文件到当前会话 inputs"} aria-label="上传文件到当前会话 inputs" disabled={uploading} onClick={() => uploadRef.current?.click()}><Upload className="size-3.5" /></Button>
+        <Button variant="ghost" size="icon" className="size-7" title="刷新文件" aria-label="刷新文件" onClick={() => void refresh()} disabled={loading}><RefreshCw className="size-3.5" /></Button>
+        <Button variant="ghost" size="icon" className="size-7" title="关闭文件面板" aria-label="关闭文件面板" onClick={onClose}><X className="size-3.5" /></Button>
+      </div>
+      <input type="file" ref={uploadRef} className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
     </div>
+    <div className="flex h-8 shrink-0 items-center border-b px-3"><code className="truncate text-[11px] text-muted-foreground" title={`${root}${path === "." ? "" : `/${path}`}`}>{root}{path === "." ? "" : `/${path}`}</code></div>
     {selected ? <><div className="flex items-center gap-2 border-b p-2"><Button variant="ghost" size="sm" onClick={() => setSelected(null)}><ArrowLeft className="size-3" />文件列表</Button>{scope === "workspace" && <Button variant="outline" size="sm" onClick={() => setDestination(selected.name)}>保存到我的存储</Button>}</div><FilePreview sessionId={sessionId} item={selected} scope={scope} reloadToken={revision} /></> :
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
         {path !== "." && <Button variant="ghost" size="sm" onClick={() => setPath(path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".")}><ArrowLeft className="size-3" />上级目录</Button>}
@@ -77,5 +83,5 @@ export function WorkspaceFiles({ sessionId, running, onClose }: { sessionId: str
         </button>)}
       </div>}
     <Dialog open={destination !== null} onOpenChange={(open) => !open && !saving && setDestination(null)}><DialogContent><DialogHeader><DialogTitle>保存到我的存储</DialogTitle><DialogDescription>复制并校验成果，保留会话中的原文件。目标路径相对于 /storage。</DialogDescription></DialogHeader><Label htmlFor="save-destination">目标路径</Label><Input id="save-destination" value={destination ?? ""} onChange={(e) => setDestination(e.target.value)} /><Button disabled={saving || !destination?.trim()} onClick={() => void save()}>{saving ? "正在保存…" : "保存"}</Button></DialogContent></Dialog>
-  </aside>
+  </FilePanel>
 }

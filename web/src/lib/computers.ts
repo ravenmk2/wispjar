@@ -57,7 +57,7 @@ export function computerOperationError(operation: ComputerOperation): string {
 }
 
 export const computerErrorMessages: Record<string, string> = {
-  "computer/required": "请选择一台云电脑，或先创建云电脑。",
+  "computer/required": "请在侧边栏智能体的「云电脑设置」中绑定电脑，也可从用户菜单进入「云电脑」创建并绑定。",
   "computer/rebuild_required": "这台电脑需要重建以启用执行端认证，持久文件将保留。",
   "computer/busy": "电脑仍有活动任务或正在维护，请在任务完成后重试。",
   "computer/in_use": "电脑仍被会话或智能体默认设置引用，请先切换这些绑定。",

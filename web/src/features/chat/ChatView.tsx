@@ -17,7 +17,6 @@ import { useComposerStore } from "@/stores/composer"
 import { useCurrentOrg } from "@/stores/identity"
 import { useSessionStore } from "@/stores/session"
 import { useChatPresentationStore } from "@/stores/chatPresentation"
-import { SessionComputer } from "@/features/computers/SessionComputer"
 import { WorkspaceFiles } from "@/features/computers/WorkspaceFiles"
 import type { SessionDetail } from "@/lib/types"
 
@@ -107,7 +106,7 @@ export default function ChatView() {
   }
 
   return (
-    <div className="flex h-full min-w-0 flex-1">
+    <div className="relative flex h-full min-w-0 flex-1">
       <div className="flex h-full min-w-0 flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center gap-2 px-4">
           <Bot className="size-4 shrink-0 text-muted-foreground" />
@@ -117,27 +116,29 @@ export default function ChatView() {
               {header.agentName}
             </span>
           )}
-          <div className="ml-4 flex shrink-0 items-center rounded-md border p-0.5">
+          <div role="group" aria-label="聊天视图" className="ml-2 flex shrink-0 items-center rounded-md bg-muted/60 p-0.5">
             <button
               type="button"
               onClick={() => setTab("chat")}
+              aria-pressed={tab === "chat"}
               className={cn(
-                "flex items-center gap-1 rounded-sm px-2 py-1 text-sm text-muted-foreground hover:text-foreground",
-                tab === "chat" && "bg-accent font-medium text-foreground",
+                "flex h-6 items-center gap-1 rounded px-1.5 text-xs text-muted-foreground hover:text-foreground",
+                tab === "chat" && "bg-background font-medium text-foreground shadow-sm",
               )}
             >
-              <MessagesSquare className="size-3.5" />
+              <MessagesSquare className="size-3" />
               聊天
             </button>
             <button
               type="button"
               onClick={() => setTab("trajectory")}
+              aria-pressed={tab === "trajectory"}
               className={cn(
-                "flex items-center gap-1 rounded-sm px-2 py-1 text-sm text-muted-foreground hover:text-foreground",
-                tab === "trajectory" && "bg-accent font-medium text-foreground",
+                "flex h-6 items-center gap-1 rounded px-1.5 text-xs text-muted-foreground hover:text-foreground",
+                tab === "trajectory" && "bg-background font-medium text-foreground shadow-sm",
               )}
             >
-              <ListTree className="size-3.5" />
+              <ListTree className="size-3" />
               轨迹
             </button>
           </div>
@@ -151,13 +152,14 @@ export default function ChatView() {
             variant="ghost"
             size="icon"
             className={cn("size-8", followStatus !== "stalled" && "ml-auto", sandboxOpen && "bg-accent")}
-            title="云电脑面板"
+            title="文件面板"
+            aria-label="文件面板"
+            aria-expanded={sandboxOpen}
             onClick={() => setSandboxOpen((v) => !v)}
           >
             <PanelRight className="size-4" />
           </Button>
         </div>
-        {detail && <SessionComputer detail={detail} busy={header?.running ?? detail.running} onChanged={setDetail} />}
         {hasMore && (
           <div role="status" className="flex shrink-0 items-center justify-center gap-2 px-4 py-2 text-xs text-fg-secondary">
             {historyStatus === "loading" ? "正在加载更早的消息…" : (

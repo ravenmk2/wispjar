@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { authApi } from "@/api/auth"
 import { errorMessage } from "@/api/client"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { CloudComputerIcon } from "@/components/CloudComputerIcon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -212,6 +213,10 @@ export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar
             ))}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+        <DropdownMenuItem onClick={() => navigate("/computers")}>
+          <CloudComputerIcon className="size-4" />
+          云电脑
+        </DropdownMenuItem>
         {isAdmin && (
           <DropdownMenuItem onClick={() => navigate("/admin/members")}>
             <Settings2 className="size-4" />

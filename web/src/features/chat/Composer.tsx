@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useNavigate } from "react-router"
 import { toast } from "sonner"
 import { attachmentsApi } from "@/api/attachments"
-import { errorMessage } from "@/api/client"
+import { ApiError, errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
 import { workspaceApi } from "@/api/workspace"
 import {
@@ -55,7 +55,7 @@ function effortLabel(effort: string): string {
   return effort.charAt(0).toUpperCase() + effort.slice(1)
 }
 
-export function Composer({ sessionId, draftAgent, draftComputerId }: { sessionId: string; draftAgent?: AgentSummary; draftComputerId?: string }) {
+export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAgent?: AgentSummary }) {
   const currentOrg = useCurrentOrg()
   const navigate = useNavigate()
   const header = useSessionStore((s) => s.header)
@@ -236,7 +236,6 @@ export function Composer({ sessionId, draftAgent, draftComputerId }: { sessionId
   async function send() {
     const content = draft.trim()
     if (sending || busy || (!draftAgent && !sessionId)) return
-    if (draftAgent && !draftComputerId) { toast.error("请先选择运行本会话的云电脑"); return }
     const pending = imagesRef.current
     if (!content && pending.length === 0) return
     if (pending.some((i) => i.status === "error")) {
@@ -253,7 +252,6 @@ export function Composer({ sessionId, draftAgent, draftComputerId }: { sessionId
         if (!currentOrg) throw new Error("当前机构不可用")
         const session = await sessionsApi.create(currentOrg.id, {
           agent_id: draftAgent.id,
-          computer_id: draftComputerId,
           model_id: modelId,
           ...(effort ? { reasoning_effort: effort } : {}),
         })
@@ -291,7 +289,11 @@ export function Composer({ sessionId, draftAgent, draftComputerId }: { sessionId
       if (draftAgent) navigate(`/c/${targetSessionId}`, { replace: true })
     } catch (e) {
       clearOptimistic()
-      toast.error(errorMessage(e))
+      if (draftAgent && e instanceof ApiError && e.code === "computer/required") {
+        toast.error(`请先为「${draftAgent.name}」绑定云电脑`, {
+          action: { label: "前往设置", onClick: () => navigate("/computers#agent-bindings") },
+        })
+      } else toast.error(errorMessage(e))
     } finally {
       setSending(false)
     }
@@ -635,7 +637,7 @@ export function Composer({ sessionId, draftAgent, draftComputerId }: { sessionId
                   type="button"
                   title="发送"
                   onClick={() => void send()}
-                  disabled={(!draft.trim() && images.length === 0) || sending || busy || (!!draftAgent && !draftComputerId)}
+                  disabled={(!draft.trim() && images.length === 0) || sending || busy}
                   className="ml-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary-hover active:bg-primary-active disabled:opacity-40"
                 >
                   <ArrowUp className="size-5" />

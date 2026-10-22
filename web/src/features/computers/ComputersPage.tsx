@@ -1,11 +1,12 @@
-import { Monitor, Plus, RefreshCw } from "lucide-react"
+import { Plus, RefreshCw } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Link } from "react-router"
+import { Link, useLocation } from "react-router"
 import { toast } from "sonner"
 import { computersApi } from "@/api/computers"
 import { errorMessage } from "@/api/client"
 import { ConfirmDialog, EmptyState, PageHeader, TableSkeleton } from "@/components/common"
 import { Button } from "@/components/ui/button"
+import { CloudComputerIcon } from "@/components/CloudComputerIcon"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
@@ -21,6 +22,7 @@ import { useComputerStore } from "@/stores/computers"
 const selectClass = "h-9 w-full rounded-md border bg-background px-3 text-sm"
 
 export default function ComputersPage() {
+  const { hash } = useLocation()
   const org = useCurrentOrg()
   const agents = useOrgAgents()
   const computers = useComputerStore((s) => s.items)
@@ -35,6 +37,9 @@ export default function ComputersPage() {
   const [deleting, setDeleting] = useState<Computer | null>(null)
   const [recovering, setRecovering] = useState<Computer | null>(null)
   const [bindingBusy, setBindingBusy] = useState<string | null>(null)
+  useEffect(() => {
+    if (hash === "#agent-bindings") document.getElementById("agent-bindings")?.scrollIntoView({ block: "start" })
+  }, [hash, loaded])
   const deleteKey = useRef("")
   const recoverKey = useRef("")
   const bindingAgents = [...(agents ?? []), ...bindings.filter((b) => !agents?.some((a) => a.id === b.agent_id)).map((b) => ({ id: b.agent_id, name: `已下线智能体 ${b.agent_id.slice(0, 8)}` }))]
@@ -114,13 +119,13 @@ export default function ComputersPage() {
     </PageHeader>
     {error && <div role="alert" className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}</div>}
     {operations.length > 0 && <p role="status" className="text-sm text-muted-foreground">{operations.length} 个操作正在处理，页面会自动更新。</p>}
-    {!loaded ? <TableSkeleton /> : computers.length === 0 ? <EmptyState icon={<Monitor className="size-10" />} title="还没有云电脑" description="创建第一台电脑后，即可为智能体选择运行环境。" /> :
+    {!loaded ? <TableSkeleton /> : computers.length === 0 ? <EmptyState icon={<CloudComputerIcon className="size-10" />} title="还没有云电脑" description="创建第一台电脑后，即可为智能体选择运行环境。" /> :
       <div className="grid gap-4 md:grid-cols-2">{computers.map((c) => {
         const activeRuns = runs[c.id]
         const pending = operations.some((op) => op.resource_id === c.id)
         const mutable = activeRuns !== undefined && canMutateComputer(c, activeRuns) && !pending
         return <section key={c.id} className="space-y-3 rounded-xl border bg-card p-4">
-          <div className="flex items-center gap-2"><Monitor className="size-4" /><h2 className="min-w-0 flex-1 truncate font-medium">{c.name}</h2><span className="text-xs text-muted-foreground">{computerStatus(c.status)}</span></div>
+          <div className="flex items-center gap-2"><CloudComputerIcon className="size-4" /><h2 className="min-w-0 flex-1 truncate font-medium">{c.name}</h2><span className="text-xs text-muted-foreground">{computerStatus(c.status)}</span></div>
           <p className="truncate text-xs text-muted-foreground" title={c.config.image}>{c.config.image} · {c.config.resources?.cpu ?? "默认"} CPU · {c.config.resources?.memory ?? "默认内存"}</p>
           <ComputerFailure computer={c} />
           <div className="flex flex-wrap gap-2">
@@ -147,11 +152,11 @@ export default function ComputersPage() {
       })}</div>
       <p className="text-xs text-muted-foreground">暂停、重建或删除电脑均保留这三类存储。会话和智能体目录按各自的数据保留策略管理。</p>
     </section>
-    <section className="space-y-3"><h2 className="font-medium">智能体默认电脑</h2><p className="text-sm text-muted-foreground">仅影响新会话，已有会话继续使用原电脑。</p>
+    <section id="agent-bindings" className="scroll-mt-6 space-y-3"><h2 className="font-medium">智能体绑定云电脑</h2><p className="text-sm text-muted-foreground">为每个智能体绑定一台你的云电脑，新聊天自动使用。也可从侧边栏智能体旁的菜单设置；已有聊天继续使用原电脑。</p>
       {bindingAgents.map((agent) => <div className="flex items-center gap-4" key={agent.id}>
         <Label className="w-40 truncate" htmlFor={`binding-${agent.id}`}>{agent.name}</Label>
         <select id={`binding-${agent.id}`} className={`${selectClass} max-w-sm`} value={bindings.find((b) => b.agent_id === agent.id)?.computer_id ?? ""} disabled={bindingBusy === agent.id} onChange={(e) => void bind(agent.id, e.target.value)}>
-          <option value="">无默认电脑</option>{computers.filter(selectableComputer).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="">未绑定（无法开始新聊天）</option>{computers.filter(selectableComputer).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>)}
     </section>

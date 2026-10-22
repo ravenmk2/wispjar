@@ -8,7 +8,6 @@ import { Composer } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
 import { useComposerStore } from "@/stores/composer"
 import { useSessionStore } from "@/stores/session"
-import { ComputerPicker } from "@/features/computers/ComputerPicker"
 
 // 草稿聊天页（/c/new?agent=<id>）：不创建聊天、不 follow 流，首条消息发出时才建聊天（见 Composer draftAgent 分支）
 export default function DraftChatView() {
@@ -19,7 +18,6 @@ export default function DraftChatView() {
   const resetSession = useSessionStore((s) => s.reset)
   const composerReset = useComposerStore((s) => s.reset)
   const [ready, setReady] = useState(false)
-  const [computerId, setComputerId] = useState("")
 
   // 清空上一聊天残留的事件流与输入草稿，保证消息区为空；reset 同步生效，ready 后再渲染
   useEffect(() => {
@@ -63,9 +61,8 @@ export default function DraftChatView() {
           {agent.name}
         </span>
       </div>
-      <div className="px-4 py-2"><ComputerPicker agentId={agent.id} value={computerId} onChange={setComputerId} defaultBinding /></div>
       <MessageList sessionId="" />
-      <Composer key={agent.id} sessionId="" draftAgent={agent} draftComputerId={computerId} />
+      <Composer key={agent.id} sessionId="" draftAgent={agent} />
     </div>
   )
 }

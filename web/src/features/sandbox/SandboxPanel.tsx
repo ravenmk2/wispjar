@@ -1,5 +1,4 @@
 import {
-  Box,
   ChevronDown,
   ChevronRight,
   FileCode2,
@@ -10,32 +9,20 @@ import {
   RotateCw,
   X,
 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
 import { Button } from "@/components/ui/button"
+import { CloudComputerIcon } from "@/components/CloudComputerIcon"
 import { formatBytes } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { SandboxFileItem, SandboxStatus } from "@/lib/types"
 import { useSessionStore } from "@/stores/session"
 import { FilePreview } from "./FilePreview"
+import { FilePanel } from "@/features/computers/FilePanel"
 import { previewKind } from "./previewUtils"
 import { SandboxStatusIndicator } from "./SandboxStatusIndicator"
-
-const PANEL_W_KEY = "wispjar-sandbox-panel-w"
-const PANEL_DEFAULT_W = 420
-const PANEL_MIN_W = 320
-const LG_MEDIA = "(min-width: 1024px)"
-
-function clampPanelWidth(w: number): number {
-  return Math.min(Math.max(w, PANEL_MIN_W), Math.round(window.innerWidth * 0.6))
-}
-
-function readPanelWidth(): number {
-  const raw = Number(localStorage.getItem(PANEL_W_KEY))
-  return Number.isFinite(raw) && raw > 0 ? clampPanelWidth(raw) : PANEL_DEFAULT_W
-}
 
 interface TreeNodeState {
   item: SandboxFileItem
@@ -71,39 +58,6 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
   const [tab, setTab] = useState<"files" | "preview">("files")
   const [previewItem, setPreviewItem] = useState<SandboxFileItem | null>(null)
   const [previewReload, setPreviewReload] = useState(0)
-  // 面板宽度：≥1024px 可拖拽调宽并持久化；窄视口维持固定 w-80
-  const [isLg, setIsLg] = useState(() => window.matchMedia(LG_MEDIA).matches)
-  const [panelW, setPanelW] = useState(readPanelWidth)
-  const [dragging, setDragging] = useState(false)
-
-  useEffect(() => {
-    const mq = window.matchMedia(LG_MEDIA)
-    const onChange = () => setIsLg(mq.matches)
-    mq.addEventListener("change", onChange)
-    return () => mq.removeEventListener("change", onChange)
-  }, [])
-
-  const onDragStart = useCallback(
-    (e: ReactPointerEvent) => {
-      e.preventDefault()
-      setDragging(true)
-      const startX = e.clientX
-      const startW = panelW
-      const onMove = (ev: PointerEvent) => setPanelW(clampPanelWidth(startW + (startX - ev.clientX)))
-      const onUp = (ev: PointerEvent) => {
-        window.removeEventListener("pointermove", onMove)
-        window.removeEventListener("pointerup", onUp)
-        setDragging(false)
-        const w = clampPanelWidth(startW + (startX - ev.clientX))
-        setPanelW(w)
-        localStorage.setItem(PANEL_W_KEY, String(w))
-      }
-      window.addEventListener("pointermove", onMove)
-      window.addEventListener("pointerup", onUp)
-    },
-    [panelW],
-  )
-
   const status: SandboxStatus = header?.sandboxStatus ?? "none"
   const running = header?.running ?? false
   const image = useMemo(() => {
@@ -255,22 +209,9 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
   }
 
   return (
-    <aside
-      className={cn(
-        "relative flex w-80 shrink-0 flex-col border-l",
-        dragging && "select-none [&_iframe]:pointer-events-none",
-      )}
-      style={isLg ? { width: panelW } : undefined}
-    >
-      {isLg && (
-        <div
-          onPointerDown={onDragStart}
-          className="absolute inset-y-0 -left-[3px] z-10 w-1.5 cursor-col-resize rounded hover:bg-primary/20"
-          title="拖拽调整面板宽度"
-        />
-      )}
+    <FilePanel>
       <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
-        <Box className="size-4 text-muted-foreground" />
+        <CloudComputerIcon className="size-4" />
         <span className="text-sm font-medium">云电脑</span>
         <SandboxStatusIndicator status={status} />
         <Button variant="ghost" size="icon" className="ml-auto size-7" onClick={onClose}>
@@ -363,6 +304,6 @@ export function SandboxPanel({ sessionId, onClose }: { sessionId: string; onClos
           </div>
         </>
       )}
-    </aside>
+    </FilePanel>
   )
 }
