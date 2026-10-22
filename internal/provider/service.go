@@ -513,7 +513,7 @@ func parseCapabilities(raw json.RawMessage) (json.RawMessage, error) {
 	if caps.APIProtocol != "" && caps.APIProtocol != "chat_completions" && caps.APIProtocol != "responses" {
 		return nil, errInvalid("api_protocol 仅支持 chat_completions|responses", nil)
 	}
-	if caps.ToolImages && !(caps.APIProtocol == "responses" && caps.Tools && caps.Vision) {
+	if caps.ToolImages && (caps.APIProtocol != "responses" || !caps.Tools || !caps.Vision) {
 		return nil, errInvalid("tool_images 需要 responses 协议、tools 与 vision", nil)
 	}
 	seen := map[string]bool{}

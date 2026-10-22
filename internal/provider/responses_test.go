@@ -94,12 +94,17 @@ func TestResponsesFileRecoveryAndReplay(t *testing.T) {
 		if request.URL.Path == "/files" {
 			if err := request.ParseMultipartForm(10 << 20); err != nil {
 				t.Error(err)
+				return
 			}
-			defer request.MultipartForm.RemoveAll()
+			defer func() {
+				if err := request.MultipartForm.RemoveAll(); err != nil {
+					t.Error(err)
+				}
+			}()
 			if request.FormValue("purpose") != "user_data" || request.FormValue("expires_after[seconds]") != "86400" {
 				t.Error("missing upload policy")
 			}
-			fmt.Fprintf(writer, `{"id":"file-%d","expires_at":%d}`, uploads.Add(1), time.Now().Add(time.Hour).Unix())
+			_, _ = fmt.Fprintf(writer, `{"id":"file-%d","expires_at":%d}`, uploads.Add(1), time.Now().Add(time.Hour).Unix())
 			return
 		}
 		var payload map[string]any
@@ -109,10 +114,10 @@ func TestResponsesFileRecoveryAndReplay(t *testing.T) {
 		payloads = append(payloads, payload)
 		if requests.Add(1) == 1 {
 			writer.WriteHeader(400)
-			fmt.Fprint(writer, `{"error":{"code":"file_expired","message":"file-1 expired"}}`)
+			_, _ = fmt.Fprint(writer, `{"error":{"code":"file_expired","message":"file-1 expired"}}`)
 			return
 		}
-		fmt.Fprint(writer, completedResponse)
+		_, _ = fmt.Fprint(writer, completedResponse)
 	})
 	ctx := WithMediaOrg(context.Background(), "tenant-a")
 	sink := NewUsageSink()
@@ -171,7 +176,7 @@ func TestResponsesFileRecoveryAndReplay(t *testing.T) {
 func TestResponsesUploadScopeAndConcurrency(t *testing.T) {
 	var uploads atomic.Int32
 	model, reader := testResponses(t, func(writer http.ResponseWriter, request *http.Request) {
-		fmt.Fprintf(writer, `{"id":"file-%d","expires_at":%d}`, uploads.Add(1), time.Now().Add(time.Hour).Unix())
+		_, _ = fmt.Fprintf(writer, `{"id":"file-%d","expires_at":%d}`, uploads.Add(1), time.Now().Add(time.Hour).Unix())
 	})
 	ctx := WithMediaOrg(context.Background(), "tenant-a")
 	var group sync.WaitGroup
@@ -257,12 +262,12 @@ func TestResponsesNoRetryForAuthOrRepeatedExpiry(t *testing.T) {
 			var uploads, requests atomic.Int32
 			model, reader := testResponses(t, func(writer http.ResponseWriter, request *http.Request) {
 				if request.URL.Path == "/files" {
-					fmt.Fprintf(writer, `{"id":"file-%d"}`, uploads.Add(1))
+					_, _ = fmt.Fprintf(writer, `{"id":"file-%d"}`, uploads.Add(1))
 					return
 				}
 				requests.Add(1)
 				writer.WriteHeader(status)
-				fmt.Fprint(writer, `{"error":{"code":"file_expired","message":"expired"}}`)
+				_, _ = fmt.Fprint(writer, `{"error":{"code":"file_expired","message":"expired"}}`)
 			})
 			_, err := model.Generate(WithMediaOrg(context.Background(), "tenant-a"), toolImage(reader.ref))
 			if err == nil {
@@ -309,11 +314,11 @@ func TestArkProcessingAndCancel(t *testing.T) {
 	var polls atomic.Int32
 	model, reader := testResponses(t, func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method == http.MethodPost {
-			fmt.Fprint(writer, `{"id":"file-ark","status":"processing","expires_at":2000000000}`)
+			_, _ = fmt.Fprint(writer, `{"id":"file-ark","status":"processing","expires_at":2000000000}`)
 			return
 		}
 		polls.Add(1)
-		fmt.Fprint(writer, `{"id":"file-ark","status":"active","expires_at":2000000000}`)
+		_, _ = fmt.Fprint(writer, `{"id":"file-ark","status":"active","expires_at":2000000000}`)
 	})
 	model.providerType = "ark"
 	ctx := WithMediaOrg(context.Background(), "tenant-a")

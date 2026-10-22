@@ -502,7 +502,7 @@ func (s *Service) planUpdate(ctx context.Context, uid string, sess *store.Sessio
 		}
 		caps := capabilities{}
 		_ = json.Unmarshal(m.Capabilities, &caps)
-		if !(caps.Vision && caps.Tools && caps.ToolImages && caps.APIProtocol == "responses") {
+		if !caps.Vision || !caps.Tools || !caps.ToolImages || caps.APIProtocol != "responses" {
 			var count int64
 			if err := s.db.WithContext(ctx).Model(&store.SessionEvent{}).Where("session_id = ? AND type = ? AND JSON_LENGTH(JSON_EXTRACT(data, '$.attachments')) > 0", sess.ID, EventToolResult).Count(&count).Error; err != nil {
 				return nil, nil, err

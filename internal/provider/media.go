@@ -206,7 +206,7 @@ func (e *apiError) Error() string {
 }
 
 func readAPIError(resp *http.Response) error {
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var body struct {
 		Error struct {
 			Code    string `json:"code"`
@@ -331,7 +331,7 @@ func (m *responsesModel) upload(ctx context.Context, id, mime string, data []byt
 	}
 	file := &remoteFile{}
 	err = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(file)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if err != nil || file.ID == "" {
 		return nil, errors.New("provider: invalid file upload response")
 	}
@@ -352,7 +352,7 @@ func (m *responsesModel) upload(ctx context.Context, id, mime string, data []byt
 			return nil, err
 		}
 		err = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(file)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if err != nil {
 			return nil, err
 		}

@@ -196,7 +196,7 @@ func (m *responsesModel) payload(input []any, stream bool, opts ...model.Option)
 	if options.Tools != nil {
 		infos := []any{}
 		for _, info := range options.Tools {
-			parameters, err := info.ParamsOneOf.ToJSONSchema()
+			parameters, err := info.ToJSONSchema()
 			if err != nil {
 				return nil, err
 			}
@@ -249,7 +249,8 @@ func (m *responsesModel) start(ctx context.Context, messages []*schema.Message, 
 		code := strings.ToLower(apiErr.code)
 		detail := strings.ToLower(apiErr.message)
 		fileError := code == "file_not_found" || code == "file_expired" || code == "invalid_file_id" || strings.Contains(code, "filenotfound") || strings.Contains(code, "fileexpired")
-		if !fileError && !(strings.Contains(detail, "file") && (strings.Contains(detail, "expired") || strings.Contains(detail, "not found") || strings.Contains(detail, "does not exist"))) {
+		detailFileError := strings.Contains(detail, "file") && (strings.Contains(detail, "expired") || strings.Contains(detail, "not found") || strings.Contains(detail, "does not exist"))
+		if !fileError && !detailFileError {
 			return nil, err
 		}
 		invalidated := false
@@ -270,7 +271,7 @@ func (m *responsesModel) start(ctx context.Context, messages []*schema.Message, 
 }
 
 func (m *responsesModel) decode(ctx context.Context, body *responseBody) (*schema.Message, error) {
-	if body.Status != "completed" && !(body.Status == "incomplete" && body.Incomplete.Reason == "max_output_tokens") {
+	if body.Status != "completed" && (body.Status != "incomplete" || body.Incomplete.Reason != "max_output_tokens") {
 		return nil, fmt.Errorf("provider: response %s (%s): %s", body.Status, body.Error.Code, body.Error.Message)
 	}
 	message := &schema.Message{Role: schema.Assistant}
@@ -331,7 +332,7 @@ func (m *responsesModel) Generate(ctx context.Context, messages []*schema.Messag
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var body responseBody
 	if err = json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&body); err != nil {
 		return nil, err
@@ -347,7 +348,7 @@ func (m *responsesModel) Stream(ctx context.Context, messages []*schema.Message,
 	reader, writer := schema.Pipe[*schema.Message](1)
 	go func() {
 		defer writer.Close()
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		err := m.readStream(ctx, resp.Body, func(message *schema.Message) bool { return writer.Send(message, nil) })
 		if err != nil {
 			writer.Send(nil, err)
