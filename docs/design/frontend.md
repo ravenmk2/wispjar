@@ -233,7 +233,7 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 - 主题：浅色默认 + 深色/跟随系统（Tailwind `class` 策略，localStorage `wispjar-theme`）。`primary` 浅 #3A83F7 / 深 #2C67C5，白色按钮内容；链接单独使用 `text-link`（浅 #2C67C5 / 深 #83B5FF）。完整语义色与变量格式见 docs/design/theme.md。
 - 背景：主区白 / #121212，侧栏 #FBFAF9 / #181817，输入框独立 `bg-composer` 白 / #1F1F1F；两套主题的蓝色用户气泡与原有文字颜色保持。菜单白 / #292929，使用不透明背景。
 - 对比度：界面主文字浅黑 .9 / 深白 .84，辅助 .6 / .56、次要 .45 / .42；助手正文使用独立 `--text-body`，浅黑 .9 / 深 #EEEEEE，深色正文不随界面文字调整。边框浅黑 .09 / 深白 .1。
-- 字体：按平台系统字体优先（-apple-system / BlinkMacSystemFont / Segoe UI / system-ui，后续中文回退见 theme.md）；等宽西文使用 SFMono-Regular / Consolas / Menlo / Liberation Mono，CJK 回退中文系统字体。无外部字体下载，不额外强制字体平滑设置。
+- 字体：按平台系统字体优先（-apple-system / BlinkMacSystemFont / Segoe UI / system-ui，后续中文回退见 theme.md）；等宽西文使用 SFMono-Regular / Consolas / Menlo / Liberation Mono，CJK 回退中文系统字体。侧栏 WISPJAR 字标使用 Clash Display Semibold（600）、18px、0.04em 字距的 SVG 轮廓，随主题变色。无外部字体下载，不额外强制字体平滑设置。
 - 排版：正文、用户消息、思考摘要及详情、工具折叠行与参数/结果/代码、提问及选项为 16px / 26px；消息输入文本为 16px / 24px。侧栏分组与聊天名称为 14px / 20px；通用菜单和按钮 14px，时间、工具耗时和统计 12px / 18px；管理表格保留 14px 密度。
 - 间距与交互：正文容器 752px（含左右各 16px，正文上限 720px），输入区上限 800px（卡片 768px）；段落间距 16px，H2 为 20px / 32px、上 24px 下 16px，粗体与标题为 600 字重。侧栏会话行高 36px；输入框圆角 24px、发送按钮 36px。菜单外缘 16px、菜单项 10px、内边距 8px，36px 行高。焦点为 3px 软蓝 ring；输入框由外容器中性阴影显示焦点。
 - 对齐：整轮、独立思考和过程组的前置图标与正文共用左边界，标题文字位于图标之后。“思考与行动／多次工具调用”组内节点保留一级 16px 缩进，内部思考、工具图标和工具卡外缘以此为基准，不额外叠加左内边距；独立思考详情与正文对齐，子任务仍通过竖线和缩进表达真实层级。

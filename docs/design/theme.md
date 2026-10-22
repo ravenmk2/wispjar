@@ -4,13 +4,15 @@
 
 ## 1. 字体与排版
 
-使用本机字体，不下载外部字体文件。平台系统字体优先，中文按字体栈回退：
+正文与通用界面使用本机字体，不下载外部字体文件。平台系统字体优先，中文按字体栈回退：
 
 - 正文：`-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, Roboto, Noto Sans, Ubuntu, Cantarell, Helvetica Neue, sans-serif, Arial, PingFang SC, Source Han Sans SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC`。
 - 等宽：`SFMono-Regular, Consolas, Menlo, Liberation Mono, PingFang SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, monospace`；西文优先等宽，CJK 明确回退到苹方、微软雅黑等中文字体。
+- 侧栏品牌字标：Clash Display Semibold（600），18px，字距 0.04em。`WispjarWordmark` 使用转为轮廓的 SVG 字标（字体来源：[Fontshare](https://www.fontshare.com/fonts/clash-display)，ITF FFL），以 `currentColor` 跟随深浅主题；不分发字体文件。
 
 | 内容 | 字号 / 行高 | 实现 |
 |---|---|---|
+| 侧栏 WISPJAR 品牌字标 | 18px 字号等比轮廓 | `WispjarWordmark`，SVG 保留原字体度量 |
 | 聊天正文、用户气泡 | 16px / 26px | `text-chat` |
 | 消息输入文本与占位符 | 16px / 24px | `text-chat leading-6` |
 | 思考摘要及详情、过程组与工具折叠行 | 16px / 26px | `text-chat`，以辅助色区分层级 |

@@ -4,6 +4,7 @@ import { Outlet } from "react-router"
 import { UserMenu } from "@/layouts/AdminLayout"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { WispjarWordmark } from "@/components/WispjarWordmark"
 import { AgentPicker } from "@/features/agents/AgentPicker"
 import { SessionList } from "@/features/sessions/SessionList"
 import { followControl } from "@/mux/control"
@@ -58,7 +59,7 @@ export default function WorkspaceLayout() {
           <>
             <div className="flex h-14 shrink-0 items-center gap-2 px-4 text-base font-semibold">
               <img src={logoSrc} alt="" className="size-6" />
-              WISPJAR
+              <WispjarWordmark />
               <Button
                 variant="ghost"
                 size="icon"
