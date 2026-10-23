@@ -259,9 +259,9 @@
     content: "";
     position: absolute;
     inset: auto 0 0;
-    height: 1px;
+    height: 0.5px;
     pointer-events: none;
-    background: repeating-linear-gradient(to right, var(--divider) 0 8px, transparent 8px 14px);
+    background: var(--divider);
   }
   .chat-process-trigger:is(:hover, :focus-visible):not(:disabled) {
     --text-process: var(--text-process-hover);
@@ -304,9 +304,6 @@
   .chat-activity-icon.is-running .activity-scan-middle { animation-delay: -1.2s; }
   .chat-activity-icon.is-running .activity-scan-last { animation-delay: -.6s; }
   .chat-activity-icon.is-running .activity-scan-web-last { animation-delay: -.9s; }
-  @media (prefers-reduced-motion: reduce) {
-    .chat-activity-web_fetch.is-running .activity-scan { animation: none; opacity: 1; }
-  }
   .chat-activity-icon.is-running .activity-pen {
     transform-origin: center;
     animation: activity-write 1.8s ease-in-out infinite;

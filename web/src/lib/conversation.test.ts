@@ -146,7 +146,7 @@ test("turn actions follow trailing tools while fallback text keeps its original 
     if (reason === "completed") f.message([text("final answer")], 2)
     f.end(reason)
     const html = render(f)
-    const toolPosition = html.lastIndexOf("1次工具使用")
+    const toolPosition = html.lastIndexOf("已使用工具 1 次")
     const actionPosition = html.indexOf('aria-label="从这里开始新聊天"')
     assert.ok(toolPosition > html.indexOf("progress before tool"))
     assert.ok(actionPosition > toolPosition)
@@ -157,7 +157,7 @@ test("turn actions follow trailing tools while fallback text keeps its original 
       const collapsed = render(f, 2)
       assert.ok(collapsed.includes("progress before tool"))
       assert.ok(collapsed.includes("↑"))
-      assert.equal(collapsed.includes("1次工具使用"), false)
+      assert.equal(collapsed.includes("已使用工具 1 次"), false)
     } else {
       assert.ok(actionPosition > html.indexOf("final answer"))
     }
