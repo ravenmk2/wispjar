@@ -82,6 +82,9 @@ func (s *Service) Search(ctx context.Context, providerID string, in Request) (ou
 	if err != nil {
 		return nil, err
 	}
+	if !supports(p.Type, false) {
+		return nil, unavailable("所选实例不支持网络搜索")
+	}
 	if p.Type == "deepseek" && utf8.RuneCountInString(in.Query) > 128 {
 		return nil, invalid("DeepSeek query 最长 128 个 Unicode 字符，请缩短搜索词后重试")
 	}
@@ -89,7 +92,7 @@ func (s *Service) Search(ctx context.Context, providerID string, in Request) (ou
 	if err != nil {
 		return nil, unavailable("搜索实例密钥不可用，请联系系统管理员")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, instanceTimeout(*p))
 	defer cancel()
 	start := time.Now()
 	defer func() {
@@ -164,7 +167,7 @@ func (s *Service) execute(ctx context.Context, p store.SearchProvider, key strin
 		// Never expose transport errors containing request URLs or upstream secrets.
 		return nil, &Error{502, "search/network", "无法连接所选搜索实例"}
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		msg := "搜索供应商请求失败"
 		switch res.StatusCode {

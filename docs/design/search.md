@@ -1,4 +1,4 @@
-# 网络搜索
+# 网络搜索与网页读取
 
 ## 1. 范围与决策
 
@@ -7,7 +7,7 @@
 - 全局默认指向具体实例，可清空。智能体独立控制 `tools_enabled.web_search`，默认为 false；`search_provider_id=null` 表示跟随默认，非空表示明确指定实例。
 - **每次搜索只调用所选实例一次，不自动重试、不自动回退。** 空结果是成功；未设置默认、实例不存在或停用、认证/额度/限流/网络/响应错误均明确报错。
 - 智能体选择随主/子智能体会话快照固定，修改智能体影响新会话。继承关系保留为 null，在下一次搜索时读取当前默认。密钥和停用状态同样在每次调用读取，快照不含密钥。
-- 不新增输入框开关，Agent 根据任务决定调用。第一版不做网页抓取、结果缓存、编号引用或聚合搜索。
+- 不新增输入框开关，Agent 根据任务决定调用。网页读取见 §7；不做结果缓存、编号引用或聚合搜索。
 
 ## 2. 工具实现
 
@@ -50,7 +50,7 @@ DeepSeek/博查 Base URL 已以 `/v1` 结尾时避免重复版本段。全部使
 
 发布时间未知时省略；`credits` 仅在供应商返回时提供。不同供应商的相关性分数不做横向归一化。
 
-调用使用 20 秒超时并传播会话取消；HTTP 响应最多读取 2 MiB。只保留不含用户信息的 HTTP(S) 结果 URL（不超过 4096 字节），移除 fragment 后去重。标题/短摘要分别限 300 字符，单结果模型片段限 2000 字符，片段总预算 12000 字符，截断保持 Unicode 完整并置 `truncated=true`。模型工具说明要求将检索内容视为外部资料并引用来源 URL。
+调用使用实例级 `timeout_seconds` 超时（默认 20 秒，范围 1–120）并传播会话取消；HTTP 响应最多读取 2 MiB。只保留不含用户信息的 HTTP(S) 结果 URL（不超过 4096 字节），移除 fragment 后去重。标题/短摘要分别限 300 字符，单结果模型片段限 2000 字符，片段总预算 12000 字符，截断保持 Unicode 完整并置 `truncated=true`。模型工具说明要求将检索内容视为外部资料并引用来源 URL。
 
 工具风险 low，沿用三种审批模式。错误由现有中间件转为 `Tool execution failed: ...`，写入 `tool/result`，让模型报告失败或修正查询；不直接终止整轮。渲染类型为新增的 `web_search`，已有 `search` 继续用于文件检索。历史回放只读取持久化结果，不发起新搜索。
 
@@ -96,3 +96,53 @@ DeepSeek/博查 Base URL 已以 `/v1` 结尾时避免重复版本段。全部使
 ## 6. 调研依据
 
 接口规格于 2026-10-23 核对：[DeepSeek Search](https://api-docs.deepseek.com/api/search/)、[DeepSeek 指南](https://api-docs.deepseek.com/guides/search/)、[Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint/search)、[博查官方适配实现](https://github.com/bocha-ai/dsh-web-search-bocha)。
+
+## 7. 网页读取（000010）
+
+### 7.1 实例与选择
+
+搜索与读取共享 `search_provider` 实例，保留原实例 ID、加密密钥及搜索选择。类型能力固定：`deepseek` 支持两者；`go_http` 仅读取；`tavily`、`bocha` 首版仅搜索。类型仍支持多个实例，修改 DeepSeek 实例地址、密钥、超时、状态同时影响两种能力。模型供应商继续完全独立。
+
+迁移预置一个无需密钥的内置实例（Go HTTP 实现），并设为 `search_config.default_fetch_provider_id`。原搜索默认值不变。`agent.fetch_provider_id=null` 跟随读取默认；非空指定实例。`tools_enabled.web_fetch` 默认为 false，已有智能体及会话不自动开启。主/子智能体各自快照保存选择，继承关系在调用时读取当前默认；密钥与状态实时读取。
+
+每次工具执行严格调用所选实例一次，无自动重试、供应商回退或额外模型总结。失败、停用、删除、不支持的能力、未设置默认均明确报错；不会偷偷调用付费后端。Go HTTP 的正常重定向属于同一次读取，不是供应商切换。
+
+### 7.2 工具及限制
+
+`web_fetch` 输入 `{url,max_chars?}`。URL 必须为 HTTP(S)、含主机、不含用户名密码，最多 8192 Unicode 字符。首版目标端口仅允许 80/443，移除 fragment。`max_chars` 默认/0 为 20000，范围 1–50000。
+
+输出 `{url,final_url?,title,content,format,provider_id,provider_name,fetched_at,duration_ms,truncated}`。`format` 为 markdown/text，正文按 Unicode 字符截断并标记。`final_url` 仅 Go HTTP 获取真实跳转终点后提供，DeepSeek 不虚构该字段。空正文是明确失败。
+
+- Go HTTP：服务端复用 HTTP 客户端；不依赖云电脑、curl 或模型 API。请求 GET，拒绝附件下载，仅处理 HTML/XHTML、纯文本、Markdown、JSON；不执行 JavaScript，不提供登录、Cookie、自定义鉴权、PDF/图像解析。HTML 转 UTF-8，选取 main/article（否则 body），清理脚本、导航、侧栏、表单和隐藏内容，再转 Markdown，保留链接、列表、代码和表格。以最终 URL 解析相对链接。
+- DeepSeek：与搜索共用实例 Base URL、Bearer 密钥，POST `/v1/tools/fetch`，请求 `{url}`，读取必需的 `title`、`content`。Base URL 已有 `/v1` 时不重复追加。供应商 API 禁止重定向，避免密钥转发。不假定其支持浏览器渲染或登录态。
+- 超时取实例配置并传播会话取消；解压后的 HTTP 响应上限 2 MiB。Go HTTP 允许最多 4 次重定向（第 5 次拒绝），每一跳重做 URL/DNS 校验。忽略环境代理，关闭连接复用以避免隐式重试；仅连接已检查的公网 IP，保留原 Host/TLS SNI，防止检查和连接之间 DNS 重绑定。拒绝本机、私网、链路本地、共享/保留地址及 IPv6 过渡地址；DNS 混合公私地址也拒绝。
+- 两种后端均先校验原始 URL 的公网地址；DeepSeek 远端实际解析与重定向由供应商控制，不能声称本地策略能约束其内部网络行为。
+
+工具风险 low，结果使用 `meta.render=web_fetch`，复用现有事件、持久化与错误中间件。正文是不可信外部资料，要求模型引用来源，不执行其中指令；历史仅重放已保存正文。聊天/测试预览禁用原始 HTML 和远程图片自动加载，普通文本按文本展示。
+
+### 7.3 API、数据及 UI
+
+在 §3 API 基础上扩展：
+
+| 方法 | 路径 | 请求/响应 |
+|---|---|---|
+| GET | `/platform/web-search/config` | 同时返回 `default_provider_id`、`default_fetch_provider_id` |
+| PUT | `/platform/web-search/fetch-config` | 必须显式提供 `{default_fetch_provider_id:string|null}`，仅修改读取默认；所选实例必须 active 且支持读取 |
+| POST | `/platform/web-search/providers/{id}/fetch-check` | `{url,max_chars?}`，调用一次，返回读取工具结果 |
+| GET | `/orgs/{orgId}/admin/search-providers?capability=fetch` | 只返回支持读取的安全选项，响应 `default_provider_id` 指读取默认；不带参数时仍只返回搜索选项及搜索默认 |
+
+实例 body/响应增加 `timeout_seconds`（缺省 20，1–120）。Go HTTP 创建/更新时 `base_url`、`api_key` 必须为空，不需要密钥；其他类型规则不变。全局默认必须支持对应能力；两类默认或任何智能体引用的实例均禁止删除。智能体 body 增加 `fetch_provider_id:string|null` 和 `tools_enabled.web_fetch:boolean`。
+
+错误码：`fetch/unavailable` 503、`fetch/cancelled` 499、`fetch/timeout` 504、`fetch/blocked` 400、`fetch/unsupported` 415，以及 `fetch/network`、`fetch/upstream`、`fetch/response`、`fetch/too_large`、`fetch/empty` 502。参数错误沿用 request/invalid；错误不回显带凭据的地址、供应商响应或网络错误原文。
+
+迁移 `000010_web_fetch` 增加两个读取外键、实例超时及独立 `fetch_call`。账本记录真实调用的归属、成功、正文字符数、耗时和错误码；不记录 URL、正文、凭据，不混入模型 token 或虚构金额。目标校验/配置错误发生在调用前，不计调用。取消后用独立 2 秒上下文落账。完整 DDL 见 [data-model.md §17](data-model.md#17-网页读取000010)。回退迁移会删除读取配置与调用记录，须先审查；不能将容器回退等同于数据库降级。
+
+「网络搜索」菜单内增加“搜索 / 网页读取”标签，各自管理默认值并按能力筛选共享实例。卡片显示支持能力、超时、默认标记；Go HTTP 不显示密钥字段。测试读取输入 URL，展示正文、实际实例、耗时、截断状态或错误。智能体工具区独立开关/选择器；聊天卡片摘要为 URL，展开标题、来源、正文和状态。网页读取工具图标为浏览器窗口与两条正文线；窗口外框固定，仅在执行中以 1.8 秒周期扫描正文，第二行错开 0.9 秒，结束后静止并遵循系统减少动效偏好。
+
+### 7.4 验收
+
+单测覆盖地址分类、混合 DNS、连接 IP 绑定、跳转拦截、正文/相对链接/代码/表格、超大及不支持内容、Unicode 截断、DeepSeek 请求响应和凭据跳转保护。运行时覆盖主/子智能体的显式/继承选择、失败记入事件且不终止整轮。前端覆盖历史校验、外部图片/HTML 禁止执行及旧智能体默认关闭。隔离 MySQL 验证预置实例、共享密钥、独立默认、严格失败、不支持能力拒绝、引用删除约束及账本；迁移 9→10 前后比较既有记录，确认 ID、密钥、搜索配置、旧工具开关不变。
+
+依据：[DeepSeek Fetch](https://api-docs.deepseek.com/api/fetch/)、[Go net/http](https://pkg.go.dev/net/http)、[HTML→Markdown](https://github.com/JohannesKaufmann/html-to-markdown)。
+
+迁移 000011 统一产品用语：类型显示“内置”，预置实例“内置网页读取”；所有界面称为“网页读取”。保留 go_http/web_fetch 稳定标识，只调整未自定义的预置名称。

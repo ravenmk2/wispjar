@@ -66,13 +66,13 @@ export function CodeBlock({ lang, code, className }: { lang?: string; code: stri
   )
 }
 
-export const Markdown = memo(function Markdown({ content, className }: { content: string; className?: string }) {
+export const Markdown = memo(function Markdown({ content, className, externalContent = false }: { content: string; className?: string; externalContent?: boolean }) {
   return (
     <div className={cn("markdown-body min-w-0 break-words text-chat", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          img: MarkdownImageRenderer,
+          img: externalContent ? ({ alt }) => <span className="text-muted-foreground">[图片：{alt || "外部图片"}]</span> : MarkdownImageRenderer,
           pre: ({ children }) => <>{children}</>,
           code: ({ className: codeClassName, children }) => {
             const text = String(children).replace(/\n$/, "")

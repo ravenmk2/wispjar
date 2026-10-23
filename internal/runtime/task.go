@@ -191,6 +191,7 @@ func (o *orchestrator) buildSubAgent(ctx context.Context, sess *store.Session, s
 	}
 	subSnap := &agent.Snapshot{
 		SearchProviderID: sub.SearchProviderID,
+		FetchProviderID:  sub.FetchProviderID,
 		AgentID:          sub.ID,
 		Name:             sub.Name,
 		Description:      sub.Description,

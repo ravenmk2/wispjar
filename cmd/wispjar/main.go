@@ -120,6 +120,7 @@ func main() {
 	})
 	orch := runtime.NewOrchestrator(runtime.Deps{
 		WebSearch:        search.NewService(db, cfg.MasterKey()),
+		WebFetch:         search.NewService(db, cfg.MasterKey()),
 		AgentEnvs:        agentSvc.LoadEnvs,
 		MaxParallelTasks: cfg.Runtime.MaxParallelTasks,
 		Computers:        computerSvc,

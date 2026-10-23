@@ -271,6 +271,8 @@
   }
   .chat-activity-icon {
     @apply size-[18px] shrink-0 text-fg-process;
+    position: relative;
+    top: 1px;
     transform-origin: center;
     overflow: visible;
   }
@@ -301,6 +303,10 @@
   }
   .chat-activity-icon.is-running .activity-scan-middle { animation-delay: -1.2s; }
   .chat-activity-icon.is-running .activity-scan-last { animation-delay: -.6s; }
+  .chat-activity-icon.is-running .activity-scan-web-last { animation-delay: -.9s; }
+  @media (prefers-reduced-motion: reduce) {
+    .chat-activity-web_fetch.is-running .activity-scan { animation: none; opacity: 1; }
+  }
   .chat-activity-icon.is-running .activity-pen {
     transform-origin: center;
     animation: activity-write 1.8s ease-in-out infinite;

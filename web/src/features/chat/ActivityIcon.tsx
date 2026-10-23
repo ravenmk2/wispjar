@@ -12,6 +12,12 @@ const glyphs = {
     <path className="activity-bulb-filament" d="m8.8 8.8 3.2 3 3.2-3M12 11.8V17" />
   </>,
   search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></>,
+  web_fetch: <>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M3 9h18" />
+    <path className="activity-scan" d="M8 13h8" />
+    <path className="activity-scan activity-scan-web-last" d="M8 17h6" />
+  </>,
   read: <>
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
     <path d="M14 2v6h6" />

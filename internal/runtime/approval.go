@@ -25,6 +25,7 @@ const (
 
 var toolRisk = map[string]string{
 	"web_search": RiskLow,
+	"web_fetch":  RiskLow,
 	"exec":       RiskHigh,
 	"read":       RiskLow,
 	"read_media": RiskLow,

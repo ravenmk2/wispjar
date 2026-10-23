@@ -1,4 +1,4 @@
-// Package search owns web search instances independently of model providers.
+// Package search owns search/fetch instances independently of model providers.
 package search
 
 import (
@@ -31,13 +31,14 @@ func unavailable(msg string) error { return &Error{503, "search/unavailable", ms
 func conflict(msg string) error    { return &Error{409, respond.CodeConflict, msg} }
 
 type Service struct {
-	db        *gorm.DB
-	masterKey []byte
-	client    *http.Client
+	db          *gorm.DB
+	masterKey   []byte
+	client      *http.Client
+	fetchClient *http.Client
 }
 
 func NewService(db *gorm.DB, masterKey []byte) *Service {
-	return &Service{db: db, masterKey: masterKey, client: &http.Client{
+	return &Service{db: db, masterKey: masterKey, fetchClient: newFetchClient(), client: &http.Client{
 		// A redirect must never forward credentials to a different endpoint.
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}}
@@ -54,11 +55,12 @@ type Option struct {
 	Status string `json:"status"`
 }
 type Input struct {
-	Name    string `json:"name"`
-	Type    string `json:"type"`
-	BaseURL string `json:"base_url"`
-	APIKey  string `json:"api_key"`
-	Status  string `json:"status"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
+	Name           string `json:"name"`
+	Type           string `json:"type"`
+	BaseURL        string `json:"base_url"`
+	APIKey         string `json:"api_key"`
+	Status         string `json:"status"`
 }
 
 func validURL(raw string) bool {
@@ -70,13 +72,19 @@ func validate(in Input) error {
 		return invalid("搜索实例名称必填且不超过 128 字符")
 	}
 	switch in.Type {
-	case "deepseek", "tavily", "bocha":
+	case "deepseek", "tavily", "bocha", "go_http":
 	default:
-		return invalid("搜索供应商类型必须是 deepseek / tavily / bocha")
+		return invalid("供应商类型必须是 deepseek / tavily / bocha / go_http")
 	}
 	u, err := url.Parse(in.BaseURL)
-	if !validURL(in.BaseURL) || len(in.BaseURL) > 512 || err != nil || u.RawQuery != "" || u.Fragment != "" {
+	if in.Type != "go_http" && (!validURL(in.BaseURL) || len(in.BaseURL) > 512 || err != nil || u.RawQuery != "" || u.Fragment != "") {
 		return invalid("base_url 必须是不含凭据、查询参数和片段的 HTTP(S) 地址")
+	}
+	if in.TimeoutSeconds < 1 || in.TimeoutSeconds > 120 {
+		return invalid("timeout_seconds 必须为 1–120")
+	}
+	if in.Type == "go_http" && (in.BaseURL != "" || in.APIKey != "") {
+		return invalid("内置实例不使用 Base URL 或 API Key")
 	}
 	if in.Status != "active" && in.Status != "disabled" {
 		return invalid("status 必须是 active / disabled")
@@ -84,6 +92,9 @@ func validate(in Input) error {
 	return nil
 }
 func (s *Service) view(p store.SearchProvider) (*ProviderView, error) {
+	if p.Type == "go_http" {
+		return &ProviderView{SearchProvider: p}, nil
+	}
 	key, err := provider.Decrypt(s.masterKey, p.APIKeyEnc)
 	if err != nil {
 		return nil, errors.New("搜索实例密钥解密失败")
@@ -127,6 +138,12 @@ func lockConfig(tx *gorm.DB) (*store.SearchConfig, error) {
 	return &cfg, err
 }
 func (s *Service) SetDefault(ctx context.Context, actor string, providerID *string) error {
+	return s.setDefault(ctx, actor, providerID, false)
+}
+func (s *Service) SetFetchDefault(ctx context.Context, actor string, providerID *string) error {
+	return s.setDefault(ctx, actor, providerID, true)
+}
+func (s *Service) setDefault(ctx context.Context, actor string, providerID *string, fetch bool) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if _, err := lockConfig(tx); err != nil {
 			return err
@@ -135,18 +152,25 @@ func (s *Service) SetDefault(ctx context.Context, actor string, providerID *stri
 			var p store.SearchProvider
 			if err := tx.First(&p, "id = ?", *providerID).Error; err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return invalid("默认搜索实例不存在或已停用")
+					return invalid("默认实例不存在或已停用")
 				}
 				return err
 			}
+			if !supports(p.Type, fetch) {
+				return invalid("所选实例不支持此能力")
+			}
 			if p.Status != "active" {
-				return invalid("默认搜索实例不存在或已停用")
+				return invalid("默认实例不存在或已停用")
 			}
 		}
-		if err := tx.Model(&store.SearchConfig{}).Where("id = 1").Update("default_provider_id", providerID).Error; err != nil {
+		column, action := "default_provider_id", "search.default_update"
+		if fetch {
+			column, action = "default_fetch_provider_id", "fetch.default_update"
+		}
+		if err := tx.Model(&store.SearchConfig{}).Where("id = 1").Update(column, providerID).Error; err != nil {
 			return err
 		}
-		return audit.Log(tx, audit.Entry{ActorID: actor, Action: "search.default_update", Target: "web_search", Detail: map[string]any{"provider_id": providerID}})
+		return audit.Log(tx, audit.Entry{ActorID: actor, Action: action, Target: "web_search", Detail: map[string]any{"provider_id": providerID}})
 	})
 }
 func (s *Service) Save(ctx context.Context, actor, providerID string, in Input) (*ProviderView, error) {
@@ -154,6 +178,9 @@ func (s *Service) Save(ctx context.Context, actor, providerID string, in Input) 
 	in.APIKey = strings.TrimSpace(in.APIKey)
 	if in.Status == "" {
 		in.Status = "active"
+	}
+	if in.TimeoutSeconds == 0 {
+		in.TimeoutSeconds = 20
 	}
 	if err := validate(in); err != nil {
 		return nil, err
@@ -165,7 +192,7 @@ func (s *Service) Save(ctx context.Context, actor, providerID string, in Input) 
 		}
 		action := "search.provider_create"
 		if providerID == "" {
-			if strings.TrimSpace(in.APIKey) == "" {
+			if in.Type != "go_http" && strings.TrimSpace(in.APIKey) == "" {
 				return invalid("api_key 必填")
 			}
 			row.ID, row.CreatedBy = id.New(), actor
@@ -180,6 +207,10 @@ func (s *Service) Save(ctx context.Context, actor, providerID string, in Input) 
 				return invalid("已有实例不能更改供应商类型，请新建实例")
 			}
 			action = "search.provider_update"
+		}
+		row.TimeoutSeconds = in.TimeoutSeconds
+		if in.Type == "go_http" {
+			row.APIKeyEnc = []byte{}
 		}
 		row.Name, row.Type, row.BaseURL, row.Status = in.Name, in.Type, in.BaseURL, in.Status
 		if strings.TrimSpace(in.APIKey) != "" {
@@ -205,11 +236,11 @@ func (s *Service) Delete(ctx context.Context, actor, providerID string) error {
 		if err != nil {
 			return err
 		}
-		if cfg.DefaultProviderID != nil && *cfg.DefaultProviderID == providerID {
+		if (cfg.DefaultProviderID != nil && *cfg.DefaultProviderID == providerID) || (cfg.DefaultFetchProviderID != nil && *cfg.DefaultFetchProviderID == providerID) {
 			return conflict("请先解除全局默认，再删除此搜索实例")
 		}
 		var n int64
-		if err := tx.Model(&store.Agent{}).Where("search_provider_id = ?", providerID).Count(&n).Error; err != nil {
+		if err := tx.Model(&store.Agent{}).Where("search_provider_id = ? OR fetch_provider_id = ?", providerID, providerID).Count(&n).Error; err != nil {
 			return err
 		}
 		if n > 0 {

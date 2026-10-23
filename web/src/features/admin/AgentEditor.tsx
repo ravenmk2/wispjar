@@ -49,6 +49,7 @@ import { useCurrentOrg } from "@/stores/identity"
 
 const DEFAULT_FORM: AgentBody = {
   search_provider_id: null,
+  fetch_provider_id: null,
   name: "",
   description: "",
   avatar: "bot",
@@ -111,6 +112,8 @@ export default function AgentEditorPage() {
   const [loaded, setLoaded] = useState(false)
   const [section, setSection] = useState<SectionId>("basic")
   const [models, setModels] = useState<OrgModel[]>([])
+  const [fetchOptions, setFetchOptions] = useState<SearchProviderOption[]>([])
+  const [fetchDefault, setFetchDefault] = useState<string | null>(null)
   const [searchOptions, setSearchOptions] = useState<SearchProviderOption[]>([])
   const [searchDefault, setSearchDefault] = useState<string | null>(null)
   const [searchOptionsError, setSearchOptionsError] = useState<string | null>(null)
@@ -130,9 +133,10 @@ export default function AgentEditorPage() {
   useEffect(() => {
     if (!currentOrg) return
     let stale = false
+    setFetchOptions([]); setFetchDefault(null)
     setSearchOptions([]); setSearchDefault(null); setSearchOptionsError(null)
-    webSearchApi.options(currentOrg.id).then((res) => {
-      if (!stale) { setSearchOptions(res.items); setSearchDefault(res.default_provider_id) }
+    Promise.all([webSearchApi.options(currentOrg.id), webSearchApi.fetchOptions(currentOrg.id)]).then(([res, fetch]) => {
+      if (!stale) { setSearchOptions(res.items); setSearchDefault(res.default_provider_id); setFetchOptions(fetch.items); setFetchDefault(fetch.default_provider_id) }
     }).catch((e) => { if (!stale) setSearchOptionsError(errorMessage(e)) })
     return () => { stale = true }
   }, [currentOrg])
@@ -345,7 +349,7 @@ export default function AgentEditorPage() {
             {section === "basic" && <BasicSection form={form} patch={patch} />}
             {section === "model" && <ModelSection form={form} patch={patch} models={models} />}
             {section === "prompt" && <PromptSection form={form} patch={patch} />}
-            {section === "tools" && <ToolsSection form={form} patch={patch} searchOptions={searchOptions} searchDefault={searchDefault} searchOptionsError={searchOptionsError} />}
+            {section === "tools" && <ToolsSection form={form} patch={patch} fetchOptions={fetchOptions} fetchDefault={fetchDefault} searchOptions={searchOptions} searchDefault={searchDefault} searchOptionsError={searchOptionsError} />}
             {section === "skills" && <SkillsSection form={form} patch={patch} skills={skills} />}
             {section === "subagents" && (
               <SubAgentsSection form={form} patch={patch} candidates={subAgentCandidates} />
@@ -604,13 +608,16 @@ function PromptSection({ form, patch }: { form: AgentBody; patch: (p: Partial<Ag
   )
 }
 
-function ToolsSection({ form, patch, searchOptions, searchDefault, searchOptionsError }: { form: AgentBody; patch: (p: Partial<AgentBody>) => void; searchOptions: SearchProviderOption[]; searchDefault: string | null; searchOptionsError: string | null }) {
+function ToolsSection({ form, patch, searchOptions, searchDefault, searchOptionsError, fetchOptions, fetchDefault }: { fetchOptions: SearchProviderOption[]; fetchDefault: string | null; form: AgentBody; patch: (p: Partial<AgentBody>) => void; searchOptions: SearchProviderOption[]; searchDefault: string | null; searchOptionsError: string | null }) {
+  const fetchDefaultOption = fetchOptions.find((p) => p.id === fetchDefault)
+  const fetchSelected = fetchOptions.find((p) => p.id === (form.fetch_provider_id || fetchDefault))
+  const missingFetchSelection = !!form.fetch_provider_id && !fetchOptions.some((p) => p.id === form.fetch_provider_id)
   const defaultOption = searchOptions.find((p) => p.id === searchDefault)
   const selected = searchOptions.find((p) => p.id === (form.search_provider_id || searchDefault))
   const missingSelection = !!form.search_provider_id && !searchOptions.some((p) => p.id === form.search_provider_id)
   return (
     <div>
-      <SectionTitle title="工具" hint="分别配置云电脑工具和联网搜索能力" />
+      <SectionTitle title="工具" hint="分别配置云电脑工具、联网搜索和网页读取能力" />
       <div className="divide-y rounded-md border">
         {TOOL_LABELS.map((tool) => (
           <div key={tool.key} className="flex items-center gap-3 px-3 py-2.5">
@@ -637,6 +644,18 @@ function ToolsSection({ form, patch, searchOptions, searchDefault, searchOptions
           </Select>
           {searchOptionsError ? <p role="alert" className="text-xs text-destructive">搜索配置加载失败：{searchOptionsError}</p> : !selected || selected.status !== "active" ? <p role="alert" className="text-xs text-destructive">尚未配置可用实例；调用联网搜索时会报错，请联系系统管理员。</p> : null}
           <p className="text-xs text-muted-foreground">严格使用所选实例，失败时不自动回退。保存后的选择影响新会话；跟随默认的会话在下次搜索时使用当前全局默认。</p>
+        </div>}
+      </div>
+      <div className="mt-4 space-y-4 rounded-md border p-3">
+        <div className="flex items-center gap-3"><div className="flex-1"><Label htmlFor="agent-web-fetch">网页读取</Label><p className="mt-1 text-xs text-muted-foreground">读取指定公开网页的正文，返回 Markdown 或文本。</p></div><Switch id="agent-web-fetch" checked={!!form.tools_enabled.web_fetch} onCheckedChange={(checked) => patch({ tools_enabled: { ...form.tools_enabled, web_fetch: checked } })} /></div>
+        {form.tools_enabled.web_fetch && <div className="space-y-2">
+          <Label>读取供应商实例</Label>
+          <Select value={form.fetch_provider_id || "default"} onValueChange={(v) => patch({ fetch_provider_id: v === "default" ? null : v })}>
+            <SelectTrigger aria-label="读取供应商实例"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="default">跟随全局默认（{fetchDefaultOption ? `${fetchDefaultOption.name}${fetchDefaultOption.status !== "active" ? " · 已停用" : ""}` : "尚未设置"}）</SelectItem>{missingFetchSelection && <SelectItem value={form.fetch_provider_id!} disabled>原实例不可用</SelectItem>}{fetchOptions.map((p) => <SelectItem key={p.id} value={p.id} disabled={p.status !== "active"}>{p.name} · {SEARCH_TYPES[p.type].label}{p.status !== "active" ? "（已停用）" : ""}</SelectItem>)}</SelectContent>
+          </Select>
+          {searchOptionsError ? <p role="alert" className="text-xs text-destructive">搜索配置加载失败：{searchOptionsError}</p> : !fetchSelected || fetchSelected.status !== "active" ? <p role="alert" className="text-xs text-destructive">尚未配置可用实例；调用网页读取时会报错，请联系系统管理员。</p> : null}
+          <p className="text-xs text-muted-foreground">严格使用所选实例，失败时不自动回退。保存后的选择影响新会话；跟随默认的会话在下次读取时使用当前全局默认。</p>
         </div>}
       </div>
     </div>

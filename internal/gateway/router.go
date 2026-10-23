@@ -162,6 +162,8 @@ func NewRouter(deps Deps) *gin.Engine {
 	platform.POST("/web-search/providers/:id/check", searchH.Check)
 	platform.GET("/web-search/config", searchH.Config)
 	platform.PUT("/web-search/config", searchH.SetDefault)
+	platform.PUT("/web-search/fetch-config", searchH.SetFetchDefault)
+	platform.POST("/web-search/providers/:id/fetch-check", searchH.FetchCheck)
 	platform.POST("/providers", providerH.CreateProvider)
 	platform.GET("/providers/:id", providerH.GetProvider)
 	platform.PUT("/providers/:id", providerH.UpdateProvider)

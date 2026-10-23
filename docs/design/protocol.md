@@ -187,7 +187,7 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 | `assistant/message` | `{turn, step, message, usage?, interrupted?}`。`message` 为完整 assistant 消息：`{role:"assistant", content:[ContentBlock...]}`，ContentBlock = `{type:"text",text}` / `{type:"reasoning",text,durationMs?}`（`durationMs` 为思考首帧到末帧的耗时，流式窗口埋点，可缺省）/ `{type:"tool-call",id,name,arguments}`。`usage` 结构同 StreamChunk usage（snake_case），含可选 `cache_reported`（供应商是否上报缓存字段，false/缺省 = 未上报，区别于命中为 0；runtime.md §3.1） |
 | `assistant/attempt` | `{turn, step, chunks:[StreamChunk...]（压缩存储）, error?}` —— 失败/取消的尝试留痕，**不进模型历史** |
 | `tool/call` | `{turn, step, call_id, name, arguments(原始JSON字符串), parent_call_id?}` |
-| `tool/result` | `{turn, step, call_id, name, content(string), error?, meta?, attachments?, parent_call_id?}`。`meta` 含 `{duration_ms, render:"terminal"\|"diff"\|"search"\|"web_search"\|"read"\|"generic", truncated?, sandbox_id?, computer_id?, run_id?, diff?, operation?:"create"\|"update"}`；子任务有独立 run_id，继承主任务 computer_id。`diff` 为 unified diff，`operation` 仅用于成功 write 的创建/覆盖标记，探测未知时省略。`attachments` 为工具产出图片的引用数组（read_media；结构与 `user/message.attachments` 相同——不透明引用，绝无 base64，字节经 `GET /attachments/{id}` 获取） |
+| `tool/result` | `{turn, step, call_id, name, content(string), error?, meta?, attachments?, parent_call_id?}`。`meta` 含 `{duration_ms, render:"terminal"\|"diff"\|"search"\|"web_search"\|"web_fetch"\|"read"\|"generic", truncated?, sandbox_id?, computer_id?, run_id?, diff?, operation?:"create"\|"update"}`；子任务有独立 run_id，继承主任务 computer_id。`diff` 为 unified diff，`operation` 仅用于成功 write 的创建/覆盖标记，探测未知时省略。`attachments` 为工具产出图片的引用数组（read_media；结构与 `user/message.attachments` 相同——不透明引用，绝无 base64，字节经 `GET /attachments/{id}` 获取） |
 
 ### 6.3 会话事件
 
@@ -293,3 +293,5 @@ Agent 调用 question → append question/asked（持久帧广播，问题文本
 ### 网络搜索结果
 
 `web_search` 复用 `tool/call`、`tool/result`，不新增事件类型。`meta.render="web_search"`，`content` 为含实际实例 ID/名称和归一化结果的 JSON 字符串；失败沿用工具错误文本。主/子任务使用现有归属及嵌套字段，刷新与重连直接回放持久化结果。结构见 [search.md §2](search.md#2-工具实现)。
+
+`web_fetch` 同样复用 tool/call、tool/result；meta.render=web_fetch，content 为正文、来源、实例和截断信息的 JSON 字符串。失败沿用工具错误文本，历史不重新读取。见 [search.md §7](search.md#7-网页读取000010)。

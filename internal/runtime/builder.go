@@ -53,6 +53,7 @@ func (o *orchestrator) buildToolContext(sess *store.Session, snap *agent.Snapsho
 	tc.Skills = snap.Skills
 	tc.Images = o.deps.ImageSaver
 	tc.WebSearch = o.deps.WebSearch
+	tc.WebFetch = o.deps.WebFetch
 	tc.PublishToolOutput = func(callID, stream, delta string) {
 		o.deps.Bus.Publish(sess.ID, ToolOutputLiveFrame(callID, stream, delta))
 	}
@@ -71,6 +72,13 @@ func buildTools(tc *tools.Context, snap *agent.Snapshot, approvalMode string, vi
 			return nil, nil, err
 		}
 		list = append(list, ws)
+	}
+	if enabled["web_fetch"] {
+		wf, err := tools.WebFetch(snap.FetchProviderID)
+		if err != nil {
+			return nil, nil, err
+		}
+		list = append(list, wf)
 	}
 	// read_media 是 enhanced 工具（tool 消息携带图片 part），单独构建：
 	// vision 门控按当前 Agent 模型在构建期捕获（主/子 Agent 各自判定）。

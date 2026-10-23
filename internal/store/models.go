@@ -90,6 +90,7 @@ type Agent struct {
 	MaxIterations    int             `gorm:"column:max_iterations" json:"max_iterations"`
 	ToolsEnabled     json.RawMessage `gorm:"column:tools_enabled;type:json" json:"tools_enabled"`
 	SearchProviderID *string         `gorm:"column:search_provider_id;size:32" json:"search_provider_id"`
+	FetchProviderID  *string         `gorm:"column:fetch_provider_id;size:32" json:"fetch_provider_id"`
 	SandboxConfig    json.RawMessage `gorm:"column:sandbox_config;type:json" json:"sandbox_config"`
 	Status           string          `gorm:"column:status;size:16" json:"status"`
 	CreatedBy        string          `gorm:"column:created_by;size:32" json:"created_by"`

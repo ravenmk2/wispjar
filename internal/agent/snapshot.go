@@ -14,6 +14,7 @@ import (
 // 快照不含任何供应商密钥——密钥由 provider 工厂在运行时按 model_id 获取。
 type Snapshot struct {
 	SearchProviderID *string            `json:"search_provider_id,omitempty"`
+	FetchProviderID  *string            `json:"fetch_provider_id,omitempty"`
 	AgentID          string             `json:"agent_id"`
 	Name             string             `json:"name"`
 	Description      string             `json:"description"`
@@ -50,6 +51,7 @@ type SnapshotSkill struct {
 // （子智能体层级限 1 层，故不再向下解析其子智能体）。
 type SnapshotSubAgent struct {
 	SearchProviderID *string         `json:"search_provider_id,omitempty"`
+	FetchProviderID  *string         `json:"fetch_provider_id,omitempty"`
 	ID               string          `json:"id"`
 	Name             string          `json:"name"`
 	Description      string          `json:"description"`
@@ -87,6 +89,7 @@ func (s *Service) BuildSnapshot(agentID string) (*Snapshot, error) {
 	}
 	return &Snapshot{
 		SearchProviderID: a.SearchProviderID,
+		FetchProviderID:  a.FetchProviderID,
 		AgentID:          a.ID,
 		Name:             a.Name,
 		Description:      a.Description,
@@ -175,6 +178,7 @@ func (s *Service) snapshotSubAgents(agentID string) ([]SnapshotSubAgent, error) 
 		}
 		subs = append(subs, SnapshotSubAgent{
 			SearchProviderID: r.SearchProviderID,
+			FetchProviderID:  r.FetchProviderID,
 			ID:               r.ID,
 			Name:             r.Name,
 			Description:      r.Description,

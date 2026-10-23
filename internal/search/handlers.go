@@ -40,7 +40,18 @@ func (h *Handler) Options(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"items": rows, "default_provider_id": cfg.DefaultProviderID})
+	fetch := c.Query("capability") == "fetch"
+	filtered := []Option{}
+	for _, row := range rows {
+		if supports(row.Type, fetch) {
+			filtered = append(filtered, row)
+		}
+	}
+	selected := cfg.DefaultProviderID
+	if fetch {
+		selected = cfg.DefaultFetchProviderID
+	}
+	c.JSON(200, gin.H{"items": filtered, "default_provider_id": selected})
 }
 func (h *Handler) Config(c *gin.Context) {
 	cfg, err := h.svc.Config(c.Request.Context())
@@ -50,23 +61,33 @@ func (h *Handler) Config(c *gin.Context) {
 	}
 	c.JSON(200, cfg)
 }
-func (h *Handler) SetDefault(c *gin.Context) {
+func (h *Handler) SetDefault(c *gin.Context)      { h.setDefault(c, false) }
+func (h *Handler) SetFetchDefault(c *gin.Context) { h.setDefault(c, true) }
+func (h *Handler) setDefault(c *gin.Context, fetch bool) {
 	var req map[string]json.RawMessage
 	if err := c.ShouldBindJSON(&req); err != nil {
 		fail(c, invalid("请求参数无效"))
 		return
 	}
-	raw, exists := req["default_provider_id"]
+	field := "default_provider_id"
+	if fetch {
+		field = "default_fetch_provider_id"
+	}
+	raw, exists := req[field]
 	var providerID *string
 	if !exists || json.Unmarshal(raw, &providerID) != nil {
 		fail(c, invalid("default_provider_id 必须是实例 ID 或 null"))
 		return
 	}
-	if err := h.svc.SetDefault(c.Request.Context(), auth.UID(c), providerID); err != nil {
+	set := h.svc.SetDefault
+	if fetch {
+		set = h.svc.SetFetchDefault
+	}
+	if err := set(c.Request.Context(), auth.UID(c), providerID); err != nil {
 		fail(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"default_provider_id": providerID})
+	c.JSON(200, gin.H{field: providerID})
 }
 func (h *Handler) Save(c *gin.Context) {
 	var req Input
@@ -101,6 +122,21 @@ func (h *Handler) Check(c *gin.Context) {
 		return
 	}
 	out, err := h.svc.Search(c.Request.Context(), c.Param("id"), Request{Query: req.Query, Count: 3, UserID: auth.UID(c)})
+	if err != nil {
+		fail(c, err)
+		return
+	}
+	c.JSON(200, out)
+}
+
+func (h *Handler) FetchCheck(c *gin.Context) {
+	var req FetchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fail(c, invalid("请提供测试 URL"))
+		return
+	}
+	req.UserID = auth.UID(c)
+	out, err := h.svc.Fetch(c.Request.Context(), c.Param("id"), req)
 	if err != nil {
 		fail(c, err)
 		return

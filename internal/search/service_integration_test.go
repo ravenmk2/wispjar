@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -123,5 +124,108 @@ func TestInstanceSelectionMySQLIntegration(t *testing.T) {
 	}
 	if len(usage) != 3 {
 		t.Fatalf("upstream call ledger: %+v", usage)
+	}
+	testFetchInstanceSelection(t, svc)
+}
+
+func testFetchInstanceSelection(t *testing.T, svc *Service) {
+	ctx := context.Background()
+	cfg, err := svc.Config(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DefaultFetchProviderID == nil {
+		t.Fatal("missing builtin default")
+	}
+	nativeID := *cfg.DefaultFetchProviderID
+	if err := svc.SetDefault(ctx, "test-actor", &nativeID); err == nil {
+		t.Fatal("native selected for search")
+	}
+	if err := svc.Delete(ctx, "test-actor", nativeID); err == nil {
+		t.Fatal("fetch default deleted")
+	}
+	native, err := svc.Save(ctx, "test-actor", "", Input{Name: "Native B", Type: "go_http", TimeoutSeconds: 9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if native.TimeoutSeconds != 9 || len(native.APIKeyEnc) != 0 || native.MaskedKey != "" {
+		t.Fatal("native requires no key")
+	}
+	var aCalls, bCalls atomic.Int32
+	aServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { aCalls.Add(1); w.WriteHeader(401) }))
+	defer aServer.Close()
+	bServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bCalls.Add(1)
+		if r.Header.Get("Authorization") != "Bearer shared-key" {
+			t.Error("key not reused")
+		}
+		if strings.HasSuffix(r.URL.Path, "/search") {
+			_, _ = w.Write([]byte(`{"results":[]}`))
+		} else {
+			_, _ = w.Write([]byte(`{"title":"Source","content":"Evidence"}`))
+		}
+	}))
+	defer bServer.Close()
+	a, err := svc.Save(ctx, "test-actor", "", Input{Name: "Fetch A", Type: "deepseek", BaseURL: aServer.URL, APIKey: "bad-key"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := svc.Save(ctx, "test-actor", "", Input{Name: "Shared B", Type: "deepseek", BaseURL: bServer.URL, APIKey: "shared-key"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetFetchDefault(ctx, "test-actor", &b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SetDefault(ctx, "test-actor", &b.ID); err != nil {
+		t.Fatal(err)
+	}
+	// Resolve only the public target locally; upstream fixture runs on localhost.
+	previous := netLookup
+	netLookup = func(context.Context, string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("1.1.1.1")}}, nil
+	}
+	defer func() { netLookup = previous }()
+	in := FetchRequest{URL: "https://example.com/"}
+	if _, err := svc.Fetch(ctx, a.ID, in); err == nil {
+		t.Fatal("failed pinned instance succeeded")
+	}
+	if aCalls.Load() != 1 || bCalls.Load() != 0 {
+		t.Fatal("provider fallback")
+	}
+	if out, err := svc.Fetch(ctx, "", in); err != nil || out.ProviderID != b.ID {
+		t.Fatalf("default not used: %+v %v", out, err)
+	}
+	if _, err := svc.Search(ctx, "", Request{Query: "q"}); err != nil {
+		t.Fatal("shared instance search failed", err)
+	}
+	if bCalls.Load() != 2 {
+		t.Fatal("key/instance not shared")
+	}
+	if err := svc.SetFetchDefault(ctx, "test-actor", &nativeID); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = svc.Config(ctx)
+	if err != nil || cfg.DefaultProviderID == nil || *cfg.DefaultProviderID != b.ID {
+		t.Fatal("fetch update changed search default")
+	}
+	if _, err := svc.Save(ctx, "test-actor", b.ID, Input{Name: b.Name, Type: b.Type, BaseURL: b.BaseURL, Status: "disabled"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Fetch(ctx, b.ID, in); err == nil {
+		t.Fatal("disabled instance used")
+	}
+	if bCalls.Load() != 2 {
+		t.Fatal("disabled call made")
+	}
+	var calls []store.FetchCall
+	if err := svc.db.Find(&calls).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("fetch ledger %+v", calls)
+	}
+	if _, err := svc.Fetch(ctx, native.ID, FetchRequest{URL: "http://127.0.0.1/"}); err == nil {
+		t.Fatal("private target allowed")
 	}
 }

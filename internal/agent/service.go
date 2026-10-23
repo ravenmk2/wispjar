@@ -60,6 +60,7 @@ type ToolsEnabled struct {
 	Grep      bool `json:"grep"`
 	ReadMedia bool `json:"read_media"`
 	WebSearch bool `json:"web_search"`
+	WebFetch  bool `json:"web_fetch"`
 }
 
 func defaultToolsEnabled() json.RawMessage {
@@ -93,7 +94,7 @@ func parseToolsEnabled(raw json.RawMessage) (json.RawMessage, error) {
 	}
 	tools := ToolsEnabled{}
 	if err := json.Unmarshal(raw, &tools); err != nil {
-		return nil, errInvalid("tools_enabled 必须是 {exec,read,write,edit,glob,grep,read_media,web_search} 布尔对象", map[string]any{"field": "tools_enabled"})
+		return nil, errInvalid("tools_enabled 必须是 {exec,read,write,edit,glob,grep,read_media,web_search,web_fetch} 布尔对象", map[string]any{"field": "tools_enabled"})
 	}
 	b, err := json.Marshal(tools)
 	if err != nil {
@@ -134,6 +135,7 @@ func parseSandboxConfig(raw json.RawMessage) (json.RawMessage, error) {
 
 type AgentInput struct {
 	SearchProviderID *string
+	FetchProviderID  *string
 	Name             string
 	Description      string
 	Avatar           string
@@ -163,6 +165,7 @@ func dedupe(ids []string) []string {
 
 type validatedInput struct {
 	searchProviderID *string
+	fetchProviderID  *string
 	name             string
 	description      string
 	avatar           string
@@ -222,13 +225,24 @@ func (s *Service) validateInput(orgID, agentID string, in AgentInput) (*validate
 	if in.SearchProviderID != nil && strings.TrimSpace(*in.SearchProviderID) != "" {
 		providerID := strings.TrimSpace(*in.SearchProviderID)
 		var count int64
-		if err := s.db.Model(&store.SearchProvider{}).Where("id = ?", providerID).Count(&count).Error; err != nil {
+		if err := s.db.Model(&store.SearchProvider{}).Where("id = ? AND type IN ?", providerID, []string{"deepseek", "tavily", "bocha"}).Count(&count).Error; err != nil {
 			return nil, err
 		}
 		if count == 0 {
 			return nil, errInvalid("所选搜索实例不存在", map[string]any{"field": "search_provider_id"})
 		}
 		v.searchProviderID = &providerID
+	}
+	if in.FetchProviderID != nil && strings.TrimSpace(*in.FetchProviderID) != "" {
+		providerID := strings.TrimSpace(*in.FetchProviderID)
+		var count int64
+		if err := s.db.Model(&store.SearchProvider{}).Where("id = ? AND type IN ?", providerID, []string{"deepseek", "go_http"}).Count(&count).Error; err != nil {
+			return nil, err
+		}
+		if count == 0 {
+			return nil, errInvalid("所选抓取实例不存在", map[string]any{"field": "fetch_provider_id"})
+		}
+		v.fetchProviderID = &providerID
 	}
 	if v.sandboxConfig, err = parseSandboxConfig(in.SandboxConfig); err != nil {
 		return nil, err
@@ -532,6 +546,7 @@ func (s *Service) Create(actorID, orgID string, in AgentInput) (*Detail, error) 
 		MaxIterations:    v.maxIterations,
 		ToolsEnabled:     v.toolsEnabled,
 		SearchProviderID: v.searchProviderID,
+		FetchProviderID:  v.fetchProviderID,
 		SandboxConfig:    v.sandboxConfig,
 		Status:           StatusDraft,
 		CreatedBy:        actorID,
@@ -577,6 +592,7 @@ func (s *Service) Update(actorID, orgID, agentID string, in AgentInput) (*Detail
 		"max_iterations":     v.maxIterations,
 		"tools_enabled":      v.toolsEnabled,
 		"search_provider_id": v.searchProviderID,
+		"fetch_provider_id":  v.fetchProviderID,
 		"sandbox_config":     v.sandboxConfig,
 	}
 	if transitioned {

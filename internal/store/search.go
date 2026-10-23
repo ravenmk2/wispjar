@@ -3,22 +3,24 @@ package store
 import "time"
 
 type SearchProvider struct {
-	ID        string    `gorm:"primaryKey;size:32" json:"id"`
-	Name      string    `json:"name"`
-	Type      string    `json:"type"`
-	BaseURL   string    `json:"base_url"`
-	APIKeyEnc []byte    `json:"-"`
-	Status    string    `json:"status"`
-	CreatedBy string    `json:"-"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	TimeoutSeconds int       `json:"timeout_seconds"`
+	ID             string    `gorm:"primaryKey;size:32" json:"id"`
+	Name           string    `json:"name"`
+	Type           string    `json:"type"`
+	BaseURL        string    `json:"base_url"`
+	APIKeyEnc      []byte    `json:"-"`
+	Status         string    `json:"status"`
+	CreatedBy      string    `json:"-"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 func (SearchProvider) TableName() string { return "search_provider" }
 
 type SearchConfig struct {
-	ID                int     `gorm:"primaryKey" json:"-"`
-	DefaultProviderID *string `json:"default_provider_id"`
+	ID                     int     `gorm:"primaryKey" json:"-"`
+	DefaultFetchProviderID *string `json:"default_fetch_provider_id"`
+	DefaultProviderID      *string `json:"default_provider_id"`
 }
 
 func (SearchConfig) TableName() string { return "search_config" }
@@ -42,3 +44,21 @@ type SearchCall struct {
 }
 
 func (SearchCall) TableName() string { return "search_call" }
+
+// FetchCall deliberately excludes target URLs, page content and credentials.
+type FetchCall struct {
+	ID           string `gorm:"primaryKey;size:32"`
+	ProviderID   string
+	OrgID        string
+	UserID       string
+	AgentID      string
+	SessionID    string
+	CallID       string
+	Success      bool
+	ContentChars int
+	DurationMS   int64
+	ErrorCode    string
+	CreatedAt    time.Time
+}
+
+func (FetchCall) TableName() string { return "fetch_call" }

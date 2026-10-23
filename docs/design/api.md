@@ -439,3 +439,5 @@
 浏览器直接 GET 下载 url，HEAD 可读长度。downloadId 为加密随机的 256 位限时资源凭证，不是登录 JWT；路由仍检查原用户账号可用、会话归属及组织成员关系。200/206 返回附件流、UTF-8 文件名、ETag、Accept-Ranges/Content-Length；支持单区间或多区间 Range、If-Range 和 416。固定副本不随源文件后续修改变化，可在有效期内续传。默认单文件及目录包上限 20 GiB、本地暂存配额 40 GiB、100,000 条目、准备时限 30 分钟、就绪有效期 30 分钟，可通过 `storage.downloads` 调整。任务状态只在当前应用进程有效，重启后需重新创建。超额并发返回 429 `file/download_busy`；非法、越权、失效或过期凭证返回 404 `file/download_not_found`。
 
 目录包采用 ZIP64，包含顶层目录、隐藏文件及空目录。符号链接、特殊文件、不可读项和导出期间源文件变化导致整次失败。不得使用预览的截断内容作为完整文件；兼容 `GET /sessions/{id}/file?download=1` 保留原有小文件接口，大文件使用上述下载任务。
+
+网页读取扩展 `fetch_provider_id`、`tools_enabled.web_fetch`，并增加读取默认及测试接口；搜索/读取共享 DeepSeek 实例，选项按能力过滤。完整增量 API 见 [search.md §7.3](search.md#73-api数据及-ui)。

@@ -44,6 +44,7 @@ func fail(c *gin.Context, err error) {
 
 type agentRequest struct {
 	SearchProviderID *string         `json:"search_provider_id"`
+	FetchProviderID  *string         `json:"fetch_provider_id"`
 	Name             string          `json:"name" binding:"required"`
 	Description      string          `json:"description"`
 	Avatar           string          `json:"avatar"`
@@ -60,6 +61,7 @@ type agentRequest struct {
 func (r *agentRequest) input() AgentInput {
 	return AgentInput{
 		SearchProviderID: r.SearchProviderID,
+		FetchProviderID:  r.FetchProviderID,
 		Name:             r.Name,
 		Description:      r.Description,
 		Avatar:           r.Avatar,

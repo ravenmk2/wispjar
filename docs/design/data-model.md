@@ -559,3 +559,47 @@ CREATE TABLE search_call (
   KEY idx_search_call_org (org_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
+
+## 17. 网页读取（000010）
+
+复用搜索实例和密钥，默认选择独立；旧智能体保持关闭。完整行为见 [search.md §7](search.md#7-网页读取000010)。以下增量保留既有字段与记录：
+
+```sql
+-- Keep existing instance IDs, encrypted keys, and search selections intact.
+ALTER TABLE search_provider ADD COLUMN timeout_seconds INT NOT NULL DEFAULT 20;
+ALTER TABLE search_config ADD COLUMN default_fetch_provider_id CHAR(32) NULL,
+  ADD CONSTRAINT fk_fetch_default FOREIGN KEY (default_fetch_provider_id) REFERENCES search_provider(id);
+ALTER TABLE agent ADD COLUMN fetch_provider_id CHAR(32) NULL AFTER search_provider_id,
+  ADD CONSTRAINT fk_agent_fetch_provider FOREIGN KEY (fetch_provider_id) REFERENCES search_provider(id);
+
+INSERT INTO search_provider (id, name, type, base_url, api_key_enc, status, created_by)
+VALUES ('00000000000040008000000000000001', 'Go HTTP（内置）', 'go_http', '', X'', 'active', '');
+UPDATE search_config SET default_fetch_provider_id = '00000000000040008000000000000001' WHERE id = 1;
+
+CREATE TABLE fetch_call (
+  id CHAR(32) NOT NULL PRIMARY KEY,
+  provider_id CHAR(32) NOT NULL,
+  org_id CHAR(32) NOT NULL DEFAULT '',
+  user_id CHAR(32) NOT NULL DEFAULT '',
+  agent_id CHAR(32) NOT NULL DEFAULT '',
+  session_id CHAR(32) NOT NULL DEFAULT '',
+  call_id VARCHAR(128) NOT NULL DEFAULT '',
+  success BOOLEAN NOT NULL,
+  content_chars INT NOT NULL DEFAULT 0,
+  duration_ms BIGINT NOT NULL,
+  error_code VARCHAR(32) NOT NULL DEFAULT '',
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY idx_fetch_call_provider (provider_id, created_at),
+  KEY idx_fetch_call_org (org_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+## 18. 内置网页读取命名（000011）
+
+界面类型显示为“内置”，工具名 web_fetch、API 与存储类型 go_http 保持不变。只重命名仍使用旧名称的预置实例，不覆盖用户自定义名称，不改变 ID、密钥或引用。
+
+```sql
+-- Preserve user-renamed instances and all provider IDs, selections and keys.
+UPDATE search_provider SET name = '内置网页读取', updated_at = updated_at
+WHERE id = '00000000000040008000000000000001' AND type = 'go_http' AND name = 'Go HTTP（内置）';
+```

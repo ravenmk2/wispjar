@@ -9,7 +9,7 @@
 > - `docs/design/protocol.md`：WebSocket 实时协议（mux 帧、follow 订阅、StreamChunk、会话事件词表、重连对账）
 > - `docs/design/runtime.md`：Agent 运行时（eino 集成、工具规格、task 委派、Skills、审批、沙箱管理）
 > - `docs/design/media.md`：图片工具、供应商文件引用、历史持久化与能力限制
-> - `docs/design/search.md`：网络搜索供应商实例、全局默认与智能体选择、工具及界面
+> - `docs/design/search.md`：网络搜索与网页读取供应商实例、独立全局默认与智能体选择、工具及界面
 > - `docs/design/computers.md`：用户云电脑与持久卷（目录、命名配置、并行执行、技能同步、退役升级及实施验收）
 > - `docs/design/frontend.md`：前端工程、界面详细规格与品牌图形资源
 
@@ -21,7 +21,7 @@ Wispjar 是一个多租户智能体平台：
 
 - **多租户（组织）**：系统托管多个组织；一个用户可同时是多个组织的成员，在组织间切换工作区。
 - **多模型供应商/多模型**：系统统一管理模型供应商与密钥（v1 至少支持 DeepSeek、火山引擎 Ark、阿里千问/百炼），组织智能体按需选用。
-- **网络搜索**：独立管理搜索供应商，首批支持 DeepSeek、Tavily、博查及同类型多实例。智能体可指定实例或跟随全局默认，严格使用所选实例，失败明确报错、不自动回退。见 [网络搜索设计](design/search.md)。
+- **网络搜索**：独立管理搜索供应商，首批支持 DeepSeek、Tavily、博查及同类型多实例。智能体可指定实例或跟随全局默认，严格使用所选实例，失败明确报错、不自动回退。网页读取支持 Go HTTP 和共用 DeepSeek 实例，预置 Go HTTP 为读取默认，智能体默认关闭。见 [网络搜索与读取设计](design/search.md)。
 - **多智能体**：组织管理员创建/发布智能体（提示词 + 模型 + 工具 + Skills + 子智能体 + 沙箱镜像）；普通用户仅对话使用。
 - **子智能体委派**：主 Agent 通过一个统一的 `task` 工具把自包含任务委派给组织内其他智能体（supervisor 模式）。
 - **Agent Skills**：遵循 agentskills.io 规范，上传 zip 配置，渐进式披露。

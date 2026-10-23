@@ -9,6 +9,8 @@ import { DiffBlock } from "@/components/Markdown"
 import { NodeList } from "@/features/chat/NodeList"
 import { MessageImages } from "@/features/chat/MessageImages"
 import { WebSearchResults } from "@/features/chat/WebSearchResults"
+import { WebFetchResult } from "@/features/chat/WebFetchResult"
+import { parseFetchResponse } from "@/lib/web-fetch"
 import { parseSearchResponse } from "@/lib/web-search"
 import { QuestionAnswerList } from "@/features/chat/QuestionCard"
 import { safeParseJson } from "@/lib/format"
@@ -22,6 +24,8 @@ import type { ToolRender } from "@/lib/types"
 
 function defaultRender(name: string): ToolRender {
   switch (name) {
+    case "web_fetch":
+      return "web_fetch"
     case "web_search":
       return "web_search"
     case "exec":
@@ -207,6 +211,12 @@ function DiffBody({ node }: { node: ToolCallNode }) {
   )
 }
 
+function WebFetchBody({ node }: { node: ToolCallNode }) {
+ const failure = toolFailure(node)
+ const parsed = node.result ? parseFetchResponse(node.result.content) : null
+ return <div className="rounded-lg bg-muted/50 p-3">{toolCancelled(node) ? <p className="text-sm text-muted-foreground">读取已取消</p> : failure ? <p role="alert" className="break-words text-sm text-destructive">{failure.replace(/^Tool execution failed: /, "")}</p> : parsed ? <WebFetchResult result={parsed} /> : <p className="text-sm text-muted-foreground">{node.result ? "无法展示读取结果" : node.endReason ? "读取已中止" : "正在读取网页…"}</p>}</div>
+}
+
 function WebSearchBody({ node }: { node: ToolCallNode }) {
   const failure = toolFailure(node)
   const parsed = node.result ? parseSearchResponse(node.result.content) : null
@@ -318,6 +328,7 @@ export function ToolCallCard({
       return taskTarget ? `委派给 ${taskTarget}${task ? `：${task}` : ""}` : task
     }
     if (node.name === "exec") return (args?.command as string) ?? ""
+    if (node.name === "web_fetch") return typeof args?.url === "string" ? args.url : ""
     if (node.name === "web_search") return typeof args?.query === "string" ? args.query : ""
     if (node.name === "skill" || node.name === "activate_skill") return typeof args?.name === "string" ? args.name : ""
     if (isQuestion) return node.question?.questions[0]?.question ?? ""
@@ -381,6 +392,7 @@ export function ToolCallCard({
           {!isQuestion && render === "terminal" && <TerminalBody node={node} liveOutput={liveOutput} sessionId={sessionId} />}
           {!isQuestion && render === "diff" && (node.name === "write" ? <WriteBody node={node} sessionId={sessionId} /> : <DiffBody node={node} />)}
           {!isQuestion && render === "search" && <SearchBody node={node} />}
+          {!isQuestion && render === "web_fetch" && <WebFetchBody node={node} />}
           {!isQuestion && render === "web_search" && <WebSearchBody node={node} />}
           {!isQuestion && render === "read" && <ReadBody node={node} />}
           {!isQuestion && render === "generic" && <GenericBody node={node} />}
