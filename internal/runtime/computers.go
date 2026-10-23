@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ravenmk2/wispjar/internal/agent"
+	"github.com/ravenmk2/wispjar/internal/computer"
 	"github.com/ravenmk2/wispjar/internal/id"
 	"github.com/ravenmk2/wispjar/internal/runtime/tools"
 	"github.com/ravenmk2/wispjar/internal/sandbox"
@@ -60,16 +61,13 @@ func (o *orchestrator) registerChildRun(ctx context.Context, parent *runState, c
 	return err
 }
 
-func workspaceAvailable(raw json.RawMessage) error {
-	return session.WorkspaceAvailable(raw)
-}
-
 func (o *orchestrator) prepareComputer(ctx context.Context, sess *store.Session, snap *agent.Snapshot, rs *runState) error {
 	if sess.ComputerID == nil {
-		return workspaceAvailable(sess.Workspace)
+		return session.ComputerError(computer.ErrRequired)
 	}
-	if err := workspaceAvailable(sess.Workspace); err != nil {
-		return err
+	// The test factory supplies an already prepared computer execution context.
+	if o.deps.ToolContextFactory != nil {
+		return nil
 	}
 	if o.deps.Computers == nil || o.deps.Skills == nil {
 		return fmt.Errorf("computer runtime unavailable")

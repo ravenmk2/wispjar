@@ -108,9 +108,6 @@ func appendEventsTx(tx *gorm.DB, sessionID string, inputs []EventInput) ([]store
 			case "recovering", "deleting", "deleted":
 				return nil, &Error{Status: 409, Code: "computer/busy", Message: "云电脑正在维护，暂时无法启动任务"}
 			}
-			if err := WorkspaceAvailable(sess.Workspace); err != nil {
-				return nil, err
-			}
 			if sess.Running {
 				return nil, &Error{Status: 409, Code: "session/running", Message: "会话已有活动任务"}
 			}

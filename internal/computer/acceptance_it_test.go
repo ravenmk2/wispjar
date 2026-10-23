@@ -175,8 +175,7 @@ func TestRepositoryConcurrencyIntegration(t *testing.T) {
 	}
 	computerID := op.ResourceID
 	session := store.Session{ID: id.New(), OrgID: org, UserID: user, AgentID: agentID, ComputerID: &computerID,
-		AgentSnapshot: json.RawMessage(`{}`), ModelParams: json.RawMessage(`{}`), Sandbox: json.RawMessage(`{}`),
-		UsageTotal: json.RawMessage(`{}`), Status: "active", LastActiveAt: time.Now()}
+		AgentSnapshot: json.RawMessage(`{}`), ModelParams: json.RawMessage(`{}`), UsageTotal: json.RawMessage(`{}`), Status: "active", LastActiveAt: time.Now()}
 	if err := db.Create(&session).Error; err != nil {
 		t.Fatal(err)
 	}

@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/ravenmk2/wispjar/internal/session"
@@ -23,18 +22,5 @@ func TestFileRootsAndRelativePaths(t *testing.T) {
 	}
 	if got, err := relativeFilePath("outputs/./result.txt"); err != nil || got != "outputs/result.txt" {
 		t.Fatal(got, err)
-	}
-}
-func TestMigrationWorkspaceBlocksBothLayouts(t *testing.T) {
-	for _, state := range []string{"migrating", "migration_failed"} {
-		raw, _ := json.Marshal(map[string]string{"state": state})
-		if err := workspaceAvailable(raw); err == nil {
-			t.Fatal("accepted " + state)
-		}
-	}
-	for _, raw := range []json.RawMessage{nil, json.RawMessage(`{"state":"ready"}`), json.RawMessage(`{"state":"pending"}`)} {
-		if err := workspaceAvailable(raw); err != nil {
-			t.Fatal(err)
-		}
 	}
 }

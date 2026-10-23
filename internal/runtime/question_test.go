@@ -338,7 +338,7 @@ func newQuestionHandlerEnv(t *testing.T) *questionHandlerEnv {
 	}
 	orch := &fakeAnswerOrchestrator{}
 	h := NewHandler(orch, fakeSessionService{detail: detail}, es, &fakeRepo{sess: &detail.Session, es: es},
-		nil, NewBus(),
+		NewBus(),
 		func(context.Context, string) (string, string, bool, error) { return "fake-v1", "prov-1", true, nil },
 		"", nil)
 	return &questionHandlerEnv{handler: h, es: es, orch: orch}

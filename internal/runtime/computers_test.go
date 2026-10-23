@@ -8,10 +8,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ravenmk2/wispjar/internal/agent"
 	"github.com/ravenmk2/wispjar/internal/runtime/tools"
 	"github.com/ravenmk2/wispjar/internal/session"
 	"github.com/ravenmk2/wispjar/internal/store"
 )
+
+func TestUnboundSessionCannotStartComputerRun(t *testing.T) {
+	o := &orchestrator{}
+	err := o.prepareComputer(context.Background(), &store.Session{ID: "session"}, &agent.Snapshot{}, &runState{})
+	var se *session.Error
+	if !errors.As(err, &se) || se.Code != "computer/required" {
+		t.Fatalf("unbound session accepted: %v", err)
+	}
+}
 
 type resourceCalls struct {
 	mu          sync.Mutex

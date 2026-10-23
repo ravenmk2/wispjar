@@ -55,8 +55,8 @@ func (s *Service) detail(ctx context.Context, sess *store.Session, started bool)
 	return d, nil
 }
 
-func (s *Service) SetComputers(computers ComputerBindings, required bool) {
-	s.computers, s.computerRequired = computers, required
+func (s *Service) SetComputers(computers ComputerBindings) {
+	s.computers = computers
 }
 
 func WorkspaceDir(sessionID string) string { return path.Join("/sessions", sessionID) }
@@ -67,10 +67,7 @@ func newWorkspace() json.RawMessage {
 
 func (s *Service) createComputer(ctx context.Context, sess *store.Session, explicit string) error {
 	if s.computers == nil {
-		if explicit != "" || s.computerRequired {
-			return &Error{Status: http.StatusServiceUnavailable, Code: "computer/unavailable", Message: "云电脑服务不可用"}
-		}
-		return nil
+		return &Error{Status: http.StatusServiceUnavailable, Code: "computer/unavailable", Message: "云电脑服务不可用"}
 	}
 	c, err := s.computers.ResolveBinding(ctx, sess.OrgID, sess.UserID, sess.AgentID, strings.TrimSpace(explicit))
 	if err != nil {
@@ -81,11 +78,8 @@ func (s *Service) createComputer(ctx context.Context, sess *store.Session, expli
 }
 
 func (s *Service) planComputerUpdate(ctx context.Context, sess *store.Session, target string) (map[string]any, []EventInput, error) {
-	if err := WorkspaceAvailable(sess.Workspace); err != nil {
-		return nil, nil, err
-	}
 	if sess.ComputerID == nil {
-		return nil, nil, &Error{Status: http.StatusConflict, Code: "workspace/migration_required", Message: "旧工作区必须先迁移，不能直接切换云电脑"}
+		return nil, nil, &Error{Status: http.StatusConflict, Code: "computer/required", Message: "会话必须绑定云电脑"}
 	}
 	if sess.Running {
 		return nil, nil, &Error{Status: http.StatusConflict, Code: "computer/busy", Message: "会话有活动任务"}
@@ -106,19 +100,6 @@ func (s *Service) planComputerUpdate(ctx context.Context, sess *store.Session, t
 		return nil, nil, ComputerError(err)
 	}
 	return map[string]any{"computer_id": c.ID}, []EventInput{{Type: "session/computer", Data: map[string]any{"computer_id": c.ID, "workspace_dir": WorkspaceDir(sess.ID)}}}, nil
-}
-
-func WorkspaceAvailable(raw json.RawMessage) error {
-	var workspace struct {
-		State string `json:"state"`
-	}
-	if len(raw) > 0 && json.Unmarshal(raw, &workspace) != nil {
-		return errInvalid("工作区状态无效", nil)
-	}
-	if workspace.State == "migrating" || workspace.State == "migration_failed" {
-		return &Error{Status: 409, Code: "workspace/migration_pending", Message: "工作区迁移尚未完成"}
-	}
-	return nil
 }
 
 func ComputerError(err error) error {

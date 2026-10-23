@@ -28,9 +28,9 @@ export const IMAGE_MAX_BYTES = 4194304
 
 export type FileData = { type: "text"; content: string; truncated: boolean } | { type: "blob"; blob: Blob }
 
-export async function fetchSandboxFileData(sessionId: string, path: string, maxBytes?: number, scope?: FileScope): Promise<FileData> {
+export async function fetchSandboxFileData(sessionId: string, path: string, maxBytes?: number, scope: FileScope = "workspace"): Promise<FileData> {
   const { token, currentOrgId } = useIdentityStore.getState()
-  const url = new URL(`/api/v1/sessions/${sessionId}/${scope ? "file" : "sandbox/file"}`, window.location.origin)
+  const url = new URL(`/api/v1/sessions/${sessionId}/file`, window.location.origin)
   if (scope) url.searchParams.set("scope", scope)
   url.searchParams.set("path", path)
   if (maxBytes) url.searchParams.set("max_bytes", String(maxBytes))
@@ -46,7 +46,7 @@ export async function fetchSandboxFileData(sessionId: string, path: string, maxB
     } catch {
       // ignore
     }
-    throw new ApiError(res.status, "sandbox/file", message)
+    throw new ApiError(res.status, "file/upstream", message)
   }
   const contentType = res.headers.get("Content-Type") ?? ""
   if (contentType.includes("application/json")) {

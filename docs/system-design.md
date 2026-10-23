@@ -9,7 +9,7 @@
 > - `docs/design/protocol.md`：WebSocket 实时协议（mux 帧、follow 订阅、StreamChunk、会话事件词表、重连对账）
 > - `docs/design/runtime.md`：Agent 运行时（eino 集成、工具规格、task 委派、Skills、审批、沙箱管理）
 > - `docs/design/media.md`：图片工具、供应商文件引用、历史持久化与能力限制
-> - `docs/design/computers.md`：用户云电脑与持久卷（目录、命名配置、并行执行、技能同步、迁移及实施验收）
+> - `docs/design/computers.md`：用户云电脑与持久卷（目录、命名配置、并行执行、技能同步、退役升级及实施验收）
 > - `docs/design/frontend.md`：前端工程、界面详细规格与品牌图形资源
 
 ---
@@ -23,7 +23,7 @@ Wispjar 是一个多租户智能体平台：
 - **多智能体**：组织管理员创建/发布智能体（提示词 + 模型 + 工具 + Skills + 子智能体 + 沙箱镜像）；普通用户仅对话使用。
 - **子智能体委派**：主 Agent 通过一个统一的 `task` 工具把自包含任务委派给组织内其他智能体（supervisor 模式）。
 - **Agent Skills**：遵循 agentskills.io 规范，上传 zip 配置，渐进式披露。
-- **云电脑与存储**：用户在组织内拥有多台云电脑，三类持久卷挂载到 `/storage`、`/agents`、`/sessions`；多会话共享电脑并行执行，subagent 跟随主任务。OpenSandbox 提供底层实例。实施与旧会话迁移见 [云电脑设计](design/computers.md)。
+- **云电脑与存储**：用户在组织内拥有多台云电脑，三类持久卷挂载到 `/storage`、`/agents`、`/sessions`；多会话共享电脑并行执行，subagent 跟随主任务。OpenSandbox 提供底层实例。实施与升级见 [云电脑设计](design/computers.md)。
 - **会话与事件**：事件溯源（event sourcing）会话日志（MySQL append-only 事件表）+ 单条 WebSocket 多路复用实时协议；协议骨架、事件词表、增量块协议借鉴 DeepSeek Harness 开源项目并做多租户适配。
 
 界面分为工作区、个人中心、组织管理和系统管理，统一通过左下角用户菜单切换；侧栏外框及工作区列表布局保留。个人中心资源为当前组织下本人所有，账号安全和外观为账号级设置。此次导航重组复用既有 API、权限及数据模型，具体路由与交互见 [前端设计 §3](design/frontend.md#3-路由)。
@@ -43,7 +43,7 @@ Wispjar 是一个多租户智能体平台：
 | 3 | 密钥归属 | 系统统一配置，加密存储，对组织不可见 |
 | 4 | 模型可见性 | 系统上架的模型由所有组织共享 |
 | 5 | Agent 形态 | 单 Agent ReAct + `task` 工具委派子 Agent（子 Agent 独立上下文执行、返回最终结果） |
-| 6 | 云电脑粒度 | 用户拥有电脑；会话绑定并可多会话并行，subagent 跟随；空闲暂停、实例租约与用户数据保留分离；旧会话独占沙箱走迁移兼容路径 |
+| 6 | 云电脑粒度 | 用户拥有电脑；会话绑定并可多会话并行，subagent 跟随；空闲暂停、实例租约与用户数据保留分离；所有会话绑定电脑，旧独占沙箱已退役 |
 | 7 | 前后端协议 | 所有 API 以 `/api` 开头：CRUD/动作走 REST，实时走单条 WebSocket 多路复用流（`/api/ws`） |
 | 8 | 工具确认 | 会话级三模式，用户自行切换：`strict`（exec/write/edit 全确认）/ `default`（仅 exec 确认）/ `auto`（全免确认，新会话默认） |
 | 9 | 普通用户边界 | 对话、个人会话/云电脑/存储与 Agent 电脑绑定；私人资源对组织管理员也不可见（仅本人） |
@@ -126,7 +126,7 @@ internal/
 │   └── checkpoint/    # adk CheckPointStore 的 MySQL 实现
 ├── computer/          # 用户电脑/绑定、生命周期协调、操作、运行登记与工作区
 ├── volume/            # 卷命名、后端适配、归属检查、三卷挂载计划
-├── sandbox/           # OpenSandbox 实例句柄、命令/文件、暂停/恢复；兼容旧会话沙箱
+├── sandbox/           # OpenSandbox 实例句柄、命令/文件、暂停/恢复；由 computer 持有生命周期
 ├── session/           # 会话事件日志（append/read/derive）、投影器（标题/用量/列表）
 ├── gateway/           # gin 路由：REST handlers + WS mux server + 协议编解码
 ├── usage/             # 用量聚合与报表查询

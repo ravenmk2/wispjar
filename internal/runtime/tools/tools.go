@@ -28,7 +28,6 @@ const (
 	grepMaxLines      = 250
 	skillMaxBytes     = 32 * 1024
 	writeDiffMaxCells = 4_000_000
-	defaultWorkDir    = "/workspace"
 )
 
 type execArgs struct {
@@ -371,46 +370,28 @@ func newActivateSkillTool() (tool.BaseTool, error) {
 			if skill == nil {
 				return "", fmt.Errorf("skill %q not found; use a name from the available skills index", in.Name)
 			}
-			if tc.SkillsDir != "" {
-				h, sid, err := tc.sandboxHandle(ctx)
-				if err != nil {
-					return "", err
-				}
-				meta.SandboxID = sid
-				dir := path.Join(tc.SkillsDir, skill.Name)
-				data, err := h.DownloadFile(ctx, path.Join(dir, "SKILL.md"))
-				if err != nil {
-					return "", err
-				}
-				meta.Truncated = len(data) > skillMaxBytes
-				if meta.Truncated {
-					data = data[:skillMaxBytes]
-				}
-				files, err := h.SearchFiles(ctx, dir, "**/*")
-				if err != nil {
-					return "", err
-				}
-				return marshalResult(map[string]any{"name": skill.Name, "instructions": string(data), "files": files, "dir": dir + "/", "truncated": meta.Truncated})
+			if tc.SkillsDir == "" {
+				return "", errSandboxUnavailable
 			}
-			dir, err := skillDir(tc.DataDir, tc.OrgID, skill.ID)
+			h, sid, err := tc.sandboxHandle(ctx)
 			if err != nil {
 				return "", err
 			}
-			content, truncated, err := readSkillMD(dir)
+			meta.SandboxID = sid
+			dir := path.Join(tc.SkillsDir, skill.Name)
+			data, err := h.DownloadFile(ctx, path.Join(dir, "SKILL.md"))
 			if err != nil {
-				return "", fmt.Errorf("skill %q: %w", in.Name, err)
+				return "", err
 			}
-			meta.Truncated = truncated
-			files, _ := listSkillFiles(dir)
-			if truncated {
-				content += "\n\n[SKILL.md truncated at 32KB; use the read tool on specific files in the package]"
+			meta.Truncated = len(data) > skillMaxBytes
+			if meta.Truncated {
+				data = data[:skillMaxBytes]
 			}
-			return marshalResult(map[string]any{
-				"name":         skill.Name,
-				"instructions": content,
-				"files":        files,
-				"dir":          "/skills/" + skill.Name + "/",
-			})
+			files, err := h.SearchFiles(ctx, dir, "**/*")
+			if err != nil {
+				return "", err
+			}
+			return marshalResult(map[string]any{"name": skill.Name, "instructions": string(data), "files": files, "dir": dir + "/", "truncated": meta.Truncated})
 		})
 }
 

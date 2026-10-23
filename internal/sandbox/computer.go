@@ -48,8 +48,7 @@ func (s ComputerSpec) matches(info opensandbox.SandboxInfo) bool {
 	return true
 }
 
-// ComputerBackend is separate from the session manager. It neither registers
-// handles with the old reaper nor touches directories in the shared volumes.
+// ComputerBackend implements instance lifecycle and identity checks for computers.
 type ComputerBackend struct{ client *Client }
 
 func NewComputerBackend(client *Client) *ComputerBackend { return &ComputerBackend{client: client} }
@@ -143,7 +142,7 @@ func computerCreateOptions(s ComputerSpec) (opensandbox.SandboxCreateOptions, er
 	opts := opensandbox.SandboxCreateOptions{Image: s.Options.Image, Metadata: metadata, TimeoutSeconds: &ttl,
 		// User environment belongs only to the non-root task. It must never
 		// affect the root execd process or its maintenance shell.
-		Env: mergeEnv(nil), ResourceLimits: opensandbox.ResourceLimits(s.Options.ResourceLimits), Volumes: mounts}
+		Env: map[string]string{"WISPJAR": "1"}, ResourceLimits: opensandbox.ResourceLimits(s.Options.ResourceLimits), Volumes: mounts}
 	if len(s.Options.NetworkPolicy) > 0 {
 		opts.NetworkPolicy, err = parseNetworkPolicy(s.Options.NetworkPolicy)
 	}
@@ -249,13 +248,12 @@ func (b *ComputerBackend) Ensure(ctx context.Context, s ComputerSpec, allowCreat
 	if err != nil {
 		return nil, err
 	}
-	h := &Handle{SandboxID: sb.ID(), ExecdURL: u, sandbox: sb, ttlSeconds: s.Options.TTLSeconds}
+	h := &Handle{SandboxID: sb.ID(), ExecdURL: u, sandbox: sb}
 	endpoint, err := sb.GetEndpoint(ctx, opensandbox.DefaultExecdPort)
 	if err != nil {
 		return nil, err
 	}
 	h.downloadClient = fileStreamClient(conn, u, token, endpoint.Headers)
-	h.Touch()
 	return h, nil
 }
 

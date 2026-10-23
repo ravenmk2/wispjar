@@ -23,6 +23,6 @@ RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ \
         pydantic \
     && rm -rf /root/.cache
 
-WORKDIR /workspace
+WORKDIR /
 
 CMD ["bash"]

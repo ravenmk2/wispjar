@@ -1,7 +1,7 @@
 # Agent 运行时详细设计
 
 > 本文是 `internal/runtime`、`internal/sandbox`、`internal/skill`、`internal/provider` 的权威设计。
-> 用户云电脑的新资源边界、目录、并行执行和技能更新以 [computers.md](computers.md) 为准。本文 `/workspace`、会话独占实例、统一 `/skills` 的描述仅为迁移前兼容行为；新路径为 `/sessions/<sid>` 与 `/agents/<agent_id>/skills`，改造任务见该文档 §12。
+> 用户云电脑资源边界、目录、并行执行和技能更新以 [computers.md](computers.md) 为准。会话必须绑定电脑，工作区为 `/sessions/<sid>`，技能为 `/agents/<agent_id>/skills`。
 > 依赖事实（调研结论）：
 > - eino：`adk.NewChatModelAgent` 即预置 ReAct Agent（model → tools 循环，`MaxIterations` 默认 20）；`adk.Runner{EnableStreaming:true}` 产出 `AsyncIterator[*AgentEvent]`；工具声明用 `components/tool/utils.InferTool`；模型组件在 eino-ext（openai/ark/qwen 各自独立 module）；interrupt + `CheckPointStore` 支持工具审批恢复；`adk.WithCancel` 支持安全点取消。
 > - OpenSandbox：lifecycle REST（`POST /v1/sandboxes` 等，header `OPEN-SANDBOX-API-KEY`）；execd 数据面（`/command` SSE 流式、`/files/upload|download|replace|search|info`、`/directories/list`）；官方 Go SDK `github.com/alibaba/OpenSandbox/sdks/sandbox/go`；execd 无原生内容搜索端点（grep 用 exec 跑 `rg`）。
@@ -56,7 +56,7 @@ func buildAgent(ctx context.Context, sess Session, snap AgentSnapshot, deps Deps
 }
 ```
 
-- `renderInstruction`：`agent.system_prompt` + 拼接"## 可用 Skills"索引段（每条 `- {name}: {description}`，提示"用 skill 工具加载完整说明"）+ 末尾注入运行事实（**会话创建日期**（`sess.CreatedAt`，非 `time.Now`——system 是 messages[0]，逐天变化会让其后全部历史的缓存前缀失配，见《缓存命中优先设计原则》§12）、工作目录 `/workspace`、确认模式说明——strict 模式下提示模型"危险操作会被用户审查"）。
+- `renderInstruction`：`agent.system_prompt` + 拼接"## 可用 Skills"索引段（每条 `- {name}: {description}`，提示"用 skill 工具加载完整说明"）+ 末尾注入运行事实（**会话创建日期**（`sess.CreatedAt`，非 `time.Now`——system 是 messages[0]，逐天变化会让其后全部历史的缓存前缀失配，见《缓存命中优先设计原则》§12）、工作目录 `/sessions/<sid>`、确认模式说明——strict 模式下提示模型"危险操作会被用户审查"）。
 - 会话级 `model_id`（用户切换过）覆盖快照中的 model。
 - 模型参数三级优先级：**会话 `session.model_params` > Agent 快照 `model_params` > 模型 `default_params`**。会话级承载用户选档（如 `{"reasoning_effort":"high"}`），创建时缺省 = 模型 `capabilities.reasoning_effort_default`；`last_seq > 0` 后锁定（锁档理由：DeepSeek 思考模式带 tools 时要求完整回放历史 `reasoning_content`，中途换档会改变每轮输出形态与回放义务；且同会话内推理深度/时延/成本跳变体验断裂。effort 是请求级参数、不进消息前缀，与前缀缓存无关）。
 
@@ -119,14 +119,14 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 ## 4. 工具规格（模型可见 schema）
 
 > 纯文本工具用 `utils.InferTool` 实现；read_media 用 `utils.InferEnhancedTool`（返回 `schema.ToolResult`，tool 消息可携带图片 part）。模型侧只暴露 name/description/parameters。每个工具有：风险等级（审批）、`render` 词汇（UI 卡片）、超时。
-> 沙箱工具从 ctx 取 `SandboxHandle`（首次调用惰性创建，§7）；工作目录默认 `/workspace`。
+> 沙箱工具从 ctx 取根运行已准备并持有使用权的电脑句柄（§7）；工作目录默认 `/sessions/<sid>`。
 
 ### 4.1 exec（风险 high，render terminal）
 
 ```jsonc
 // name: exec —— 执行 shell 命令（bash -lc），返回退出码与输出
 { "command": "string（必填）",
-  "cwd": "string，默认 /workspace",
+  "cwd": "string，默认 /sessions/<sid>",
   "timeout_ms": "int，默认 30000，上限 600000",
   "env": "object<string,string>，附加环境变量" }
 // 返回：{ "exit_code": 0, "stdout": "...", "stderr": "...", "truncated": false }
@@ -174,7 +174,7 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 
 ```jsonc
 // name: glob —— 按 glob 模式搜索文件名
-{ "pattern": "string（必填，如 **/*.go）", "path": "string，默认 /workspace" }
+{ "pattern": "string（必填，如 **/*.go）", "path": "string，默认 /sessions/<sid>" }
 // 返回：{ "files": [ {"path","size","modified_at"} ], "truncated": bool }（按修改时间倒序，上限 100）
 ```
 
@@ -185,7 +185,7 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 ```jsonc
 // name: grep —— 搜索文件内容（ripgrep 语义）
 { "pattern": "string（必填，正则）",
-  "path": "string，默认 /workspace",
+  "path": "string，默认 /sessions/<sid>",
   "glob": "string，文件名过滤，如 *.go",
   "ignore_case": "bool，默认 false",
   "output_mode": "content|files_with_matches，默认 content" }
@@ -200,10 +200,10 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 // name: skill —— 加载指定 Skill 的完整使用说明（SKILL.md 全文 + 包内文件清单）
 { "name": "string（必填，Skills 索引段中的 name）" }
 // 返回：{ "name", "instructions": "<SKILL.md markdown 全文>",
-//         "files": ["scripts/a.py", ...], "dir": "/skills/<name>/" }
+//         "files": ["scripts/a.py", ...], "dir": "/agents/<agent_id>/skills/<name>/" }
 ```
 
-新云电脑路径：根据主运行取得的 `skill.Manifest`，读取当前执行 Agent 的 `/agents/<agent_id>/skills/<name>/SKILL.md`。不能读取已更新的系统源包来搭配尚未同步的安装脚本。SKILL.md >32KB 截断并提示用 read 工具读包内具体文件。旧会话兼容路径仍读取系统源包，待迁移后切换。
+新云电脑路径：根据主运行取得的 `skill.Manifest`，读取当前执行 Agent 的 `/agents/<agent_id>/skills/<name>/SKILL.md`。不能读取已更新的系统源包来搭配尚未同步的安装脚本。SKILL.md >32KB 截断并提示用 read 工具读包内具体文件。不从应用本地源包回退读取技能。
 
 `skill.Coordinator.Acquire(ctx, AcquireRequest{OrgID,UserID,RootRunID,AgentIDs}, installer)` 要求先登记主 `computer_run`；AgentIDs 包含主 Agent 和所有可达 subagent。它在新主任务边界解析当前关联，整组取权后把 `skill_manifest` 合并写入运行 manifest。同 rootRunID 的审批恢复返回原 manifest，不重新解析新版本。所有主/子任务和后台命令均确认结束后才能 `Release(..., commandsStopped=true)`；租约失效不能代替确认。
 
@@ -355,11 +355,11 @@ func NewTaskTool(snap AgentSnapshot, deps Deps) tool.InvokableTool // snap.SubAg
 4. 事件嵌套：消费子 AgentEvent 流，翻译为会话事件时全部附加 `parent_call_id=<本次 task 的 call_id>`（含 turn/step 用子序列 `sub_turn`/`sub_step` 字段避免与主冲突：data 内用 `turn:0, sub_turn:N` 表达，前端按 parent_call_id 聚合）。
 5. 结果合成：取子 Agent 最终 assistant 消息文本作为 `output`；`stopReason != completed` 时按"错误标题 + Diagnostic + Partial output"合成 error（参考 §4.8 返回约定）。
 6. 主 Agent 视角：一次普通 tool/call(task) + tool/result；审批在子 Agent 内部独立触发（嵌套事件）。
-7. 并发：原 v1 使用 task 互斥锁串行执行；云电脑改造支持有界并行，必须先隔离工具 Context、UsageSink、审批/取消归属，再移除串行锁。电脑及会话工作区继承主任务，技能按实际执行的子 Agent 解析（computers.md §7）。
+7. 并发：子任务有界并行，工具 Context、UsageSink、审批/取消归属独立。电脑及会话工作区继承主任务，技能按实际执行的子 Agent 解析（computers.md §7）。
 
-## 7. 沙箱管理器（internal/sandbox）
+## 7. 云电脑运行环境（internal/computer、internal/sandbox）
 
-本节为旧会话实例的迁移兼容说明。新模式由 computer 持有实例生命周期，volume 解析三卷挂载，sandbox 只负责 SDK 适配；删除会话不再回收共享电脑，见 computers.md §3/§6。
+computer 持有实例生命周期，volume 解析三卷挂载，sandbox 只负责 SDK 适配。每轮在运行模型前准备电脑、登记运行、初始化工作区、取得技能使用权，再将句柄绑定到工具上下文；缺少电脑绑定时拒绝执行。删除会话不回收共享电脑，见 computers.md §3/§6。
 
 新模式的工作区初始化区分“已退出失败”和“完成状态未知”：同步命令返回明确非零退出码时，包装为 `StoppedControlError`，主任务与文件维护都以 failed 释放对应运行占用；例如 inputs/outputs 是符号链接而被 `O_NOFOLLOW` 拒绝，不能因此永久占用电脑。只有传输断链、没有退出状态等无法确认完成的情况才保留占用，等待核查恢复。初始化尚未取得技能使用权，不得误当作仍有技能命令在执行。
 
@@ -369,45 +369,13 @@ func NewTaskTool(snap AgentSnapshot, deps Deps) tool.InvokableTool // snap.SubAg
 
 恢复意图先持久化 recovering，再删除旧实例。若工具因此断链，而模型在恢复 hook 前已经自行收尾，事件落库边界仍按电脑 recovering 状态将 `turn/end` 统一记为 `failed` / `computer/recovered`；不得将恢复中断误报为 completed。该判定不改变命令确认与技能租约释放次序。
 
-```go
-type Manager interface {
-    Get(ctx context.Context, sessionID string) (*Handle, error)  // 惰性创建 + 内存缓存
-    Recycle(sessionID string, reason string) error               // 主动销毁
-}
-type Handle struct {
-    SandboxID, ExecdURL string
-    Execd *opensandbox.ExecdClient  // 命令/文件操作入口
-}
-```
+### 7.1 创建与使用
 
-### 7.1 创建参数（lifecycle `POST /v1/sandboxes`）
-
-```jsonc
-{ "image": {"uri": computer.config.image},
-  "timeout": settings.sandbox_ttl_seconds,
-  "resourceLimits": computer.config.resources,  // {"cpu":"1","memory":"1Gi"}
-  "networkPolicy": settings.egress_policy,   // 系统统一黑白名单
-  "env": {"WISPJAR": "1", "EXECD_ACCESS_TOKEN": "<platform-managed>"} }
-```
-
-电脑 env 创建时合并系统 `sandbox.env` 与显式配置，不从 Agent 模板复制。每轮开始读取电脑变量和主/子 Agent 最新 `sandbox_config.env`，本轮固定；exec 按电脑 → 当前 Agent → 命令 env 逐键覆盖，再注入 `WISPJAR=1`。变量只传入非 root 任务进程，不传给容器级 execd 或维护进程。子 Agent 不继承父 Agent env。电脑变量可通过 PATCH 编辑，Agent 变量可独立保存且不改变发布状态，已有会话下一轮任务生效，无需重建或改写历史快照。读取失败终止准备，不静默使用旧值。
-
-键名须匹配 `[A-Za-z_][A-Za-z0-9_]*`，每层及合并后最多 64 项、单值最多 4096 字节，值不可包含 NUL。WISPJAR、HOME、EXECD_* 为保留变量；HOME 固定 /tmp。
-
-创建成功后：
-1. `GET /sandboxes/{id}/endpoints/44772` 解析 execd 地址 → 构造 ExecdClient。
-2. 上传会话激活 Skills：`/skills/<name>/` 整目录（execd upload）。REST 沙箱面板端点（`GET /sessions/{id}/sandbox/file(s)`）在拿到新建/重建沙箱时同样做一次同步（按 sessionID→sandboxID 去重），保证服务重启句柄丢失后技能目录一致。
-3. 更新 `session.sandbox` 为 `{"id": <沙箱ID>, "status": "running"}` + append `session/sandbox{action:"created"}`。
+实例创建选项来自电脑配置及系统设置。创建时挂载三卷、注入实例认证信息和保留标记。任务环境按电脑、当前 Agent、命令显式 env 的顺序覆盖；平台维护命令使用独立受控环境。主任务和子任务共用电脑句柄，子任务按自身 Agent 读取技能。
 
 ### 7.2 续约、暂停与回收
 
-- **续约**：会话活动（每次事件写入）刷新内存 lastActive；后台任务每 30s 对距离过期不足 TTL/2 的沙箱调 `renew-expiration`。running 句柄仅在仍有活动（idle < idle_ttl）时续约；paused 句柄不受 idle 限制、持续续约以防被服务端过期清理。续约返回 404（沙箱已消失）→ 直接回收句柄。
-- **空闲暂停（idle → pause）**：reaper 每分钟扫描，`now-lastActive > idle_ttl_seconds`（默认 28800=8h）→ `POST /sandboxes/{id}/pause` 保留文件系统 → `session.sandbox.status="paused"` + append `session/sandbox{action:"paused"}`。pause 404 → 按沙箱已消失回收；其他错误保留下一轮重试。
-- **恢复（resume）**：沙箱获取路径（turn 内 ensure / REST 沙箱面板）遇到 paused 句柄先 `POST /sandboxes/{id}/resume`（同会话并发由句柄级互斥锁串行，只 resume 一次）→ `status="running"` + `action:"resumed"`，文件系统与 /skills 保留；resume 失败（沙箱已消失）→ 落入按需新建（Skills 自动重传逻辑不变）。
-- **硬 TTL 回收**：`expiresAt` 到期（续约也无法延续）的句柄无论 running/paused 都 DELETE 回收（reason `ttl_expired`）→ `status="recycled"` + `action:"recycled"`。删除会话（DeleteSession）的回收不变：直接 recycle，不 pause。
-- **重启 adopt**：启动时与每小时对比 lifecycle `GET /sandboxes` 列表与本进程句柄。wispjar 标签的孤儿沙箱：metadata 会话在本库存在且未软删且沙箱处于可恢复状态 → 重连并暂停，adopt 为 paused 句柄（不 touch 文件系统，之后按需 resume，事件 `action:"paused", reason:"adopted"`）；会话不存在/已删除或沙箱终态 → 强制删除（`action:"recycled", reason:"orphan"`）。
-- **失败**：创建失败置 `session.sandbox.status="failed"` + 事件，工具调用返回"execution environment unavailable"错误给模型（可重试一次）。创建路径自带一次退避重试（2s），lifecycle 请求超时 120s（冷启动镜像拉取可能超过 30s）。
-- **配置优先级**：`sandbox.idle_ttl_seconds` 生效顺序为 platform_setting 表（热加载，30s 缓存）→ config 文件 `opensandbox.idle_ttl_seconds` → 代码默认 28800；`sandbox.ttl_seconds`（硬 TTL 步长）经 platform_setting 热加载生效于新建/续约。
+电脑服务按实例身份接管并续约；仅无活动运行和维护占用的电脑可以空闲暂停。启动、暂停、恢复、重建和删除都通过电脑服务的持久操作协调，不按会话销毁实例。实例消失不重放命令；重建保留三类卷。系统默认的 idle TTL 和实例 TTL 来自 platform_setting（30 秒缓存），不再从旧会话管理器配置回退。
 
 ### 7.3 沙箱镜像
 

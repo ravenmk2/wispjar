@@ -70,29 +70,10 @@ func main() {
 
 	authSvc := auth.NewService(db, jwtSecret, cfg.TokenTTL())
 
-	var sandboxSvc *sandbox.Service
 	settingsSource := sandbox.NewCachedSettingsSource(sandbox.NewDBSettingsSource(db), 30*time.Second)
 	var computerBackend computer.Backend
 	if cfg.OpenSandbox.LifecycleURL != "" {
 		computerBackend = sandbox.NewComputerBackend(sandbox.NewClient(cfg.OpenSandbox.LifecycleURL, cfg.OpenSandbox.APIKey, cfg.OpenSandbox.UseServerProxy))
-	}
-	if cfg.OpenSandbox.LifecycleURL != "" && cfg.OpenSandbox.LegacySessionsEnabled {
-		sandboxSvc = sandbox.NewService(
-			sandbox.NewClient(cfg.OpenSandbox.LifecycleURL, cfg.OpenSandbox.APIKey, cfg.OpenSandbox.UseServerProxy),
-			cfg.OpenSandbox.IdleTTLSeconds,
-			sandbox.NewCachedSettingsSource(sandbox.NewDBSettingsSource(db), 30*time.Second),
-		)
-		sandboxSvc.SetSessionChecker(func(ctx context.Context, sessionID string) bool {
-			var n int64
-			if err := db.WithContext(ctx).Model(&store.Session{}).
-				Where("id = ? AND status <> ?", sessionID, session.StatusDeleted).
-				Count(&n).Error; err != nil {
-				log.Printf("sandbox: session exists check %s: %v", sessionID, err)
-				return false
-			}
-			return n > 0
-		})
-		sandboxSvc.Start(context.Background())
 	}
 	volumeRepo := volume.NewGORMRepository(db)
 	installationID, err := volumeRepo.InstallationID(context.Background())
@@ -120,7 +101,7 @@ func main() {
 
 	agentSvc := agent.NewService(db)
 	sessionSvc := session.NewService(db, agentSvc)
-	sessionSvc.SetComputers(computerSvc, true)
+	sessionSvc.SetComputers(computerSvc)
 	skillSvc := skill.NewService(db, cfg.Storage.DataDir)
 	skillCoordinator := skill.NewCoordinator(db, skillSvc)
 	attachmentSvc := attachment.NewService(db, cfg.Storage.DataDir)
@@ -136,10 +117,6 @@ func main() {
 		}
 		bus.PublishControl(row.OrgID, frame)
 	})
-	var legacyManager sandbox.Manager
-	if sandboxSvc != nil {
-		legacyManager = sandboxSvc
-	}
 	orch := runtime.NewOrchestrator(runtime.Deps{
 		AgentEnvs:        agentSvc.LoadEnvs,
 		MaxParallelTasks: cfg.Runtime.MaxParallelTasks,
@@ -148,12 +125,10 @@ func main() {
 		Events:           eventStore,
 		Sessions:         repo,
 		Models:           provider.NewChatModelFactory(db, cfg.MasterKey(), attachmentSvc),
-		Sandbox:          legacyManager,
 		Checkpoints: func(sessionID string) adk.CheckPointStore {
 			return runtime.NewCheckpointStore(db, sessionID)
 		},
-		Bus:     bus,
-		DataDir: cfg.Storage.DataDir,
+		Bus: bus,
 		ContextSize: func(ctx context.Context, modelID string) int {
 			var m store.Model
 			if err := db.WithContext(ctx).Select("context_size").First(&m, "id = ?", modelID).Error; err != nil {
@@ -184,9 +159,6 @@ func main() {
 			return caps.Vision && caps.Tools && caps.ToolImages && caps.APIProtocol == "responses"
 		},
 	})
-	if sandboxSvc != nil {
-		sandboxSvc.OnEvent(runtime.SandboxEventHook(repo, eventStore, bus))
-	}
 	if err := orch.RecoverPendingApprovals(context.Background()); err != nil {
 		log.Printf("recover pending approvals: %v", err)
 	}
@@ -198,7 +170,7 @@ func main() {
 	})
 	computerSvc.Start(context.Background())
 
-	runtimeH := runtime.NewHandler(orch, sessionSvc, eventStore, repo, legacyManager, bus,
+	runtimeH := runtime.NewHandler(orch, sessionSvc, eventStore, repo, bus,
 		func(ctx context.Context, modelID string) (string, string, bool, error) {
 			var m store.Model
 			if err := db.WithContext(ctx).First(&m, "id = ?", modelID).Error; err != nil {
@@ -247,9 +219,6 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatalf("shutdown: %v", err)
-	}
-	if sandboxSvc != nil {
-		sandboxSvc.Stop()
 	}
 	computerSvc.Stop()
 	log.Println("wispjar stopped")

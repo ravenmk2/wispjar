@@ -72,6 +72,7 @@ func TestMigrationsMySQLIntegration(t *testing.T) {
 		t.Fatalf("fresh admin display name = %q", admin.DisplayName)
 	}
 	testSystemDisplayNames(t, db, admin)
+	testRetireSessionSandboxes(t, db, admin)
 }
 
 func testSystemDisplayNames(t *testing.T, db *gorm.DB, admin User) {

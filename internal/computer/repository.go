@@ -373,13 +373,6 @@ func (r *GORMRepository) RegisterRun(ctx context.Context, run store.ComputerRun,
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&session, "id=? AND org_id=? AND user_id=? AND computer_id=? AND status<>?", run.SessionID, run.OrgID, run.UserID, c.ID, "deleted").Error; err != nil {
 				return ErrNotFound
 			}
-			var workspace struct {
-				State string `json:"state"`
-			}
-			_ = json.Unmarshal(session.Workspace, &workspace)
-			if workspace.State == "migrating" {
-				return ErrBusy
-			}
 			if run.ParentRunID == nil && !strings.HasPrefix(run.Owner, "runtime/files:") {
 				var n int64
 				if err := activeRuns(tx, c.ID).Where("session_id=? AND parent_run_id IS NULL AND owner NOT LIKE ?", run.SessionID, "runtime/files:%").Count(&n).Error; err != nil {

@@ -68,16 +68,3 @@ func TestValidateEnvLimits(t *testing.T) {
 		t.Fatal("oversized value must be rejected")
 	}
 }
-
-func TestMergeEnvReservedKeyWins(t *testing.T) {
-	got := mergeEnv(map[string]string{"FOO": "bar", "WISPJAR": "0"})
-	if got["FOO"] != "bar" {
-		t.Fatalf("user env lost: %+v", got)
-	}
-	if got["WISPJAR"] != "1" {
-		t.Fatalf("reserved key must not be overridable: %+v", got)
-	}
-	if got := mergeEnv(nil); got["WISPJAR"] != "1" || len(got) != 1 {
-		t.Fatalf("nil env must still carry marker: %+v", got)
-	}
-}

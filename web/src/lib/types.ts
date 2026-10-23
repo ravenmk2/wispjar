@@ -215,7 +215,6 @@ export interface AuditItem {
 
 export type ApprovalMode = "strict" | "default" | "auto"
 
-export type SandboxStatus = "none" | "creating" | "running" | "paused" | "recycled"
 
 export type SessionStatus = "active" | "archived" | "deleted"
 
@@ -354,10 +353,6 @@ export type SessionEvent = SessionEventBase &
     | { type: "session/computer"; data: { computer_id: string; workspace_dir: string } }
     | { type: "workspace/ready"; data: { root: string; layout_version: number } }
     | { type: "runtime/environment"; data: { computer_id: string; generation: number; run_id: string; skills: unknown } }
-    | {
-        type: "session/sandbox"
-        data: { action: "created" | "recycled" | "failed"; sandbox_id: string; image: string; error?: string }
-      }
     | { type: "session/approval-mode"; data: { mode: ApprovalMode; changed_by: string } }
     | { type: "session/effort"; data: { effort: string; changed_by: string } }
     | { type: "model/selection"; data: { model_id: string; changed_by: string } }
@@ -403,7 +398,6 @@ export interface SessionHeader {
   agentAvatar: string
   modelId: string
   approvalMode: ApprovalMode
-  sandboxStatus: SandboxStatus
   running: boolean
   lastSeq: number
   usageTotal: Usage
@@ -504,7 +498,6 @@ export interface SessionDetail extends SessionSummary {
   computer?: import("./computers").Computer
   workspace?: { state?: string; layout_version?: number; retention_until?: string | null }
   title_pinned?: boolean
-  sandbox_status?: SandboxStatus
   status?: SessionStatus
   agent?: SessionAgentInfo
   model_params?: Record<string, unknown> | null

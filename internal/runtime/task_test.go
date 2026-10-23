@@ -65,10 +65,10 @@ func newTaskTestEnv(t *testing.T, approvalMode string, mainScript, subScript fun
 		UserID:        "user-1",
 		AgentID:       "agent-1",
 		AgentSnapshot: snapRaw,
+		ComputerID:    ptrComputerID("computer-test"),
 		ApprovalMode:  approvalMode,
 		ModelID:       "model-main",
 		Status:        session.StatusActive,
-		Sandbox:       json.RawMessage(`{"id":"","status":"none"}`),
 	}
 	es := &fakeEventStore{}
 	repo := &fakeRepo{sess: sess, es: es}
@@ -86,7 +86,7 @@ func newTaskTestEnv(t *testing.T, approvalMode string, mainScript, subScript fun
 		Bus:         bus,
 		ToolContextFactory: func(sess *store.Session, snap *agent.Snapshot) *tools.Context {
 			tc := tools.NewContext(sess.ID, sess.OrgID)
-			tc.Sandbox = fakeSandboxProvider{h: handle}
+			tc.BoundHandle, tc.BoundSandboxID = handle, "fake-sandbox"
 			return tc
 		},
 	})

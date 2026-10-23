@@ -3,12 +3,7 @@ package tools
 
 import (
 	"context"
-	"fmt"
-	"log"
-	"os"
 	"path"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -56,23 +51,6 @@ const (
 	RenderGeneric  = "generic"
 )
 
-// SandboxProvider 抽象沙箱获取（sandbox.Manager 适配 / 测试 fake）。
-type SandboxProvider interface {
-	Get(ctx context.Context, sessionID string, opts sandbox.Options) (Handle, string, error)
-}
-
-type sandboxManagerAdapter struct{ m sandbox.Manager }
-
-func (a sandboxManagerAdapter) Get(ctx context.Context, sessionID string, opts sandbox.Options) (Handle, string, error) {
-	h, err := a.m.Get(ctx, sessionID, opts)
-	if err != nil {
-		return nil, "", err
-	}
-	return h, h.SandboxID, nil
-}
-
-func WrapManager(m sandbox.Manager) SandboxProvider { return sandboxManagerAdapter{m} }
-
 // Context 是一个 turn 内全部工具共享的运行上下文（经 ctx 传递）。
 type Context struct {
 	SessionID string
@@ -91,15 +69,11 @@ type Context struct {
 	BoundHandle    Handle
 	BoundSandboxID string
 
-	Sandbox   SandboxProvider
-	Image     string
-	Resources map[string]string
 	// Env belongs to this Agent; ComputerEnv is the shared task baseline.
 	ComputerEnv map[string]string
 	Env         map[string]string
 
-	DataDir string
-	Skills  []agent.SnapshotSkill
+	Skills []agent.SnapshotSkill
 
 	PublishToolOutput func(callID, stream, delta string)
 
@@ -107,12 +81,8 @@ type Context struct {
 	// nil 时 read_media 拒绝执行。
 	Images ImageSaver
 
-	// OnSkillUploadFailed 技能目录上传沙箱失败回调（非阻断；builder 注入以记录会话事件）。
-	OnSkillUploadFailed func(skillName, sandboxID string, err error)
-
-	mu     sync.Mutex
-	handle *cachedHandle
-	metas  map[string]*Meta
+	mu    sync.Mutex
+	metas map[string]*Meta
 }
 
 func NewContext(sessionID, orgID string) *Context {
@@ -156,29 +126,13 @@ func (c *Context) sandboxHandle(ctx context.Context) (Handle, string, error) {
 	if c.BoundHandle != nil {
 		return c.BoundHandle, c.BoundSandboxID, nil
 	}
-	c.mu.Lock()
-	h := c.handle
-	c.mu.Unlock()
-	if h != nil {
-		return h.h, h.id, nil
-	}
-	if c.Sandbox == nil {
-		return nil, "", errSandboxUnavailable
-	}
-	opts := sandbox.Options{Image: c.Image, ResourceLimits: c.Resources, Env: c.Env}
-	sh, sid, err := c.Sandbox.Get(ctx, c.SessionID, opts)
-	if err != nil {
-		log.Printf("tools: sandbox get for session %s: %v", c.SessionID, err)
-		return nil, "", errSandboxUnavailable
-	}
-	c.uploadSkills(ctx, sh, sid)
-	return c.setHandle(sh, sid), sid, nil
+	return nil, "", errSandboxUnavailable
 }
 
 func (c *Context) ResolvePath(value string) string {
 	base := c.WorkDir
 	if base == "" {
-		base = defaultWorkDir
+		base = session.WorkspaceDir(c.SessionID)
 	}
 	if value == "" {
 		return base
@@ -196,112 +150,14 @@ func (c *Context) Fork(agentID, runID string, skills []agent.SnapshotSkill) *Con
 	child.UserID, child.AgentID = c.UserID, agentID
 	child.ComputerID, child.Generation = c.ComputerID, c.Generation
 	child.RunID, child.ParentRunID = runID, c.RunID
-	child.WorkDir, child.DataDir = c.WorkDir, c.DataDir
-	child.Sandbox, child.Image, child.Resources = c.Sandbox, c.Image, c.Resources
+	child.WorkDir = c.WorkDir
 	child.ComputerEnv = sandbox.MergeEnv(c.ComputerEnv)
 	child.Skills, child.Images = skills, c.Images
 	child.BoundHandle, child.BoundSandboxID = c.BoundHandle, c.BoundSandboxID
-	child.PublishToolOutput, child.OnSkillUploadFailed = c.PublishToolOutput, c.OnSkillUploadFailed
-	if c.ComputerID != "" {
-		child.SkillsDir = "/agents/" + agentID + "/skills"
-		child.AgentFilesDir = "/agents/" + agentID + "/files"
-	}
+	child.PublishToolOutput = c.PublishToolOutput
+	child.SkillsDir = "/agents/" + agentID + "/skills"
+	child.AgentFilesDir = "/agents/" + agentID + "/files"
 	return child
-}
-
-// uploadSkills 在沙箱就绪后上传会话激活 Skills 到 /skills/<name>/（runtime.md §7）。
-// 单个失败只回调记录，不阻断其余技能与工具调用。
-func (c *Context) uploadSkills(ctx context.Context, h Handle, sandboxID string) {
-	UploadSkills(ctx, h, c.DataDir, c.OrgID, c.Skills, func(skillName string, err error) {
-		if c.OnSkillUploadFailed != nil {
-			c.OnSkillUploadFailed(skillName, sandboxID, err)
-		}
-	})
-}
-
-// UploadSkills 上传激活 Skills 到沙箱 /skills/<name>/。除 turn 内工具上下文外，
-// REST 沙箱面板在沙箱被重建后（如服务重启句柄丢失）也需保证技能目录一致。
-// 单技能失败回调记录，不阻断其余技能。
-func UploadSkills(ctx context.Context, h Handle, dataDir, orgID string, skills []agent.SnapshotSkill, onFailed func(skillName string, err error)) {
-	if len(skills) == 0 || dataDir == "" {
-		return
-	}
-	for i := range skills {
-		sk := skills[i]
-		dir, err := skillDir(dataDir, orgID, sk.ID)
-		if err == nil {
-			err = uploadSkillDir(ctx, h, dir, "/skills/"+sk.Name)
-		}
-		if err != nil && onFailed != nil {
-			onFailed(sk.Name, err)
-		}
-	}
-}
-
-func uploadSkillDir(ctx context.Context, h Handle, localDir, remoteBase string) error {
-	dirs := []string{}
-	type fileEntry struct{ rel, abs string }
-	files := []fileEntry{}
-	err := filepath.WalkDir(localDir, func(p string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(localDir, p)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return nil
-		}
-		rel = filepath.ToSlash(rel)
-		if d.IsDir() {
-			dirs = append(dirs, rel)
-			return nil
-		}
-		if rel == "_source.zip" {
-			return nil
-		}
-		files = append(files, fileEntry{rel: rel, abs: p})
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	mkdirs := make([]string, 0, len(dirs)+1)
-	mkdirs = append(mkdirs, shellQuote(remoteBase))
-	for _, d := range dirs {
-		mkdirs = append(mkdirs, shellQuote(path.Join(remoteBase, d)))
-	}
-	res, err := h.RunCommand(ctx, "mkdir -p "+strings.Join(mkdirs, " "), "/", nil, 30000, nil)
-	if err != nil {
-		return err
-	}
-	if res.ExitCode != 0 {
-		return fmt.Errorf("mkdir %s: exit %d: %s", remoteBase, res.ExitCode, strings.TrimSpace(res.Stderr))
-	}
-	for _, f := range files {
-		data, err := os.ReadFile(f.abs)
-		if err != nil {
-			return err
-		}
-		if err := h.UploadFile(ctx, path.Join(remoteBase, f.rel), data); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type cachedHandle struct {
-	h  Handle
-	id string
-}
-
-// setHandle 缓存句柄。
-func (c *Context) setHandle(h Handle, id string) Handle {
-	c.mu.Lock()
-	c.handle = &cachedHandle{h: h, id: id}
-	c.mu.Unlock()
-	return h
 }
 
 func (c *Context) publish(ctx context.Context, stream, delta string) {

@@ -33,7 +33,6 @@ func publicPreparationError(cause error) *Error {
 		{Status: 404, Code: "computer/not_found", Message: "云电脑不存在或无权访问"},
 		{Status: 409, Code: "computer/busy", Message: "云电脑暂不可运行，请稍后重试"},
 		{Status: 503, Code: "computer/unavailable", Message: "云电脑服务暂不可用"},
-		{Status: 409, Code: "workspace/migration_pending", Message: "工作区迁移尚未完成"},
 		{Status: 409, Code: "skill/update_pending", Message: "技能更新正在等待已有任务结束"},
 		{Status: 409, Code: "skill/sync_failed", Message: "技能同步失败，请检查安装状态"},
 		{Status: 409, Code: "skill/sync_blocked", Message: "技能同步状态需要核查后恢复"},

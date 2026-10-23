@@ -255,11 +255,6 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
         header = { ...header, running: true }
       } else if (e.type === "turn/end" && header) {
         header = { ...header, running: false }
-      } else if (e.type === "session/sandbox" && header) {
-        header = {
-          ...header,
-          sandboxStatus: e.data.action === "created" ? "running" : e.data.action === "recycled" ? "recycled" : "none",
-        }
       }
     }
     if (applied.length === 0) return

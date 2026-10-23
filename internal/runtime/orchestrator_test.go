@@ -151,12 +151,6 @@ func (r *fakeRepo) SetTitleIfUnpinned(_ context.Context, sessionID, title string
 	return true, nil
 }
 
-func (r *fakeRepo) SetSandboxStatus(_ context.Context, sessionID, sandboxID, status string) error {
-	raw, _ := json.Marshal(map[string]string{"id": sandboxID, "status": status})
-	r.sess.Sandbox = raw
-	return nil
-}
-
 func (r *fakeRepo) ApprovalDecision(_ context.Context, sessionID, callID string) (bool, bool, error) {
 	for _, ev := range r.es.byType(session.EventApprovalDecided) {
 		var d session.ApprovalDecidedData
@@ -385,12 +379,6 @@ func (h *fakeHandle) FileInfo(_ context.Context, remotePath string) (sandbox.Fil
 	return sandbox.FileInfo{Path: remotePath, Type: "file", Size: int64(len(data)), ModifiedAt: time.Now()}, nil
 }
 
-type fakeSandboxProvider struct{ h *fakeHandle }
-
-func (p fakeSandboxProvider) Get(_ context.Context, sessionID string, opts sandbox.Options) (tools.Handle, string, error) {
-	return p.h, "fake-sandbox", nil
-}
-
 // ---------- 测试装配 ----------
 
 type testEnv struct {
@@ -423,10 +411,10 @@ func newTestEnv(t *testing.T, approvalMode string, script func(call int, input [
 		UserID:        "user-1",
 		AgentID:       "agent-1",
 		AgentSnapshot: snapRaw,
+		ComputerID:    ptrComputerID("computer-test"),
 		ApprovalMode:  approvalMode,
 		ModelID:       "model-1",
 		Status:        session.StatusActive,
-		Sandbox:       json.RawMessage(`{"id":"","status":"none"}`),
 	}
 	es := &fakeEventStore{}
 	repo := &fakeRepo{sess: sess, es: es}
@@ -443,7 +431,7 @@ func newTestEnv(t *testing.T, approvalMode string, script func(call int, input [
 		Bus:         bus,
 		ToolContextFactory: func(sess *store.Session, snap *agent.Snapshot) *tools.Context {
 			tc := tools.NewContext(sess.ID, sess.OrgID)
-			tc.Sandbox = fakeSandboxProvider{h: handle}
+			tc.BoundHandle, tc.BoundSandboxID = handle, "fake-sandbox"
 			return tc
 		},
 	})
@@ -529,3 +517,5 @@ func TestFollowModelSettingsLockAcrossHistoryWindow(t *testing.T) {
 		}
 	}
 }
+
+func ptrComputerID(v string) *string { return &v }

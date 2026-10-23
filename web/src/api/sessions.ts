@@ -8,7 +8,6 @@ import type {
   List,
   PromptRequest,
   PromptResponse,
-  SandboxFileResponse,
   SandboxFilesResponse,
   SessionDetail,
   SessionEventsResponse,
@@ -76,13 +75,6 @@ export const sessionsApi = {
       body: { answers },
     })
   },
-  sandboxFiles(id: string, path?: string) {
-    return api<SandboxFilesResponse>(`/sessions/${id}/sandbox/files`, { params: { path } })
-  },
-  sandboxFile(id: string, path: string, maxBytes?: number) {
-    return api<SandboxFileResponse>(`/sessions/${id}/sandbox/file`, {
-      params: { path, max_bytes: maxBytes },
-    })
-  },
+
 }
 export type FileScope = "workspace" | "storage" | "agent"

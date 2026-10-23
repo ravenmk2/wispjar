@@ -89,15 +89,9 @@ func (h *memHandle) FileInfo(_ context.Context, p string) (sandbox.FileInfo, err
 	return sandbox.FileInfo{Path: p, Type: "file", Size: int64(len(data))}, nil
 }
 
-type memProvider struct{ h *memHandle }
-
-func (p memProvider) Get(_ context.Context, sessionID string, opts sandbox.Options) (Handle, string, error) {
-	return p.h, "mem-sandbox", nil
-}
-
 func testCtx(h *memHandle) context.Context {
 	tc := NewContext("sess-1", "org-1")
-	tc.Sandbox = memProvider{h: h}
+	tc.BoundHandle = h
 	return WithContext(context.Background(), tc)
 }
 

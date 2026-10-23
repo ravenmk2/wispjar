@@ -50,14 +50,8 @@ runtime:
   max_parallel_tasks: 4
 
 opensandbox:
-  # 旧 session 沙箱兼容管理器。新独立部署共用 server 时必须设 false，
-  # 避免扫描没有 installation 标签的旧 wispjar=1 实例。
-  legacy_sessions_enabled: true
   lifecycle_url: "http://127.0.0.1:8081"
   api_key: ""
   # true：execd/egress 流量经 opensandbox-server 反代（客户端只需连通 server 端口，
   # 适用于 wispjar 以 bridge 网络部署）；false：直连沙箱在宿主发布的端口（host 网络部署用）
   use_server_proxy: false
-  # 空闲多久（秒）暂停沙箱（pause 保留文件系统，恢复对话时 resume）；硬 TTL 到期才销毁
-  idle_ttl_seconds: 28800
-  sandbox_ttl_seconds: 3600

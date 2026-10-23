@@ -1,7 +1,6 @@
 # REST API 规格
 
-> 用户云电脑资源 API 见本文 §8；文件与会话接入按 [computers.md §8](computers.md#8-rest-契约) 的 T4 实施。创建会话将增加 computer_id，旧 sandbox/file(s) 保留兼容代理；下文旧会话独占沙箱行为不适用于已绑定电脑的会话。
-
+> 所有会话绑定用户云电脑。文件接口统一使用 scope 和相对 path；旧会话沙箱端点已移除，云电脑 API 见 §8。
 > 全部端点以 `/api/v1` 为前缀（WS 实时协议 `/api/ws` 见 protocol.md）。
 > 认证：除 `/api/v1/auth/login` 外全部需要 `Authorization: Bearer <jwt>`。
 > 组织上下文：组织域端点路径内带 `orgId`；中间件校验当前用户是该组织成员并注入 `(uid, org_id, role)`。
@@ -94,10 +93,10 @@
 创建会话。请求：
 
 ```json
-{ "agent_id": "...", "model_id": "可选，缺省使用智能体模型", "title": "可选，默认空（首条 prompt 后自动生成）", "reasoning_effort": "可选，思考强度档位" }
+{ "agent_id": "...", "computer_id": "可选，缺省解析本人默认电脑", "model_id": "可选，缺省使用智能体模型", "title": "可选，默认空（首条 prompt 后自动生成）", "reasoning_effort": "可选，思考强度档位" }
 ```
 
-- 校验 agent 属于该组织且 `status=published`。
+- 校验 agent 属于该组织且 `status=published`。必须解析到本人可用电脑；未选择且无默认电脑时返回 409 `computer/required`。
 - `model_id` 可选，必须为已上架（active）模型；选择与推理档位在创建时一并保存。
 - `reasoning_effort` 必须在目标模型 `capabilities.reasoning_efforts` 内，否则 400；缺省 = 模型的 `reasoning_effort_default`，模型未配默认则不注入。生效值写入 `session.model_params`（如 `{"reasoning_effort":"high"}`）。
 - 服务端：写 `session`（`agent_snapshot` 为创建时刻 Agent 全量配置 + 解析后的 skills/subagents 清单；`model_id` 使用所选模型，缺省 `agent.model_id`）→ 201 返回会话对象。
@@ -196,13 +195,6 @@
   开启新 turn，202 `{ "accepted": true, "delivered": "continued", "seq": <user/message seq> }`；
   会话忙 → 409 `session/running`（v1 不支持排队）。
 
-### GET /api/v1/sessions/{id}/sandbox/files
-
-沙箱文件浏览（owner，代理 execd）。query：`path`（默认 `/workspace`）→ `{ "items": [{ "name", "path", "type": "file|dir", "size", "modified_at" }] }`。
-
-### GET /api/v1/sessions/{id}/sandbox/file
-
-文件预览/下载。query：`path`、`max_bytes`（默认 256KB，超出截断并标记 `truncated:true`）→ `{ "path", "content"(utf8 文本), "truncated" }`；二进制文件返回 `application/octet-stream` 原始流。
 
 ---
 
@@ -420,7 +412,7 @@
 
 错误沿用统一信封：`computer/not_found` 404；`computer/invalid` 400；`computer/required`、`computer/busy`、`computer/in_use`、`operation/conflict`、`volume/conflict`、`volume/missing` 为 409；后端未配置或不可用为 `computer/unavailable` 503。异步执行中发生的后端故障记录到 operation，不把“已接收”当作“已启动”。
 
-部署兼容：`opensandbox.legacy_sessions_enabled` 默认 true，保留旧会话管理器。共用 OpenSandbox 的新独立部署必须配置为 false，防止无 installation 标签的旧 `wispjar=1` 实例被扫描。电脑实例始终使用独立的 `wispjar=computer-<installation>` 标签，按组织、用户、电脑、存储域和 generation 完整校验后接管。
+实例归属：电脑实例使用 `wispjar=computer-<installation>` 标签，按组织、用户、电脑、存储域和 generation 完整校验后接管。旧会话管理器及 legacy_sessions_enabled 配置已移除。
 
 ### 8.1 工作区上传与大文件下载
 

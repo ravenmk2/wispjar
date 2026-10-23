@@ -52,12 +52,9 @@ type Config struct {
 		MaxParallelTasks int `yaml:"max_parallel_tasks"`
 	} `yaml:"runtime"`
 	OpenSandbox struct {
-		LegacySessionsEnabled bool   `yaml:"legacy_sessions_enabled"`
-		LifecycleURL          string `yaml:"lifecycle_url"`
-		APIKey                string `yaml:"api_key"`
-		UseServerProxy        bool   `yaml:"use_server_proxy"`
-		IdleTTLSeconds        int    `yaml:"idle_ttl_seconds"`
-		SandboxTTLSeconds     int    `yaml:"sandbox_ttl_seconds"`
+		LifecycleURL   string `yaml:"lifecycle_url"`
+		APIKey         string `yaml:"api_key"`
+		UseServerProxy bool   `yaml:"use_server_proxy"`
 	} `yaml:"opensandbox"`
 
 	AdminPassword string `yaml:"-"`
@@ -73,9 +70,6 @@ func Load(path string) (*Config, error) {
 	cfg.Storage.Volumes = DefaultVolumesConfig()
 	cfg.Storage.Downloads = DownloadsConfig{MaxBytes: 20 << 30, MaxStagedBytes: 40 << 30, MaxEntries: 100000, TTL: Duration(30 * time.Minute), PrepareTimeout: Duration(30 * time.Minute)}
 	cfg.Runtime.MaxParallelTasks = 4
-	cfg.OpenSandbox.IdleTTLSeconds = 28800
-	cfg.OpenSandbox.SandboxTTLSeconds = 3600
-	cfg.OpenSandbox.LegacySessionsEnabled = true
 
 	data, err := os.ReadFile(path)
 	switch {

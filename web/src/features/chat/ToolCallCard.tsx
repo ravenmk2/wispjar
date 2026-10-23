@@ -127,7 +127,7 @@ function ToolTextSection({ label, content, sessionId, preferenceKey, running = f
 function TerminalBody({ node, liveOutput, sessionId }: { node: ToolCallNode; liveOutput?: ToolOutput; sessionId: string }) {
   const args = safeParseJson(node.arguments)
   const command = typeof args?.command === "string" ? args.command : node.arguments
-  const cwd = typeof args?.cwd === "string" && args.cwd ? args.cwd : "/workspace"
+  const cwd = typeof args?.cwd === "string" && args.cwd ? args.cwd : `/sessions/${sessionId}`
   const output = execOutput(node.result, liveOutput)
   const running = !node.result && !node.endReason
   const cancelled = toolCancelled(node) || (!node.result && !!node.endReason)

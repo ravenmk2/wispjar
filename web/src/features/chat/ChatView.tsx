@@ -9,7 +9,6 @@ import { ApprovalTakeover } from "@/features/chat/ApprovalCard"
 import { Composer } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
 import { QuestionTakeover } from "@/features/chat/QuestionCard"
-import { SandboxPanel } from "@/features/sandbox/SandboxPanel"
 import { TrajectoryView } from "@/features/trajectory/TrajectoryView"
 import { followSession, type FollowHandle } from "@/mux/follow"
 import { cn } from "@/lib/utils"
@@ -191,7 +190,7 @@ export default function ChatView() {
             <Composer sessionId={sessionId} />
           ))}
       </div>
-      {sandboxOpen && (detail?.computer_id ? <WorkspaceFiles key={sessionId} sessionId={sessionId} running={header?.running ?? false} onClose={() => setSandboxOpen(false)} /> : <SandboxPanel sessionId={sessionId} onClose={() => setSandboxOpen(false)} />)}
+      {sandboxOpen && (<WorkspaceFiles key={sessionId} sessionId={sessionId} running={header?.running ?? false} onClose={() => setSandboxOpen(false)} />)}
     </div>
   )
 }

@@ -12,8 +12,6 @@ import (
 	opensandbox "github.com/alibaba/OpenSandbox/sdks/sandbox/go"
 )
 
-const markerMetadataKey = "wispjar"
-
 type Client struct {
 	conn      opensandbox.ConnectionConfig
 	lifecycle *opensandbox.LifecycleClient
@@ -33,52 +31,6 @@ func NewClient(lifecycleURL, apiKey string, useServerProxy bool) *Client {
 	}
 }
 
-func (c *Client) createSandbox(ctx context.Context, sessionID string, o Options) (*opensandbox.Sandbox, error) {
-	if o.Image == "" {
-		return nil, fmt.Errorf("sandbox: image is required")
-	}
-	ttl := o.TTLSeconds
-	if ttl <= 0 {
-		ttl = opensandbox.DefaultTimeoutSeconds
-	}
-	createOpts := opensandbox.SandboxCreateOptions{
-		Image:          o.Image,
-		TimeoutSeconds: &ttl,
-		Metadata: map[string]string{
-			markerMetadataKey:   "1",
-			"wispjar-session":   sessionID,
-			"wispjar-createdby": "wispjar-manager",
-		},
-		Env: mergeEnv(o.Env),
-	}
-	if len(o.ResourceLimits) > 0 {
-		createOpts.ResourceLimits = opensandbox.ResourceLimits(o.ResourceLimits)
-	}
-	if len(o.NetworkPolicy) > 0 {
-		np, err := parseNetworkPolicy(o.NetworkPolicy)
-		if err != nil {
-			return nil, err
-		}
-		createOpts.NetworkPolicy = np
-	}
-	sb, err := opensandbox.CreateSandbox(ctx, c.conn, createOpts)
-	if err != nil {
-		return nil, fmt.Errorf("sandbox: create: %w", err)
-	}
-	return sb, nil
-}
-
-// mergeEnv 以用户配置（系统默认经 applySettings 合并后的 Agent 级 env）为基础，
-// 最后写入系统保留键，保证标记不可被配置覆盖。
-func mergeEnv(env map[string]string) map[string]string {
-	out := make(map[string]string, len(env)+1)
-	for k, v := range env {
-		out[k] = v
-	}
-	out["WISPJAR"] = "1"
-	return out
-}
-
 func (c *Client) execdURL(ctx context.Context, sb *opensandbox.Sandbox) (string, error) {
 	ep, err := sb.GetEndpoint(ctx, opensandbox.DefaultExecdPort)
 	if err != nil {
@@ -95,10 +47,6 @@ func (c *Client) deleteSandbox(ctx context.Context, id string) error {
 	return c.lifecycle.DeleteSandbox(ctx, id)
 }
 
-func (c *Client) connectSandbox(ctx context.Context, id string) (*opensandbox.Sandbox, error) {
-	return opensandbox.ConnectSandbox(ctx, c.conn, id)
-}
-
 func (c *Client) pauseSandbox(ctx context.Context, id string) error {
 	return c.lifecycle.PauseSandbox(ctx, id)
 }
@@ -111,26 +59,6 @@ func (c *Client) resumeSandbox(ctx context.Context, id string) error {
 func isNotFound(err error) bool {
 	var apiErr *opensandbox.APIError
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
-}
-
-func (c *Client) listManagedSandboxes(ctx context.Context) ([]opensandbox.SandboxInfo, error) {
-	var out []opensandbox.SandboxInfo
-	page := 1
-	for {
-		resp, err := c.lifecycle.ListSandboxes(ctx, opensandbox.ListOptions{
-			Metadata: map[string]string{markerMetadataKey: "1"},
-			Page:     page,
-			PageSize: 100,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("sandbox: list: %w", err)
-		}
-		out = append(out, resp.Items...)
-		if !resp.Pagination.HasNextPage {
-			return out, nil
-		}
-		page++
-	}
 }
 
 func (c *Client) getSandbox(ctx context.Context, id string) (*opensandbox.SandboxInfo, error) {

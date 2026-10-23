@@ -1,7 +1,7 @@
 # 数据模型（MySQL 8）
 
 > 本文是数据库的权威定义：DDL 可直接执行，迁移文件按此生成。
-> 云电脑增量模型见 [computers.md §5](computers.md#5-数据模型)。七张新表、session 电脑引用与 skill 修订字段见 §14（000005 增量迁移）；旧 session.sandbox 仅用于过渡兼容，不能代表共享电脑的权威状态。
+> 云电脑增量模型见 [computers.md §5](computers.md#5-数据模型)。七张新表、session 电脑引用与 skill 修订字段见 §14（000005 增量迁移）；000008 删除旧会话及 sandbox 字段，并将 session.computer_id 设为 NOT NULL；共享电脑状态以 computer 为准。
 > 全局约定：
 > - 表名一律**单数**（`session_event`、`agent_subagent` …）。
 > - 主键：`CHAR(32)`，UUIDv7 去掉 `-` 的 32 位小写 hex，**应用层生成**（`internal/id`），时序有序，天然可作分页游标。
@@ -12,7 +12,7 @@
 ## 0. 列 vs JSON 的取舍约定（避免频繁改表结构）
 
 - 用于 **WHERE / JOIN / ORDER BY / 唯一约束** 的字段必须是独立列（org_id、status、role、name、seq …）。
-- **纯配置、展示、扩展性字段优先进 JSON 列**：`model_provider.extra`、`model.capabilities`、`model.default_params`、`agent.model_params`、`agent.tools_enabled`、`agent.sandbox_config`、`session.agent_snapshot`、`session.model_params`、`session.sandbox`、`session.usage_total`、`session_event.data`、`platform_setting.value`、`audit_log.detail`。
+- **纯配置、展示、扩展性字段优先进 JSON 列**：`model_provider.extra`、`model.capabilities`、`model.default_params`、`agent.model_params`、`agent.tools_enabled`、`agent.sandbox_config`、`session.agent_snapshot`、`session.model_params`、`session.usage_total`、`session_event.data`、`platform_setting.value`、`audit_log.detail`。
 - **未来新增配置项默认并入既有 JSON 列**（如新增沙箱旋钮 → `agent.sandbox_config`），只有需要查询/关联时才新增独立列并写 migration。
 
 ## 1. 迁移与种子
@@ -212,7 +212,6 @@ CREATE TABLE session (
   approval_mode  VARCHAR(16)  NOT NULL DEFAULT 'auto',    -- strict / default / auto
   model_id       CHAR(32)     NOT NULL,                 -- 会话级模型（创建时=agent.model_id，可切换）
   model_params   JSON         NULL,                     -- 会话级模型参数（如 {"reasoning_effort":"high"}），覆盖 agent.model_params；思考强度在 last_seq>0 后锁定
-  sandbox        JSON         NOT NULL,                 -- {"id":"","status":"none"}；status: none/creating/running/recycled/failed
   last_seq       BIGINT       NOT NULL DEFAULT 0,       -- 事件投影游标
   running        TINYINT(1)   NOT NULL DEFAULT 0,
   usage_total    JSON         NOT NULL,                 -- {"input_tokens":0,"output_tokens":0,"cache_read_tokens":0,"cache_write_tokens":0,"reasoning_tokens":0}
@@ -253,7 +252,7 @@ CREATE TABLE agent_checkpoint (
 3. `session_event` 永不 UPDATE/DELETE；上下文压缩只追加新事件（`surface_op` 语义在 protocol.md §6.3）。
 4. 回放：`SELECT seq,type,time_ms,data FROM session_event WHERE session_id=? AND seq>? ORDER BY seq`。
 5. `agent_checkpoint` 定期清理：`DELETE WHERE created_at < NOW() - INTERVAL 7 DAY`（审批 checkpoint 在 decided 后立即删除）。
-6. 旧会话沙箱状态由 `session.sandbox` 保存，仅供兼容和迁移。绑定云电脑的新会话使用 `session.computer_id`；实例状态以 `computer` 为准，不能根据某个会话删除状态回收共享电脑。
+6. 会话必须绑定 `session.computer_id`；实例状态以 `computer` 为准，不能根据会话删除状态回收共享电脑。旧沙箱字段和旧会话数据由 000008 清理。
 
 ## 10. attachment（图片附件，组织级）
 
@@ -368,7 +367,7 @@ INSERT INTO platform_setting (`key`, value, updated_by) VALUES
 |---|---|---|
 | Skill zip 解压目录 | `<data_dir>/skills/<org_id>/<skill_id>/` | 原始 zip 保留为 `_source.zip` 便于重新校验；路径配置化，保留对象存储扩展口 |
 | 图片附件 blob | `<data_dir>/attachments/v1/objects/<sha256[:2]>/<sha256>` | 内容寻址、不可变、字节去重；写：临时文件→校验→原子 rename；读：按记录 sha256 校验后再服务（`internal/attachment`）。永不自动删除 |
-| 云电脑持久文件 | 用户三类卷 `/storage`、`/agents`、`/sessions` | 生命周期独立于实例；仅旧沙箱未迁移文件与容器运行层会随销毁丢失 |
+| 云电脑持久文件 | 用户三类卷 `/storage`、`/agents`、`/sessions` | 生命周期独立于实例；容器运行层随销毁丢失 |
 
 ## 14. 云电脑与持久卷（000005_computers）
 
@@ -491,7 +490,7 @@ CREATE TABLE resource_operation (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ALTER TABLE session
-  ADD COLUMN computer_id CHAR(32) NULL,
+  ADD COLUMN computer_id CHAR(32) NOT NULL,
   ADD COLUMN workspace JSON NULL,
   ADD KEY idx_session_computer (computer_id);
 ALTER TABLE skill
@@ -509,3 +508,7 @@ ALTER TABLE skill
 - `resource_operation.idempotency_key` 可空（无幂等键），非空值使用二进制排序规则；唯一约束按组织、用户、action 限定。相同键且 request_hash 不同由服务返回 conflict。
 - `computer_run` 的活动主任务互斥由运行服务锁定 session 行后检查并登记，不能仅依赖进程 map。过期 lease 不等同于远端进程结束。
 - 删除电脑使用 status=deleted，不级联删除用户卷。schema down 会删除资源索引表，执行前应导出资源身份；已有工作区新写入需要独立数据回滚计划。
+
+## 15. 旧会话沙箱退役（000008）
+
+历史 000001–000007 迁移保持原样。000008 清理未绑定电脑、持有旧实例 ID 或含旧 session/sandbox 事件的会话，以及关联事件、检查点、computer_run 和 run_skill_lease；删除 workspace/migrate 操作和维护运行。保留正常电脑会话及完整连续的事件序列，不改写其历史。删除 session.sandbox，computer_id 改为 NOT NULL。三卷、电脑、用户、Agent、Skill 和共享附件不删除。停止应用与远端执行后升级；down 仅恢复 schema，不恢复旧数据。

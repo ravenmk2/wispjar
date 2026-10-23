@@ -25,7 +25,6 @@ func TestPlanFork(t *testing.T) {
 		ApprovalMode: ApprovalStrict,
 		ModelID:      "model-1",
 		ModelParams:  json.RawMessage(`{"reasoning_effort":"high"}`),
-		Sandbox:      json.RawMessage(`{"id":"sb-1","status":"running"}`),
 		LastSeq:      4,
 		Running:      true,
 		Status:       StatusActive,
@@ -52,9 +51,6 @@ func TestPlanFork(t *testing.T) {
 	}
 	if string(forked.ModelParams) != `{"reasoning_effort":"high"}` {
 		t.Fatalf("model_params must be copied, got %s", forked.ModelParams)
-	}
-	if string(forked.Sandbox) != string(defaultSandbox) {
-		t.Fatalf("sandbox must be fresh none, got %s", forked.Sandbox)
 	}
 	if forked.Running || forked.Status != StatusActive || forked.LastSeq != 2 {
 		t.Fatalf("unexpected state running=%v status=%s last_seq=%d", forked.Running, forked.Status, forked.LastSeq)

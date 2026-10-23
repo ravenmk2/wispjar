@@ -22,7 +22,7 @@ function fixture(count: number, sessionId = "pelican") {
   events[count - 1] = { seq: count, time: count * 1000, type: "turn/end", data: { turn: 1, reason: "completed" } }
   const header: SessionHeader = {
     sessionId, title: "鹈鹕骑自行车SVG动画", titlePinned: false, agentId: "agent", agentName: "Agent", agentAvatar: "",
-    modelId: "model", modelSettingsLocked: true, approvalMode: "auto", sandboxStatus: "none", running: false,
+    modelId: "model", modelSettingsLocked: true, approvalMode: "auto", running: false,
     lastSeq: count, usageTotal: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, reasoning_tokens: 0 }, createdAt: "",
   }
   useSessionStore.getState().applySnapshot(sessionId, header, events.slice(-200), count > 200)

@@ -145,7 +145,7 @@ func invokeEnhanced(t *testing.T, tt tool.BaseTool, ctx context.Context, args st
 
 func readMediaTestCtx(h *memHandle, saver *memSaver) context.Context {
 	tc := NewContext("sess-1", "org-1")
-	tc.Sandbox = memProvider{h: h}
+	tc.BoundHandle = h
 	if saver != nil {
 		tc.Images = saver
 	}

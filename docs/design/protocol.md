@@ -1,6 +1,6 @@
 # 实时协议（WebSocket mux）
 
-> 云电脑增量协议见 [computers.md §9](computers.md#9-实时协议与前端)：control 增加电脑投影，snapshot 增加电脑/工作区，工具 meta 增加 computer_id/run_id。旧 session/sandbox 事件保留历史回放，不再作为共享电脑当前状态的唯一依据；实现状态见该文档 §12。
+> 云电脑协议见 [computers.md §9](computers.md#9-实时协议与前端)：control 提供电脑投影，snapshot 提供电脑/工作区，工具 meta 提供 computer_id/run_id。旧 session/sandbox 事件和 sandboxStatus 已移除。
 
 > 本文是会话实时通讯的权威协议定义，前后端都以此为准。
 > 设计来源：借鉴 DeepSeek Harness 的 stream-protocol / session follow / StreamChunk / SessionEvent 设计，适配多租户与 MySQL 事件表。
@@ -68,7 +68,7 @@
     "sessionId": "...", "title": "...", "titlePinned": false,
     "agentId": "...", "agentName": "...", "agentAvatar": "",
     "modelId": "...", "approvalMode": "default",
-    "sandboxStatus": "running", "running": true,
+    "computerId": "<computer-id>", "computerStatus": "running", "workspaceDir": "/sessions/<sid>", "running": true,
     "computerId": "...", "computerStatus": "running",
     "workspaceDir": "/sessions/<session_id>",
     "modelSettingsLocked": true, "lastSeq": 87, "usageTotal": { "input_tokens": 1234, "output_tokens": 567,
@@ -84,7 +84,7 @@
 
 客户端语义：**用快照原子替换本地会话窗口**，再按序应用后续帧。
 
-云电脑会话使用 `computerId/computerStatus/workspaceDir`；旧会话可缺省这些字段并继续回放 `sandboxStatus`。获取快照只读取当前电脑状态，不隐式创建或启动电脑。
+所有会话使用 `computerId/computerStatus/workspaceDir`。获取快照只读取当前电脑状态，不隐式创建或启动电脑。
 
 ### 4.3 持久事件帧
 
@@ -199,7 +199,6 @@ open payload `{ "orgId": "..." }`。首帧基线 + 增量：
 | `session/computer` | `{computer_id, workspace_dir}`；空闲会话切换电脑后追加，旧事件不改写 |
 | `workspace/ready` | `{root, layout_version:1}`；当前会话工作区及 inputs/outputs 已准备 |
 | `runtime/environment` | `{computer_id, generation?, run_id?, skills?, status?}`；实际技能 manifest 记录 Agent、revision、hash、目录；`status:"waiting_skills"` 表示等待旧运行释放技能，尚未调用模型/工具 |
-| `session/sandbox` | `{action: "created"\|"paused"\|"resumed"\|"recycled"\|"failed", sandbox_id, image, error?}`（paused=空闲暂停/重启 adopt，resumed=恢复使用；会话 `sandboxStatus` 对应 `running\|paused\|recycled\|failed`） |
 | `session/approval-mode` | `{mode: "strict"\|"default"\|"auto", changed_by}` |
 | `session/effort` | `{effort: "<档位>", changed_by}` —— 会话思考强度改档（仅 `last_seq = 0` 时可改，见 api.md §3） |
 | `model/selection` | `{model_id, changed_by}` |

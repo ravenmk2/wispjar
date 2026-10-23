@@ -53,7 +53,7 @@ func NewRouter(deps Deps) *gin.Engine {
 	agentSvc := agent.NewService(deps.DB)
 	sessionSvc := session.NewService(deps.DB, agentSvc)
 	if deps.Computers != nil {
-		sessionSvc.SetComputers(deps.Computers, true)
+		sessionSvc.SetComputers(deps.Computers)
 	}
 	if deps.Runtime != nil && deps.WSBus != nil {
 		sessionSvc.AfterEvents = func(sessionID string, events []session.Event) {
@@ -83,8 +83,6 @@ func NewRouter(deps Deps) *gin.Engine {
 		authed.POST("/sessions/:id/cancel", deps.Runtime.Cancel)
 		authed.POST("/sessions/:id/approvals/:callId", deps.Runtime.Approval)
 		authed.POST("/sessions/:id/questions/:callId/answer", deps.Runtime.AnswerQuestion)
-		authed.GET("/sessions/:id/sandbox/files", deps.Runtime.SandboxFiles)
-		authed.GET("/sessions/:id/sandbox/file", deps.Runtime.SandboxFile)
 		authed.GET("/sessions/:id/files", deps.Runtime.Files)
 		authed.GET("/sessions/:id/file", deps.Runtime.File)
 		authed.POST("/sessions/:id/files", deps.Runtime.UploadFile)

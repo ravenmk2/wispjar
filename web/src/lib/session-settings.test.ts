@@ -5,7 +5,7 @@ import type { SessionHeader, SessionEvent } from "./types"
 
 const header = (locked: boolean): SessionHeader => ({
   sessionId: "s", title: "", titlePinned: false, agentId: "a", agentName: "A", agentAvatar: "",
-  modelId: "m", modelSettingsLocked: locked, approvalMode: "auto", sandboxStatus: "none", running: false,
+  modelId: "m", modelSettingsLocked: locked, approvalMode: "auto", running: false,
   lastSeq: 400, usageTotal: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, reasoning_tokens: 0 }, createdAt: "",
 })
 

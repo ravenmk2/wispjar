@@ -54,7 +54,7 @@ export default function StoragePage() {
     try {
       const detail = await sessionsApi.detail(selected)
       if (version !== request.current) return
-      if (!detail.computer_id) { setError("这个会话仍使用旧工作区，请选择已绑定云电脑的会话。"); return }
+      if (!detail.computer_id) { setError("会话未绑定云电脑，请重新选择会话。"); return }
       setOpened(detail.id)
     } catch (e) { if (version === request.current) setError(errorMessage(e)) }
     finally { if (version === request.current) setOpening(false) }

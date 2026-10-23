@@ -4,15 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
-	"path"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
-	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
@@ -21,8 +16,6 @@ import (
 	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/gateway/respond"
 	"github.com/ravenmk2/wispjar/internal/id"
-	"github.com/ravenmk2/wispjar/internal/runtime/tools"
-	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/session"
 	"github.com/ravenmk2/wispjar/internal/skill"
 	"github.com/ravenmk2/wispjar/internal/store"
@@ -46,27 +39,24 @@ type Handler struct {
 	sessions    SessionService
 	events      EventStore
 	repo        SessionRepo
-	sandbox     sandbox.Manager
 	bus         *Bus
 	model       func(ctx context.Context, modelID string) (modelCode, providerID string, vision bool, err error)
 	attachments AttachmentResolver
 	dataDir     string
 
-	skillsMu        sync.Mutex
-	skillsSynced    map[string]string // sessionID -> 已完成技能目录同步的 sandboxID
 	downloadMu      sync.Mutex
 	downloads       map[string]*fileDownload
 	downloadOptions DownloadOptions
 }
 
 func NewHandler(orch Orchestrator, sessions SessionService, events EventStore, repo SessionRepo,
-	sb sandbox.Manager, bus *Bus,
+	bus *Bus,
 	modelLookup func(ctx context.Context, modelID string) (string, string, bool, error), dataDir string,
 	attachments AttachmentResolver) *Handler {
 	return &Handler{
 		orch: orch, sessions: sessions, events: events, repo: repo,
-		sandbox: sb, bus: bus, model: modelLookup, attachments: attachments,
-		dataDir: dataDir, skillsSynced: map[string]string{},
+		bus: bus, model: modelLookup, attachments: attachments,
+		dataDir: dataDir,
 	}
 }
 
@@ -357,132 +347,7 @@ func (h *Handler) AnswerQuestion(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{"accepted": true, "delivered": "continued", "seq": seq})
 }
 
-func (h *Handler) sandboxHandle(c *gin.Context, sess *session.Detail) (*sandbox.Handle, bool) {
-	var sb struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
-	}
-	_ = json.Unmarshal(sess.Sandbox, &sb)
-	if sb.ID == "" || h.sandbox == nil {
-		fail(c, ErrSandboxNotFound)
-		return nil, false
-	}
-	var snap agent.Snapshot
-	if err := json.Unmarshal(sess.AgentSnapshot, &snap); err != nil {
-		fail(c, err)
-		return nil, false
-	}
-	sc := parseSandboxConfig(snap.SandboxConfig)
-	handle, err := h.sandbox.Get(c.Request.Context(), sess.ID, sandbox.Options{Image: sc.Image, ResourceLimits: sc.Resources, Env: sc.Env})
-	if err != nil {
-		respond.Error(c, http.StatusBadGateway, "sandbox/upstream", "调用云电脑失败", gin.H{"reason": err.Error()})
-		return nil, false
-	}
-	h.syncSkills(c.Request.Context(), sess, &snap, handle)
-	return handle, true
-}
-
-// syncSkills 保证 REST 侧拿到的沙箱含 /skills/<name>/（沙箱可能被重建过，
-// 例如服务重启后句柄丢失再按需新建；turn 内路径由 tools.Context 自行上传）。
-func (h *Handler) syncSkills(ctx context.Context, sess *session.Detail, snap *agent.Snapshot, handle *sandbox.Handle) {
-	if len(snap.Skills) == 0 || h.dataDir == "" {
-		return
-	}
-	h.skillsMu.Lock()
-	synced := h.skillsSynced[sess.ID] == handle.SandboxID
-	if !synced {
-		h.skillsSynced[sess.ID] = handle.SandboxID
-	}
-	h.skillsMu.Unlock()
-	if synced {
-		return
-	}
-	tools.UploadSkills(ctx, handle, h.dataDir, sess.OrgID, snap.Skills, func(skillName string, err error) {
-		log.Printf("runtime: skill %s upload to sandbox %s (session %s): %v", skillName, handle.SandboxID, sess.ID, err)
-	})
-}
-
-// SandboxFiles GET /sessions/:id/sandbox/files?path=。
-func (h *Handler) SandboxFiles(c *gin.Context) {
-	sess, err := h.sessions.Get(c.Request.Context(), auth.UID(c), c.Param("id"))
-	if err != nil {
-		fail(c, err)
-		return
-	}
-	if sess.ComputerID != nil {
-		h.Files(c)
-		return
-	}
-	handle, ok := h.sandboxHandle(c, sess)
-	if !ok {
-		return
-	}
-	dir := c.DefaultQuery("path", "/workspace")
-	infos, err := handle.ListDir(c.Request.Context(), dir)
-	if err != nil {
-		respond.Error(c, http.StatusBadGateway, "sandbox/upstream", "列出目录失败", gin.H{"reason": err.Error()})
-		return
-	}
-	items := make([]gin.H, 0, len(infos))
-	for _, fi := range infos {
-		typ := "file"
-		if fi.Type == "directory" {
-			typ = "dir"
-		}
-		items = append(items, gin.H{
-			"name": path.Base(fi.Path), "path": fi.Path, "type": typ,
-			"size": fi.Size, "modified_at": fi.ModifiedAt.UTC().Format(time.RFC3339),
-		})
-	}
-	c.JSON(http.StatusOK, gin.H{"items": items})
-}
-
-// SandboxFile GET /sessions/:id/sandbox/file?path=&max_bytes=。
-func (h *Handler) SandboxFile(c *gin.Context) {
-	sess, err := h.sessions.Get(c.Request.Context(), auth.UID(c), c.Param("id"))
-	if err != nil {
-		fail(c, err)
-		return
-	}
-	if sess.ComputerID != nil {
-		h.File(c)
-		return
-	}
-	filePath := strings.TrimSpace(c.Query("path"))
-	if filePath == "" {
-		respond.Error(c, http.StatusBadRequest, respond.CodeInvalid, "path 必填", nil)
-		return
-	}
-	maxBytes := 256 * 1024
-	if s := c.Query("max_bytes"); s != "" {
-		n, err := strconv.Atoi(s)
-		if err != nil || n < 1 || n > 4*1024*1024 {
-			respond.Error(c, http.StatusBadRequest, respond.CodeInvalid, "max_bytes 必须是 1..4194304 的整数", gin.H{"max_bytes": s})
-			return
-		}
-		maxBytes = n
-	}
-	handle, ok := h.sandboxHandle(c, sess)
-	if !ok {
-		return
-	}
-	data, err := handle.DownloadFile(c.Request.Context(), filePath)
-	if err != nil {
-		respond.Error(c, http.StatusBadGateway, "sandbox/upstream", "下载文件失败", gin.H{"reason": err.Error()})
-		return
-	}
-	truncated := len(data) > maxBytes
-	if truncated {
-		data = data[:maxBytes]
-	}
-	if !utf8.Valid(data) {
-		c.Data(http.StatusOK, "application/octet-stream", data)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"path": filePath, "content": string(data), "truncated": truncated})
-}
-
-// DeleteSession DELETE /sessions/:id：先 Cancel，软删后异步回收沙箱（接线点）。
+// DeleteSession DELETE /sessions/:id：先 Cancel，再软删会话；云电脑独立管理。
 func (h *Handler) DeleteSession(c *gin.Context) {
 	ctx := c.Request.Context()
 	uid := auth.UID(c)
@@ -495,18 +360,12 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	h.skillsMu.Lock()
-	delete(h.skillsSynced, sess.ID)
-	h.skillsMu.Unlock()
 	if err := h.sessions.Delete(ctx, uid, sess.ID); err != nil {
 		fail(c, err)
 		return
 	}
 	if h.bus != nil {
 		go PublishControlProjection(h.repo, h.bus, sess.ID)
-	}
-	if h.sandbox != nil && sess.ComputerID == nil {
-		go func() { _ = h.sandbox.Recycle(sess.ID, "session deleted") }()
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

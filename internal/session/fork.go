@@ -78,7 +78,6 @@ func planFork(src *store.Session, events []store.SessionEvent, atSeq int64, newI
 		ApprovalMode:  src.ApprovalMode,
 		ModelID:       src.ModelID,
 		ModelParams:   src.ModelParams,
-		Sandbox:       defaultSandbox,
 		LastSeq:       atSeq,
 		Running:       false,
 		UsageTotal:    usageTotalFromEvents(copied),
@@ -96,9 +95,7 @@ func planFork(src *store.Session, events []store.SessionEvent, atSeq int64, newI
 			forked.TitlePinned = true
 		}
 	}
-	if src.ComputerID != nil {
-		forked.Workspace = newWorkspace()
-	}
+	forked.Workspace = newWorkspace()
 	return forked, copied, nil
 }
 

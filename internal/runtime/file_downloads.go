@@ -116,12 +116,8 @@ func (h *Handler) CreateDownload(c *gin.Context) {
 		fail(c, err)
 		return
 	}
-	if err = workspaceAvailable(sess.Workspace); err != nil {
-		fail(c, err)
-		return
-	}
 	if sess.ComputerID == nil {
-		respond.Error(c, 409, "workspace/migration_required", "此会话仍使用旧工作区，请先迁移", nil)
+		respond.Error(c, 409, "computer/required", "会话必须绑定云电脑", nil)
 		return
 	}
 	name := path.Base(relative)

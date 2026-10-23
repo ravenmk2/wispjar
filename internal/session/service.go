@@ -32,8 +32,6 @@ const (
 
 const codeSessionNotFound = "session/not_found"
 
-var defaultSandbox = json.RawMessage(`{"id":"","status":"none"}`)
-
 type Error struct {
 	Status  int
 	Code    string
@@ -52,11 +50,10 @@ func errNotFound(msg string) *Error {
 }
 
 type Service struct {
-	db               *gorm.DB
-	agent            *agent.Service
-	store            *Store
-	computers        ComputerBindings
-	computerRequired bool
+	db        *gorm.DB
+	agent     *agent.Service
+	store     *Store
+	computers ComputerBindings
 
 	// AfterEvents 在 PATCH 或 fork 事务提交后调用（WS 广播挂钩；生产接线，测试可为 nil）。
 	// fork 只刷新 control 投影，events 为 nil，避免重新广播复制的历史事件。
@@ -158,7 +155,6 @@ func (s *Service) Create(ctx context.Context, actorID, orgID string, in CreateIn
 		ApprovalMode:  ApprovalAuto,
 		ModelID:       modelID,
 		ModelParams:   modelParams,
-		Sandbox:       defaultSandbox,
 		UsageTotal:    zeroUsage(),
 		Status:        StatusActive,
 		LastActiveAt:  time.Now(),

@@ -2,7 +2,7 @@
 
 > 状态：2026-10-20 已批准设计，分阶段实现；交付状态见 §12。
 > 本文是 `internal/computer`、`internal/volume` 及其与 sandbox/runtime/session/skill 的集成契约。
-> 涉及云电脑资源归属、目录、技能同步的规则以本文为准；旧会话沙箱只作为迁移兼容路径。
+> 涉及云电脑资源归属、目录、技能同步的规则以本文为准；所有会话统一绑定用户云电脑，不再提供旧会话独占沙箱。
 > 相关文档：[系统总览](../system-design.md)、[数据模型](data-model.md)、[API](api.md)、[运行时](runtime.md)、[实时协议](protocol.md)、[前端](frontend.md)。
 
 ## 1. 目标与不变量
@@ -110,8 +110,8 @@ Docker 模式使用 execd 自身的 `EXECD_ACCESS_TOKEN` / `X-EXECD-ACCESS-TOKEN
 
 - `session` 增加 nullable `computer_id`、`workspace` JSON、computer_id 索引。workspace 有 state/layout_version/retention_until；路径由 ID 计算。
 - `skill` 增加 revision（从 1 开始）、content_hash（内容清单摘要）；保持 skill.id 和 name 稳定。
-- `agent.sandbox_config` 过渡期保留，作为新建电脑/迁移的环境模板，不覆盖已有电脑环境。
-- `session.sandbox` 只用于旧数据兼容，computer 表是新实例状态权威来源。
+- `agent.sandbox_config` 的 image/resources 是新建电脑模板，env 每轮读取并用于命令环境，不覆盖已有电脑配置。
+- `session.computer_id` 不可为空；computer 表是实例状态权威来源，session 不保存沙箱状态。
 - `manifest` 保存实际使用的 Agent/skill 修订与摘要、电脑 generation，用于审计，不创建历史安装版本。
 - 同一会话至多一个活动主任务，必须通过事务/条件写入保证，不能只靠进程 map。
 - 资源创建遵循 DB 意图→外部 Ensure→DB ready 的幂等状态机，不在 SQL 事务内持有长时间网络调用。重启恢复未完成操作。
@@ -129,9 +129,7 @@ Docker 模式使用 execd 自身的 `EXECD_ACCESS_TOKEN` / `X-EXECD-ACCESS-TOKEN
 
 暂停：无活动 run、无后台执行/维护使用权、超过 idle TTL。SDK 租约与数据保留期分开。删除会话只取消其任务；删除电脑遇绑定/运行返回 conflict，要求先迁移。实例丢失可恢复电脑，但中断中的命令不得自动重放（可能产生重复副作用）。
 
-服务重启按 installation/computer_id/generation 标签接管，禁止用“session 已删除”推断共享电脑可以删除。旧会话标签单独走兼容迁移策略。新电脑 metadata 的 `wispjar` marker 使用独立代际/installation 值，不复用旧管理器扫描的 `wispjar=1`，避免新旧应用并存或测试实例共用 OpenSandbox 时被旧 reaper 当成孤儿删除。
-
-实际 marker 为 `computer-<installation>`（满足后端标签字符约束）。`opensandbox.legacy_sessions_enabled` 默认为 true 保留旧部署兼容；新独立部署共用已有 OpenSandbox 时必须设为 false，完全关闭旧 session 管理器的创建与扫描。仅更换电脑 marker 不能阻止旧管理器扫描其他部署的旧 session 实例。
+服务重启按 installation/computer_id/generation 标签接管，禁止用“session 已删除”推断共享电脑可以删除。实例 metadata 的 `wispjar` marker 固定为 `computer-<installation>`，并校验组织、用户、存储后端和代次。不创建或扫描旧 `wispjar=1` 会话实例。
 
 运行记录租约失效后先核查命令，再回收使用权；不能把数据库心跳失效当作远端进程已死。无法确认时保持阻塞并暴露待处理状态。
 
@@ -197,7 +195,7 @@ T3 实现约定：
 
 新增电脑/重建等耗时操作返回 202 `{operation_id,status,resource_id}`；创建与重建接受 Idempotency-Key。操作轮询只读，不隐式启动实例。
 
-创建会话增加 computer_id；PATCH 仅空闲时可换电脑；会话详情增加 computer 摘要/workspace。旧 sandbox/file(s) 端点过渡期代理新服务。
+创建会话增加 computer_id；PATCH 仅空闲时可换电脑；会话详情增加 computer 摘要/workspace。文件服务只提供带 scope 和相对 path 的 `/files`、`/file` 端点。
 
 文件端点默认限制在对应资源根，校验绝对/相对路径、`..`、符号链接及实际打开对象；不能把字符串前缀检查当成完整保护。通用文件上传与现有图片 attachment 准入分开。
 
@@ -228,37 +226,15 @@ control 流在现有会话 baseline/upsert/remove 外增加 computers 基线与 
 - 技能更新等待/失败提示；显示阻塞原因，不悄悄终止用户任务。
 - 沿用 theme.md tokens、既有布局与组件，不引入独立设计系统。
 
-## 10. 迁移与回滚
+## 10. 旧架构退役与升级
 
-1. 增量 schema，旧 sandbox 数据继续保留。旧会话兼容路径与新电脑路径显式分离。
-2. 只读盘点生成迁移清单（含旧沙箱、镜像、工作区、其他用户文件），提供 dry-run。
-3. 幂等建立三卷；按会话停止新任务并等待活动执行结束。
-4. 导出旧工作区到 `/sessions/<sid>`，预检 inputs/outputs 同名普通文件冲突；保留目录权限、必要元数据、符号链接语义并校验内容。
-5. 第一轮每个旧沙箱生成一个迁移电脑，保留镜像/config，不自动合并。
-6. 新实例挂载并验证后，再提交 session.computer_id。旧数据保留到显式验收清理。
-7. 原实例已经丢失时明确标记不可恢复，不把空目录报告成恢复成功。
-8. 旧历史 `/workspace` 不批量改写；新环境说明给出新路径。不创建电脑级全局兼容软链接。
-9. fork 默认沿用消息历史复制且新工作区为空；复制当前文件若后续提供，必须明确不是 at_seq 时刻快照。
-10. schema down 不删除后端卷；新工作区产生写入后，回滚需要独立数据方案，不能只回滚 SQL。
+所有会话均绑定云电脑。旧会话管理器、后台扫描、独占工作区 `/workspace`、统一 `/skills`、旧文件 API、SandboxPanel 和工作区迁移工具均已移除。
 
-迁移实现与线上执行分开；本次代码交付不自动操作任何实际部署或旧实例。
+`000008_remove_session_sandboxes` 在停服升级时清理未绑定电脑、仍保存旧实例 ID 或含 `session/sandbox` 事件的旧会话，连同事件、检查点和运行/技能租约；清理 `workspace/migrate` 操作及其维护占用，删除 `session.sandbox` 并将 computer_id 改为 NOT NULL。整段旧会话历史一起删除，避免部分删除事件造成序列缺口。云电脑、三类卷、账号、智能体、技能和正常电脑会话保留。共享的内容寻址附件不按会话删除。
 
-实现位于 `internal/workspacemigration`，`cmd/wispjar-migrate` 只解析参数和组装依赖。工具要求显式会话 ID 批次，不支持隐式全量迁移：
+升级前停止应用和远端执行，按旧实例 metadata、数据库会话归属和实例 ID 核对清单，再删除归属明确的旧实例；应用不再承担旧实例回收。不得仅凭全局 `wispjar=1` 标记批量删除共享后端资源。
 
-```sh
-# 只读盘点；不执行 schema migration、不创建安装身份/卷/电脑、不恢复暂停实例
-go run ./cmd/wispjar-migrate -config config.yaml -sessions <session-id>,<session-id>
-# 已确认旧任务和先前迁移命令均停止后执行
-go run ./cmd/wispjar-migrate -config config.yaml -sessions <session-id> -apply -confirm-stopped
-```
-
-盘点和执行均核对旧实例 ID 以及旧管理器的 `wispjar=1`、会话归属、创建者 metadata。迁移在会话行锁下检查 `running` 与非终态 `computer_run`，写入 `workspace.state=migrating` 后阻止任务启动、文件维护和电脑重新绑定；操作进度保存在 `resource_operation` 的 `workspace/migrate` 操作中。目标电脑持有维护使用权，只有新工作区校验完成、源实例和会话绑定未改变、且会话未删除并无活动执行时才 CAS 提交新绑定。
-
-迁移范围仅为 `/workspace`。清单记录内容摘要、文件类型、rwx mode、mtime、符号链接目标和原 UID/GID，导出前后及目标导入后再次扫描源目录；任一变化返回 `source_changed`，不切换绑定。目标将所有者映射为任务 UID/GID `65532`，保留 rwx mode 和 mtime，去除特殊权限位。仅允许指向旧工作区内部的符号链接，内部绝对链接转换为等价相对链接；越界链接、设备/FIFO 等特殊文件及 inputs/outputs 同名非目录均拒绝。缺少的 inputs/outputs 自动创建。第一版单次上限为 100,000 个条目、1 GiB 文件内容；归档流还受独立大小限制。
-
-归档经本地受限临时文件转移，远端暂存目录只允许 root 使用；目标先在 `/sessions/.wispjar/migrations/<operation-id>/workspace` 校验完整清单，再原子发布到 `/sessions/<sid>`。目标已存在时，仅接受与完整清单一致的内容，不覆盖有差异的目录。`/root`、`/home`、`/tmp`、手工安装的软件和进程环境不随工作区复制，盘点输出明确列出该限制；新电脑保留旧镜像和会话环境配置，但系统当前网络策略继续生效。
-
-失败状态保留会话迁移门禁和持久操作，旧实例与源文件始终保留。未知远端结果不能凭超时自动重试；核实命令停止后，以相同参数和 `-confirm-stopped` 重试，工具重读操作、验证已发布目标并继续提交。同一已完成操作重复执行返回原结果。若源已变化或目标已产生其他写入，工具保持阻塞，须另行核对数据后制定恢复方案，不提供覆盖目标或自动回滚删除。迁移临时归档与目标暂存不会作为会话输入输出暴露，残留暂存由维护流程核验后处理。
+此升级不保留旧会话数据，不提供工作区迁移或数据恢复。down 仅恢复列结构，不能恢复已删除数据；新 schema 与旧应用不兼容，回退镜像前必须评估 schema。
 
 ## 11. 验收矩阵
 
@@ -270,7 +246,7 @@ go run ./cmd/wispjar-migrate -config config.yaml -sessions <session-id> -apply -
 - 技能更新等待活跃任务，新增与删除文件均同步，失败不开放混合版本，跨电脑协调。
 - 服务重启恢复操作和电脑 generation；过期租约需核查实际命令。
 - 文件上传/下载/保存、路径与符号链接边界、历史附件稳定。
-- 迁移 dry-run 无写入，重复执行幂等，校验失败不切换，旧数据不提前删除。
+- 全新安装与版本 7→8 升级通过；旧会话及关联数据清空，正常电脑会话/事件和卷内容保持。
 - Go 单测与 race（环境支持时）、前端类型/构建与现有测试；真实 MySQL/Docker/OpenSandbox 集成验收独立记录，不用 mock 通过代替。
 
 ## 12. 实施任务与责任
@@ -285,7 +261,7 @@ go run ./cmd/wispjar-migrate -config config.yaml -sessions <session-id> -apply -
 | T3 | 技能包更新、单版本同步与运行使用权 | T1,T2 接口 | 已实现并接入运行时；真实 MySQL、Linux Python 安装、未知执行恢复和迟到取权回归通过 |
 | T4 | 会话绑定/文件服务、运行上下文、并行 subagent 与取消 | T2,T3 | 已实现；单测/race、真实会话门禁及进程回收、文件路径边界回归通过 |
 | T5 | 前端电脑管理/选择/文件面板、WS 契约接入 | T4 | 已实现；49 项前端测试、类型检查及构建通过，电脑/文件交互已用浏览器验证 |
-| T6 | 旧数据盘点/迁移工具与恢复、跨模块集成验收 | T1–T5 | 迁移工具已实现；真实 MySQL 与隔离 Python 文件迁移通过，完整旧实例适配器验收仍待执行 |
+| T6 | 旧架构退役及旧数据清理、跨模块集成验收 | T1–T5 | 旧运行路径和迁移工具已移除；升级由 000008 完成 |
 
 每个任务提交真实修改范围、测试命令与结果、遗留限制，由根 Agent 审查后才标记验收通过。文档不得把未完成的能力写成已交付。
 
@@ -298,4 +274,3 @@ go run ./cmd/wispjar-migrate -config config.yaml -sessions <session-id> -apply -
 - 执行鉴权：Docker/OpenSandbox 真实实例验证 execd 独立令牌、匿名命令拒绝、两电脑三卷共享、暂停恢复及重建后持久数据保留。
 - 集成回归：确定性模型驱动的 HTTP 测试验证同机多会话并行、并行子任务、取消互不影响及技能版本切换；电脑管理、文件预览、保存到存储已通过浏览器验证。远程候选镜像、完整回归结果、截图与已知限制单独保存在忽略的操作记录中，不将环境地址或凭据写入设计文档。
 - T3 电脑恢复：`TestRecoverComputerProvenanceIntegration` 与 `TestRecoverComputerInFlightAcquireIntegration` 在真实 MySQL 通过，覆盖未知同步归属、历史无归属计划保守阻塞、跨电脑/代次/fence 隔离，以及安装在途时旧运行终结后不重建租约。
-- T6：`TestMigrationPythonSafetyIntegration`、`TestMigrationMySQLIntegration`、`TestMigrationSourceMutationBlocksBindingIntegration` 在隔离 Linux Python 3.12 与 MySQL 8 通过，覆盖权限/链接/摘要、默认目录冲突、只读盘点无写入、丢失导入响应后的重试和源变更拒绝绑定。集成入口为 `WISPJAR_MIGRATION_FS_TEST=1`、`WISPJAR_MIGRATION_TEST_DSN`；仅允许专用已迁移测试库。测试使用真实文件系统和 SQL，但旧实例 metadata 与目标电脑供应为测试适配器，不能替代真实 OpenSandbox 旧实例迁移验收。

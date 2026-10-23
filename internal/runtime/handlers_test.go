@@ -64,7 +64,7 @@ func newPromptTestEnv(t *testing.T) *promptTestEnv {
 		AgentSnapshot: snapRaw, ModelID: "model-1", Status: session.StatusActive,
 	}}}
 	repo := &fakeRepo{sess: &sessions.detail.Session, es: env.es}
-	env.handler = NewHandler(fakePromptOrchestrator{}, sessions, env.es, repo, nil, NewBus(),
+	env.handler = NewHandler(fakePromptOrchestrator{}, sessions, env.es, repo, NewBus(),
 		func(context.Context, string) (string, string, bool, error) {
 			return "fake-v1", "prov-1", env.vision, nil
 		}, "", env.resolver)

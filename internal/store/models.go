@@ -133,7 +133,7 @@ type AgentSubagent struct {
 func (AgentSubagent) TableName() string { return "agent_subagent" }
 
 type Session struct {
-	ComputerID    *string         `gorm:"column:computer_id;size:32" json:"computer_id"`
+	ComputerID    *string         `gorm:"column:computer_id;size:32;not null" json:"computer_id"`
 	Workspace     json.RawMessage `gorm:"column:workspace;type:json" json:"workspace"`
 	ID            string          `gorm:"column:id;primaryKey;size:32" json:"id"`
 	OrgID         string          `gorm:"column:org_id;size:32" json:"org_id"`
@@ -145,7 +145,6 @@ type Session struct {
 	ApprovalMode  string          `gorm:"column:approval_mode;size:16" json:"approval_mode"`
 	ModelID       string          `gorm:"column:model_id;size:32" json:"model_id"`
 	ModelParams   json.RawMessage `gorm:"column:model_params;type:json" json:"model_params"`
-	Sandbox       json.RawMessage `gorm:"column:sandbox;type:json" json:"sandbox"`
 	LastSeq       int64           `gorm:"column:last_seq" json:"last_seq"`
 	Running       bool            `gorm:"column:running" json:"running"`
 	UsageTotal    json.RawMessage `gorm:"column:usage_total;type:json" json:"usage_total"`

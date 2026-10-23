@@ -92,9 +92,9 @@ func newReadMediaEnv(t *testing.T, vision bool, files map[string][]byte,
 	}
 	sess := &store.Session{
 		ID: "sess-1", OrgID: "org-1", UserID: "user-1", AgentID: "agent-1",
-		AgentSnapshot: snapRaw, ApprovalMode: session.ApprovalAuto,
+		AgentSnapshot: snapRaw,
+		ComputerID:    ptrComputerID("computer-test"), ApprovalMode: session.ApprovalAuto,
 		ModelID: "model-1", Status: session.StatusActive,
-		Sandbox: json.RawMessage(`{"id":"","status":"none"}`),
 	}
 	es := &fakeEventStore{}
 	repo := &fakeRepo{sess: sess, es: es}
@@ -118,7 +118,7 @@ func newReadMediaEnv(t *testing.T, vision bool, files map[string][]byte,
 		ToolImages:  func(_ context.Context, _ string) bool { return vision },
 		ToolContextFactory: func(sess *store.Session, snap *agent.Snapshot) *tools.Context {
 			tc := tools.NewContext(sess.ID, sess.OrgID)
-			tc.Sandbox = fakeSandboxProvider{h: handle}
+			tc.BoundHandle, tc.BoundSandboxID = handle, "fake-sandbox"
 			tc.Images = saver
 			return tc
 		},

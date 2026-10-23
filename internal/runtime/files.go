@@ -82,10 +82,7 @@ func (h *Handler) openFileAccess(ctx context.Context, uid, sessionID, scope stri
 		return nil, err
 	}
 	if sess.ComputerID == nil {
-		return nil, &session.Error{Status: 409, Code: "workspace/migration_required", Message: "此会话仍使用旧工作区，请先迁移"}
-	}
-	if err = workspaceAvailable(sess.Workspace); err != nil {
-		return nil, err
+		return nil, &session.Error{Status: 409, Code: "computer/required", Message: "会话必须绑定云电脑"}
 	}
 	if h.computers == nil {
 		return nil, &session.Error{Status: 503, Code: "computer/unavailable", Message: "云电脑服务不可用"}

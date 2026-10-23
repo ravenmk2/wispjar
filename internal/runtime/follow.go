@@ -30,7 +30,6 @@ type SnapshotHeader struct {
 	AgentAvatar         string        `json:"agentAvatar"`
 	ModelID             string        `json:"modelId"`
 	ApprovalMode        string        `json:"approvalMode"`
-	SandboxStatus       string        `json:"sandboxStatus"`
 	Running             bool          `json:"running"`
 	LastSeq             int64         `json:"lastSeq"`
 	UsageTotal          session.Usage `json:"usageTotal"`
@@ -79,10 +78,6 @@ func (o *orchestrator) Follow(sessionID string, afterSeq int64) (*Snapshot, <-ch
 
 	var snap agentSnapLite
 	_ = json.Unmarshal(sess.AgentSnapshot, &snap)
-	var sb struct {
-		Status string `json:"status"`
-	}
-	_ = json.Unmarshal(sess.Sandbox, &sb)
 	usage := session.Usage{}
 	_ = json.Unmarshal(sess.UsageTotal, &usage)
 
@@ -97,7 +92,6 @@ func (o *orchestrator) Follow(sessionID string, afterSeq int64) (*Snapshot, <-ch
 			AgentAvatar:         snap.Avatar,
 			ModelID:             sess.ModelID,
 			ApprovalMode:        sess.ApprovalMode,
-			SandboxStatus:       sb.Status,
 			Running:             sess.Running,
 			LastSeq:             sess.LastSeq,
 			UsageTotal:          usage,

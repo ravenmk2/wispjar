@@ -25,7 +25,6 @@ type SessionRepo interface {
 	SessionByID(ctx context.Context, sessionID string) (*store.Session, error)
 	TurnCount(ctx context.Context, sessionID string) (int, error)
 	SetTitleIfUnpinned(ctx context.Context, sessionID, title string) (bool, error)
-	SetSandboxStatus(ctx context.Context, sessionID, sandboxID, status string) error
 	ApprovalDecision(ctx context.Context, sessionID, callID string) (decided bool, auto bool, err error)
 	QuestionAsked(ctx context.Context, sessionID, callID string) (*session.QuestionAskedData, error)
 	QuestionAnswered(ctx context.Context, sessionID, callID string) (bool, error)
@@ -62,13 +61,6 @@ func (r *gormRepo) SetTitleIfUnpinned(ctx context.Context, sessionID, title stri
 		Where("id = ? AND title_pinned = 0", sessionID).
 		Update("title", title)
 	return res.RowsAffected > 0, res.Error
-}
-
-func (r *gormRepo) SetSandboxStatus(ctx context.Context, sessionID, sandboxID, status string) error {
-	raw, _ := json.Marshal(map[string]string{"id": sandboxID, "status": status})
-	return r.db.WithContext(ctx).Model(&store.Session{}).
-		Where("id = ?", sessionID).
-		Update("sandbox", raw).Error
 }
 
 func (r *gormRepo) ApprovalDecision(ctx context.Context, sessionID, callID string) (bool, bool, error) {

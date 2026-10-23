@@ -51,19 +51,3 @@ func TestVolumeConfigDefaultsAndValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
-func TestLegacySessionsExplicitlyDisabled(t *testing.T) {
-	t.Setenv("WISPJAR_MASTER_KEY", "")
-	path := filepath.Join(t.TempDir(), "config.yaml")
-	cfg, err := Load(path)
-	if err != nil || !cfg.OpenSandbox.LegacySessionsEnabled {
-		t.Fatalf("legacy compatibility default: %v %+v", err, cfg)
-	}
-	if err = os.WriteFile(path, []byte("opensandbox:\n  legacy_sessions_enabled: false\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err = Load(path)
-	if err != nil || cfg.OpenSandbox.LegacySessionsEnabled {
-		t.Fatalf("explicit false ignored: %v %+v", err, cfg)
-	}
-}

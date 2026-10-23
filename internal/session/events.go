@@ -13,7 +13,6 @@ const (
 	EventToolCall            = "tool/call"
 	EventToolResult          = "tool/result"
 	EventSessionTitle        = "session/title"
-	EventSessionSandbox      = "session/sandbox"
 	EventSessionApprovalMode = "session/approval-mode"
 	EventSessionEffort       = "session/effort"
 	EventModelSelection      = "model/selection"
@@ -151,13 +150,6 @@ type ToolResultData struct {
 type SessionTitleData struct {
 	Title string `json:"title"`
 	Auto  bool   `json:"auto"`
-}
-
-type SessionSandboxData struct {
-	Action    string `json:"action"`
-	SandboxID string `json:"sandbox_id"`
-	Image     string `json:"image"`
-	Error     string `json:"error,omitempty"`
 }
 
 type ApprovalModeData struct {

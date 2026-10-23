@@ -175,7 +175,6 @@ var (
 	ErrSessionRunning     = &Error{Status: http.StatusConflict, Code: "session/running", Message: "会话有进行中的 turn"}
 	ErrApprovalNotPending = &Error{Status: http.StatusConflict, Code: "approval/not_pending", Message: "审批已决定或不存在"}
 	ErrApprovalExpired    = &Error{Status: http.StatusGone, Code: "approval/expired", Message: "审批已超时"}
-	ErrSandboxNotFound    = &Error{Status: http.StatusNotFound, Code: "sandbox/not_found", Message: "会话没有可用云电脑"}
 	// ErrModelNotVision 带图 prompt 命中纯文本模型（用户主动挂图，静默降级会造成"模型假装看不见"）。
 	ErrModelNotVision = &Error{Status: http.StatusUnprocessableEntity, Code: "model/not_vision",
 		Message: "当前模型不支持图片输入，请切换到支持视觉的模型后重试"}

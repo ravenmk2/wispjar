@@ -2,8 +2,6 @@ package tools
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -134,41 +132,4 @@ func lcsOps(a, b []string) []diffOp {
 		ops = append(ops, diffOp{'+', b[j]})
 	}
 	return ops
-}
-
-func skillDir(dataDir, orgID, skillID string) (string, error) {
-	if dataDir == "" {
-		return "", fmt.Errorf("skill storage not configured")
-	}
-	return filepath.Join(dataDir, "skills", orgID, skillID), nil
-}
-
-func readSkillMD(dir string) (string, bool, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
-	if err != nil {
-		return "", false, err
-	}
-	if len(data) > skillMaxBytes {
-		return string(data[:skillMaxBytes]), true, nil
-	}
-	return string(data), false, nil
-}
-
-func listSkillFiles(dir string) ([]string, error) {
-	files := []string{}
-	err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(dir, p)
-		if err != nil {
-			return err
-		}
-		files = append(files, filepath.ToSlash(rel))
-		return nil
-	})
-	return files, err
 }

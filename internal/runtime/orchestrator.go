@@ -17,7 +17,6 @@ import (
 	"github.com/ravenmk2/wispjar/internal/id"
 	"github.com/ravenmk2/wispjar/internal/provider"
 	"github.com/ravenmk2/wispjar/internal/runtime/tools"
-	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/session"
 	"github.com/ravenmk2/wispjar/internal/store"
 )
@@ -40,15 +39,13 @@ type Deps struct {
 	Events           EventStore
 	Sessions         SessionRepo
 	Models           ModelFactory
-	Sandbox          sandbox.Manager
 	Checkpoints      func(sessionID string) adk.CheckPointStore
 	Bus              *Bus
-	DataDir          string
 	ContextSize      func(ctx context.Context, modelID string) int
 	// ProviderType 按 model_id 查供应商类型（ark 注入 prompt_cache_key 用；测试可为 nil，
 	// 为 nil 时回退快照中的 provider_type）。
 	ProviderType func(ctx context.Context, modelID string) string
-	// ToolContextFactory 覆盖工具上下文装配（测试注入用；生产为 nil）。
+	// ToolContextFactory 注入完整电脑执行上下文并跳过远端准备（仅测试；生产为 nil）。
 	ToolContextFactory func(sess *store.Session, snap *agent.Snapshot) *tools.Context
 	// Attachments 附件字节读取（图片组装用；历史含附件时必配）。
 	Attachments AttachmentReader
