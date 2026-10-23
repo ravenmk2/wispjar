@@ -291,7 +291,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
       clearOptimistic()
       if (draftAgent && e instanceof ApiError && e.code === "computer/required") {
         toast.error(`请先为「${draftAgent.name}」绑定云电脑`, {
-          action: { label: "前往设置", onClick: () => navigate("/computers#agent-bindings") },
+          action: { label: "前往设置", onClick: () => navigate("/personal/agents") },
         })
       } else toast.error(errorMessage(e))
     } finally {

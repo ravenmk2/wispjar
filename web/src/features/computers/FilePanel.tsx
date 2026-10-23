@@ -5,7 +5,7 @@ const WIDTH_KEY = "wispjar-sandbox-panel-w"
 const DEFAULT_WIDTH = 420
 
 // Both current workspaces and legacy sandboxes share the same panel preference.
-export function FilePanel({ children }: { children: ReactNode }) {
+export function FilePanel({ children, embedded = false }: { children: ReactNode; embedded?: boolean }) {
   const panel = useRef<HTMLElement>(null)
   const [available, setAvailable] = useState(window.innerWidth)
   const [width, setWidth] = useState(() => {
@@ -26,7 +26,9 @@ export function FilePanel({ children }: { children: ReactNode }) {
     observer.observe(parent)
     setAvailable(parent.clientWidth)
     return () => observer.disconnect()
-  }, [])
+  }, [embedded])
+
+  if (embedded) return <section aria-label="存储文件" className="flex h-[calc(100dvh-260px)] min-h-[360px] flex-col overflow-hidden rounded-xl border bg-background">{children}</section>
 
   function save(value: number) {
     const next = clamp(value)

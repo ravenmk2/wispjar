@@ -9,6 +9,8 @@ interface OptimisticMessage {
 
 interface ComposerState {
   draft: string
+  contextKey: string
+  drafts: Record<string, string>
   approvalMode: ApprovalMode
   sending: boolean
   optimistic: OptimisticMessage | null
@@ -18,10 +20,13 @@ interface ComposerState {
   setOptimistic: (optimistic: OptimisticMessage) => void
   clearOptimistic: () => void
   reset: () => void
+  enterContext: (key: string) => void
 }
 
 export const useComposerStore = create<ComposerState>()((set) => ({
   draft: "",
+  contextKey: "",
+  drafts: {},
   approvalMode: "auto",
   sending: false,
   optimistic: null,
@@ -30,5 +35,11 @@ export const useComposerStore = create<ComposerState>()((set) => ({
   setSending: (sending) => set({ sending }),
   setOptimistic: (optimistic) => set({ optimistic }),
   clearOptimistic: () => set({ optimistic: null }),
-  reset: () => set({ draft: "", approvalMode: "auto", sending: false, optimistic: null }),
+  enterContext: (contextKey) => set((state) => {
+    if (state.contextKey === contextKey) return {}
+    const drafts = { ...state.drafts }
+    if (state.contextKey) drafts[state.contextKey] = state.draft
+    return { contextKey, drafts, draft: drafts[contextKey] ?? "", approvalMode: "auto", sending: false, optimistic: null }
+  }),
+  reset: () => set({ draft: "", contextKey: "", drafts: {}, approvalMode: "auto", sending: false, optimistic: null }),
 }))

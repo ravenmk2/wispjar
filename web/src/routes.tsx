@@ -1,5 +1,5 @@
 import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router"
-import { AdminLayout, PlatformLayout } from "@/layouts/AdminLayout"
+import { AdminLayout, PersonalLayout, PlatformLayout } from "@/layouts/AdminLayout"
 import WorkspaceLayout from "@/layouts/WorkspaceLayout"
 import ChangePasswordPage from "@/pages/ChangePassword"
 import LoginPage from "@/pages/Login"
@@ -7,6 +7,10 @@ import WorkspaceHome from "@/pages/WorkspaceHome"
 import ChatView from "@/features/chat/ChatView"
 import DraftChatView from "@/features/chat/DraftChatView"
 import ComputersPage from "@/features/computers/ComputersPage"
+import PersonalAgentsPage from "@/features/personal/AgentsPage"
+import StoragePage from "@/features/personal/StoragePage"
+import AccountPage from "@/features/personal/AccountPage"
+import AppearancePage from "@/features/personal/AppearancePage"
 import MembersPage from "@/features/admin/MembersPage"
 import AgentsPage from "@/features/admin/AgentsPage"
 import AgentEditorPage from "@/features/admin/AgentEditor"
@@ -44,6 +48,11 @@ function RequirePlatformAdmin() {
   return <Outlet />
 }
 
+function LegacyComputersRedirect() {
+  const { hash } = useLocation()
+  return <Navigate to={hash === "#agent-bindings" ? "/personal/agents" : "/personal/computers"} replace />
+}
+
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/change-password", element: <ChangePasswordPage /> },
@@ -51,48 +60,58 @@ export const router = createBrowserRouter([
     element: <RequireAuth />,
     children: [
       {
-        path: "/",
         element: <WorkspaceLayout />,
         children: [
-          { index: true, element: <WorkspaceHome /> },
-          { path: "computers", element: <ComputersPage /> },
-          { path: "c/new", element: <DraftChatView /> },
-          { path: "c/:sessionId", element: <ChatView /> },
-        ],
-      },
-      {
-        element: <RequireOrgAdmin />,
-        children: [
+          { path: "/", element: <WorkspaceHome /> },
+          { path: "/computers", element: <LegacyComputersRedirect /> },
+          { path: "/c/new", element: <DraftChatView /> },
+          { path: "/c/:sessionId", element: <ChatView /> },
           {
-            path: "/admin",
-            element: <AdminLayout />,
+            path: "/personal", element: <PersonalLayout />,
             children: [
-              { index: true, element: <Navigate to="/admin/agents" replace /> },
-              { path: "agents", element: <AgentsPage /> },
-              { path: "agents/new", element: <AgentEditorPage /> },
-              { path: "agents/:id", element: <AgentEditorPage /> },
-              { path: "skills", element: <SkillsPage /> },
-              { path: "members", element: <MembersPage /> },
-              { path: "usage", element: <OrgUsagePage /> },
+              { index: true, element: <Navigate to="/personal/computers" replace /> },
+              { path: "computers", element: <ComputersPage /> },
+              { path: "agents", element: <PersonalAgentsPage /> },
+              { path: "storage", element: <StoragePage /> },
+              { path: "account", element: <AccountPage /> },
+              { path: "appearance", element: <AppearancePage /> },
             ],
           },
-        ],
-      },
-      {
-        element: <RequirePlatformAdmin />,
-        children: [
           {
-            path: "/platform",
-            element: <PlatformLayout />,
+            element: <RequireOrgAdmin />,
             children: [
-              { index: true, element: <Navigate to="/platform/orgs" replace /> },
-              { path: "orgs", element: <OrgsPage /> },
-              { path: "users", element: <UsersPage /> },
-              { path: "providers", element: <ProvidersPage /> },
-              { path: "models", element: <ModelsPage /> },
-              { path: "usage", element: <PlatformUsagePage /> },
-              { path: "audit", element: <AuditPage /> },
-              { path: "settings", element: <SettingsPage /> },
+              {
+                path: "/admin",
+                element: <AdminLayout />,
+                children: [
+                  { index: true, element: <Navigate to="/admin/agents" replace /> },
+                  { path: "agents", element: <AgentsPage /> },
+                  { path: "agents/new", element: <AgentEditorPage /> },
+                  { path: "agents/:id", element: <AgentEditorPage /> },
+                  { path: "skills", element: <SkillsPage /> },
+                  { path: "members", element: <MembersPage /> },
+                  { path: "usage", element: <OrgUsagePage /> },
+                ],
+              },
+            ],
+          },
+          {
+            element: <RequirePlatformAdmin />,
+            children: [
+              {
+                path: "/platform",
+                element: <PlatformLayout />,
+                children: [
+                  { index: true, element: <Navigate to="/platform/orgs" replace /> },
+                  { path: "orgs", element: <OrgsPage /> },
+                  { path: "users", element: <UsersPage /> },
+                  { path: "providers", element: <ProvidersPage /> },
+                  { path: "models", element: <ModelsPage /> },
+                  { path: "usage", element: <PlatformUsagePage /> },
+                  { path: "audit", element: <AuditPage /> },
+                  { path: "settings", element: <SettingsPage /> },
+                ],
+              },
             ],
           },
         ],

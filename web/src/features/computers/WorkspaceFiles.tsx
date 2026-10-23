@@ -15,8 +15,8 @@ import { formatBytes } from "@/lib/format"
 import { workspaceRoot } from "@/lib/computers"
 import type { SandboxFileItem } from "@/lib/types"
 
-export function WorkspaceFiles({ sessionId, running, onClose }: { sessionId: string; running: boolean; onClose: () => void }) {
-  const [scope, setScope] = useState<FileScope>("workspace")
+export function WorkspaceFiles({ sessionId, running, onClose, fixedScope, embedded = false }: { sessionId: string; running: boolean; onClose?: () => void; fixedScope?: FileScope; embedded?: boolean }) {
+  const [scope, setScope] = useState<FileScope>(fixedScope ?? "workspace")
   const [path, setPath] = useState(".")
   const [root, setRoot] = useState(workspaceRoot(sessionId))
   const [items, setItems] = useState<SandboxFileItem[]>([])
@@ -66,10 +66,10 @@ export function WorkspaceFiles({ sessionId, running, onClose }: { sessionId: str
   async function save() {
     if (!selected || !destination?.trim()) return
     setSaving(true)
-    try { await sessionsApi.saveToStorage(sessionId, selected.path, destination.trim()); toast.success("已保存到我的存储"); setDestination(null) }
+    try { await sessionsApi.saveToStorage(sessionId, selected.path, destination.trim()); toast.success("已保存到存储"); setDestination(null) }
     catch (e) { toast.error(errorMessage(e)) } finally { setSaving(false) }
   }
-  function scopeLabel(value: FileScope) { return { workspace: "当前会话", storage: "我的存储", agent: "智能体文件" }[value] }
+  function scopeLabel(value: FileScope) { return { workspace: "当前会话", storage: "存储", agent: "智能体文件" }[value] }
   function navigate(next: string) { setSelected(null); setPath(next) }
   function back() { if (selected) setSelected(null); else navigate(path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".") }
   async function downloadDirectory(target: string) {
@@ -86,22 +86,22 @@ export function WorkspaceFiles({ sessionId, running, onClose }: { sessionId: str
       </div>
       {!selected && <Button variant="ghost" size="icon" className="size-7 shrink-0" title="打包下载当前目录（ZIP）" aria-label="打包下载当前目录" onClick={() => void downloadDirectory(path)}><FolderDown className="size-3.5" /></Button>}
     </nav>
-  return <FilePanel>
+  return <FilePanel embedded={embedded}>
     <div className="flex h-12 shrink-0 items-center gap-1 border-b px-3">
       <span className="mr-1 text-sm font-medium">文件</span>
-      <label className="sr-only" htmlFor="file-scope">文件目录</label>
+      {!fixedScope && <><label className="sr-only" htmlFor="file-scope">文件目录</label>
       <select id="file-scope" className="h-7 min-w-0 max-w-36 flex-1 rounded-md border-0 bg-transparent px-1 text-xs text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" value={scope} onChange={(e) => { setScope(e.target.value as FileScope); setPath("."); setSelected(null) }}>
-        <option value="workspace">当前会话</option><option value="storage">我的存储</option><option value="agent">智能体文件</option>
-      </select>
+        <option value="workspace">当前会话</option><option value="storage">存储</option><option value="agent">智能体文件</option>
+      </select></>}
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
         <Button variant="ghost" size="icon" className="size-7" title={uploading ? "正在上传…" : `上传文件到当前目录：${scopeLabel(scope)}${path === "." ? "" : `/${path}`}`} aria-label="上传文件到当前目录" disabled={uploading} onClick={() => uploadRef.current?.click()}><Upload className="size-3.5" /></Button>
         <Button variant="ghost" size="icon" className="size-7" title="刷新文件" aria-label="刷新文件" onClick={() => void refresh()} disabled={loading}><RefreshCw className="size-3.5" /></Button>
-        <Button variant="ghost" size="icon" className="size-7" title="关闭文件面板" aria-label="关闭文件面板" onClick={onClose}><X className="size-3.5" /></Button>
+        {!embedded && <Button variant="ghost" size="icon" className="size-7" title="关闭文件面板" aria-label="关闭文件面板" onClick={onClose}><X className="size-3.5" /></Button>}
       </div>
       <input type="file" ref={uploadRef} className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
     </div>
     {!selected && <div className="flex h-9 shrink-0 items-center border-b px-2">{navigation}</div>}
-    {selected ? <FilePreview navigation={navigation} sessionId={sessionId} item={selected} scope={scope} reloadToken={revision} actions={scope === "workspace" && <Button variant="ghost" size="icon" className="size-7 shrink-0" title="保存到我的存储" aria-label="保存到我的存储" disabled={saving} onClick={() => setDestination(selected.name)}><HardDriveDownload className="size-3.5" /></Button>} /> :
+    {selected ? <FilePreview navigation={navigation} sessionId={sessionId} item={selected} scope={scope} reloadToken={revision} actions={scope === "workspace" && <Button variant="ghost" size="icon" className="size-7 shrink-0" title="保存到存储" aria-label="保存到存储" disabled={saving} onClick={() => setDestination(selected.name)}><HardDriveDownload className="size-3.5" /></Button>} /> :
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
         {error ? <p role="alert" className="p-2 text-sm text-destructive">{error}</p> : loading ? <p role="status" className="p-2 text-sm text-muted-foreground">正在读取文件…</p> : items.length === 0 ? <p className="p-2 text-sm text-muted-foreground">目录为空</p> : items.map((item) => <div key={item.path} className="group flex items-center gap-2 rounded-md px-2 hover:bg-accent">
           <button type="button" className="flex min-w-0 flex-1 items-center gap-2 py-2 text-left text-sm" onClick={() => item.type === "dir" ? navigate(relative(item)) : setSelected({ ...item, path: relative(item) })}>
@@ -110,6 +110,6 @@ export function WorkspaceFiles({ sessionId, running, onClose }: { sessionId: str
           {item.type === "dir" && <Button variant="ghost" size="icon" className="size-7 shrink-0 opacity-40 group-hover:opacity-100 focus-visible:opacity-100" title={`打包下载 ${item.name}`} aria-label={`打包下载 ${item.name}`} onClick={() => void downloadDirectory(relative(item))}><FolderDown className="size-3.5" /></Button>}
         </div>)}
       </div>}
-    <Dialog open={destination !== null} onOpenChange={(open) => !open && !saving && setDestination(null)}><DialogContent><DialogHeader><DialogTitle>保存到我的存储</DialogTitle><DialogDescription>复制并校验成果，保留会话中的原文件。目标路径相对于 /storage。</DialogDescription></DialogHeader><Label htmlFor="save-destination">目标路径</Label><Input id="save-destination" value={destination ?? ""} onChange={(e) => setDestination(e.target.value)} /><Button disabled={saving || !destination?.trim()} onClick={() => void save()}>{saving ? "正在保存…" : "保存"}</Button></DialogContent></Dialog>
+    <Dialog open={destination !== null} onOpenChange={(open) => !open && !saving && setDestination(null)}><DialogContent><DialogHeader><DialogTitle>保存到存储</DialogTitle><DialogDescription>复制并校验成果，保留会话中的原文件。目标路径相对于 /storage。</DialogDescription></DialogHeader><Label htmlFor="save-destination">目标路径</Label><Input id="save-destination" value={destination ?? ""} onChange={(e) => setDestination(e.target.value)} /><Button disabled={saving || !destination?.trim()} onClick={() => void save()}>{saving ? "正在保存…" : "保存"}</Button></DialogContent></Dialog>
   </FilePanel>
 }

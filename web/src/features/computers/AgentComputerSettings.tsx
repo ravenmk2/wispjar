@@ -10,12 +10,13 @@ import { computerStatus, resolveComputerSelection, selectableComputer, type Comp
 import type { AgentSummary } from "@/lib/types"
 import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 
-export function AgentComputerSettings({ agent, onClose }: { agent: AgentSummary; onClose: () => void }) {
+export function AgentComputerSettings({ agent, onClose, onSaved }: { agent: Pick<AgentSummary, "id" | "name">; onClose: () => void; onSaved?: () => void }) {
   const org = useCurrentOrg()
   const [computers, setComputers] = useState<Computer[] | null>(null)
   const [selected, setSelected] = useState("")
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
+  const [binding, setBinding] = useState("")
 
   useEffect(() => {
     if (!org) return
@@ -24,6 +25,7 @@ export function AgentComputerSettings({ agent, onClose }: { agent: AgentSummary;
     Promise.all([computersApi.list(org.id), computersApi.bindings(org.id)]).then(([cs, bs]) => {
       if (!active) return
       setComputers(cs.items.filter(selectableComputer))
+      setBinding(bs.items.find((item) => item.agent_id === agent.id)?.computer_id ?? "")
       setSelected(resolveComputerSelection(cs.items, bs.items, agent.id))
     }).catch((e) => { if (active) setError(errorMessage(e)) })
     return () => { active = false }
@@ -38,13 +40,27 @@ export function AgentComputerSettings({ agent, onClose }: { agent: AgentSummary;
       await computersApi.bind(orgId, agent.id, selected)
       if (useIdentityStore.getState().currentOrgId !== orgId || useIdentityStore.getState().token !== token) return
       toast.success(`已设置「${agent.name}」的云电脑`)
+      onSaved?.()
       onClose()
+    } catch (e) { setError(errorMessage(e)) } finally { setSaving(false) }
+  }
+
+  async function clearBinding() {
+    if (!org || saving) return
+    const orgId = org.id
+    const token = useIdentityStore.getState().token
+    setSaving(true); setError("")
+    try {
+      await computersApi.unbind(orgId, agent.id)
+      if (useIdentityStore.getState().currentOrgId !== orgId || useIdentityStore.getState().token !== token) return
+      toast.success("已清除默认云电脑，已有会话不受影响")
+      onSaved?.(); onClose()
     } catch (e) { setError(errorMessage(e)) } finally { setSaving(false) }
   }
 
   return <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose() }}>
     <DialogContent>
-      <DialogHeader><DialogTitle>{agent.name} · 云电脑设置</DialogTitle><DialogDescription>为你使用这个智能体时绑定一台云电脑，新聊天自动使用。已有聊天继续使用原电脑。</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>{agent.name} · 个人配置</DialogTitle><DialogDescription>配置你使用这个智能体时的默认云电脑，新聊天自动使用。已有聊天继续使用原电脑。</DialogDescription></DialogHeader>
       <div className="space-y-2">
         <Label htmlFor="agent-computer">绑定云电脑</Label>
         <select id="agent-computer" className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={selected} disabled={!computers || saving} onChange={(event) => setSelected(event.target.value)}>
@@ -55,8 +71,8 @@ export function AgentComputerSettings({ agent, onClose }: { agent: AgentSummary;
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       </div>
       <DialogFooter className="gap-2 sm:justify-between">
-        <Button variant="ghost" asChild disabled={saving}><Link to="/computers" onClick={(event) => { if (saving) event.preventDefault(); else onClose() }}>管理云电脑</Link></Button>
-        <Button disabled={!selected || saving || !computers} onClick={() => void save()}>{saving ? "正在保存…" : "保存"}</Button>
+        <Button variant="ghost" asChild disabled={saving}><Link to="/personal/computers" onClick={(event) => { if (saving) event.preventDefault(); else onClose() }}>管理云电脑</Link></Button>
+        <div className="flex gap-2">{binding && <Button variant="outline" disabled={saving || !computers} onClick={() => void clearBinding()}>清除绑定</Button>}<Button disabled={!selected || saving || !computers} onClick={() => void save()}>{saving ? "正在保存…" : "保存"}</Button></div>
       </DialogFooter>
     </DialogContent>
   </Dialog>

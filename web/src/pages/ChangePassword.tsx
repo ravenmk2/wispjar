@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { passwordValid } from "@/lib/format"
 import { useIdentityStore } from "@/stores/identity"
 
-export default function ChangePasswordPage() {
+export default function ChangePasswordPage({ embedded = false }: { embedded?: boolean }) {
   const token = useIdentityStore((s) => s.token)
   const user = useIdentityStore((s) => s.user)
   const setToken = useIdentityStore((s) => s.setToken)
@@ -44,7 +44,8 @@ export default function ChangePasswordPage() {
       const me = await authApi.me()
       setIdentity(me.user, me.orgs)
       toast.success("密码已更新")
-      navigate("/", { replace: true })
+      setOldPassword(""); setNewPassword(""); setConfirm("")
+      if (!embedded) navigate("/", { replace: true })
     } catch (err) {
       setError(errorMessage(err))
     } finally {
@@ -53,8 +54,8 @@ export default function ChangePasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-sm">
+    <div className={embedded ? "" : "flex min-h-screen items-center justify-center bg-muted/40 p-4"}>
+      <Card className={embedded ? "w-full" : "w-full max-w-sm"}>
         <CardHeader>
           <CardTitle className="text-lg">修改密码</CardTitle>
           <CardDescription>

@@ -1,89 +1,21 @@
-import { ArrowLeft, Building2, Check, ChevronsUpDown, CircleUserRound, KeyRound, LogOut, Monitor, Moon, Settings2, ShieldCheck, Sun } from "lucide-react"
+import { Building2, Check, CircleUserRound, LayoutDashboard, LogOut, Monitor, Moon, Settings2, ShieldCheck, Sun } from "lucide-react"
 import { useState } from "react"
-import { Link, NavLink, Outlet, useNavigate } from "react-router"
+import { Outlet, useLocation, useNavigate } from "react-router"
 import { toast } from "sonner"
 import { authApi } from "@/api/auth"
 import { errorMessage } from "@/api/client"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { CloudComputerIcon } from "@/components/CloudComputerIcon"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent,
+  DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Separator } from "@/components/ui/separator"
+import { mainSection, orgSwitchPath, platformOrganization, safeWorkspaceLocation, workspaceLocationKey } from "@/lib/navigation"
 import { setThemeMode, useThemeMode, type ThemeMode } from "@/lib/theme"
 import { cn } from "@/lib/utils"
+import type { UserOrg } from "@/lib/types"
 import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
-
-export function OrgSwitcher({ variant = "header" }: { variant?: "header" | "sidebar" }) {
-  const orgs = useIdentityStore((s) => s.orgs)
-  const setOrg = useIdentityStore((s) => s.setOrg)
-  const setIdentity = useIdentityStore((s) => s.setIdentity)
-  const currentOrg = useCurrentOrg()
-  const [switching, setSwitching] = useState(false)
-
-  async function switchOrg(orgId: string) {
-    if (orgId === currentOrg?.id || switching) return
-    setSwitching(true)
-    setOrg(orgId)
-    try {
-      const me = await authApi.me()
-      setIdentity(me.user, me.orgs)
-    } catch (e) {
-      toast.error(errorMessage(e))
-    } finally {
-      setSwitching(false)
-    }
-  }
-
-  if (!currentOrg) return null
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        {variant === "sidebar" ? (
-          <button
-            type="button"
-            className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm hover:bg-accent"
-          >
-            <Building2 className="size-4 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate text-left font-medium">{currentOrg.name}</span>
-            {currentOrg.is_platform && <Badge variant="secondary">系统</Badge>}
-            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-          </button>
-        ) : (
-          <Button variant="outline" size="sm" className="max-w-56 gap-1.5">
-            <Building2 className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate">{currentOrg.name}</span>
-            {currentOrg.is_platform && <Badge variant="secondary">系统</Badge>}
-            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-          </Button>
-        )}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuLabel>切换组织</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {orgs.map((org) => (
-          <DropdownMenuItem key={org.id} onClick={() => switchOrg(org.id)} className="gap-2">
-            <span className={cn("size-1.5 rounded-full", org.id === currentOrg.id ? "bg-primary" : "bg-transparent")} />
-            <span className="flex-1 truncate">{org.name}</span>
-            {org.is_platform && <Badge variant="secondary">系统</Badge>}
-            {org.role === "admin" && <span className="text-xs text-muted-foreground">管理员</span>}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
 
 const THEME_OPTIONS: Array<{ value: ThemeMode; label: string; icon: typeof Sun }> = [
   { value: "light", label: "浅色", icon: Sun },
@@ -93,245 +25,103 @@ const THEME_OPTIONS: Array<{ value: ThemeMode; label: string; icon: typeof Sun }
 
 function ThemeSubMenu() {
   const mode = useThemeMode()
-  return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger className="gap-2">
-        <Sun className="size-4 dark:hidden" />
-        <Moon className="hidden size-4 dark:block" />
-        外观
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="w-36">
-        {THEME_OPTIONS.map((option) => (
-          <DropdownMenuItem key={option.value} onClick={() => setThemeMode(option.value)} className="gap-2">
-            <option.icon className="size-4" />
-            <span className="flex-1">{option.label}</span>
-            {mode === option.value && <Check className="size-3.5" />}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
-  )
+  return <DropdownMenuSub>
+    <DropdownMenuSubTrigger className="gap-2"><Sun className="size-4 dark:hidden" /><Moon className="hidden size-4 dark:block" />外观</DropdownMenuSubTrigger>
+    <DropdownMenuSubContent className="w-36">{THEME_OPTIONS.map((option) => <DropdownMenuItem key={option.value} onClick={() => setThemeMode(option.value)} className="gap-2">
+      <option.icon className="size-4" /><span className="flex-1">{option.label}</span>{mode === option.value && <Check className="size-3.5" />}
+    </DropdownMenuItem>)}</DropdownMenuSubContent>
+  </DropdownMenuSub>
 }
 
-export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar" | "icon" }) {
+export function UserMenu({ variant = "sidebar" }: { variant?: "sidebar" | "icon" }) {
   const user = useIdentityStore((s) => s.user)
   const orgs = useIdentityStore((s) => s.orgs)
   const setOrg = useIdentityStore((s) => s.setOrg)
-  const setIdentity = useIdentityStore((s) => s.setIdentity)
   const clear = useIdentityStore((s) => s.clear)
   const currentOrg = useCurrentOrg()
   const navigate = useNavigate()
+  const location = useLocation()
+  const section = mainSection(location.pathname)
   const [switching, setSwitching] = useState(false)
-
+  const platformOrg = platformOrganization(orgs)
   if (!user) return null
-  const isAdmin = currentOrg?.role === "admin"
-  const isPlatformAdmin = isAdmin && currentOrg?.is_platform
 
-  async function switchOrg(orgId: string) {
-    if (orgId === currentOrg?.id || switching) return
-    setSwitching(true)
-    setOrg(orgId)
-    try {
-      const me = await authApi.me()
-      setIdentity(me.user, me.orgs)
-    } catch (e) {
-      toast.error(errorMessage(e))
-    } finally {
-      setSwitching(false)
-    }
+  function returnToWorkspace() {
+    const previousOrg = orgs.find((org) => org.id === sessionStorage.getItem(`wispjar-workspace-org:${user!.id}`) && !org.is_platform)
+    const target = currentOrg?.is_platform && previousOrg ? previousOrg : currentOrg
+    if (!target) { navigate("/"); return }
+    if (target.id !== currentOrg?.id) setOrg(target.id)
+    navigate(safeWorkspaceLocation(sessionStorage.getItem(workspaceLocationKey(user!.id, target.id))))
   }
 
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        {variant === "icon" ? (
-          <button
-            type="button"
-            title={user.display_name || user.username}
-            className="flex size-8 items-center justify-center rounded-full hover:bg-accent"
-          >
-            <Avatar className="size-6">
-              <AvatarFallback>
-                <CircleUserRound className="size-4" />
-              </AvatarFallback>
-            </Avatar>
-          </button>
-        ) : variant === "sidebar" ? (
-          <button
-            type="button"
-            className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm hover:bg-accent"
-          >
-            <Avatar className="size-6 shrink-0">
-              <AvatarFallback>
-                <CircleUserRound className="size-4" />
-              </AvatarFallback>
-            </Avatar>
-            <span className="min-w-0 flex-1 truncate text-left">{user.display_name || user.username}</span>
-          </button>
-        ) : (
-          <Button variant="ghost" size="sm" className="gap-2 px-2">
-            <Avatar className="size-6">
-              <AvatarFallback>
-                <CircleUserRound className="size-4" />
-              </AvatarFallback>
-            </Avatar>
-            <span className="max-w-32 truncate">{user.display_name || user.username}</span>
-          </Button>
-        )}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        side={variant === "header" ? "bottom" : "top"}
-        align={variant === "header" ? "end" : "start"}
-        className="w-56"
-      >
-        <DropdownMenuLabel>
-          <div className="flex flex-col">
-            <span>{user.display_name || user.username}</span>
-            <span className="text-xs font-normal text-muted-foreground">@{user.username}</span>
-            {currentOrg && (
-              <span className="mt-1 flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
-                <span className="truncate">{currentOrg.name}</span>
-                {currentOrg.is_platform && <Badge variant="secondary">系统</Badge>}
-              </span>
-            )}
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger className="gap-2">
-            <Building2 className="size-4" />
-            切换组织
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-56">
-            {orgs.map((org) => (
-              <DropdownMenuItem key={org.id} onClick={() => switchOrg(org.id)} className="gap-2">
-                <span className={cn("size-1.5 rounded-full", org.id === currentOrg?.id ? "bg-primary" : "bg-transparent")} />
-                <span className="flex-1 truncate">{org.name}</span>
-                {org.is_platform && <Badge variant="secondary">系统</Badge>}
-                {org.role === "admin" && <span className="text-xs text-muted-foreground">管理员</span>}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuItem onClick={() => navigate("/computers")}>
-          <CloudComputerIcon className="size-4" />
-          云电脑
-        </DropdownMenuItem>
-        {isAdmin && (
-          <DropdownMenuItem onClick={() => navigate("/admin/members")}>
-            <Settings2 className="size-4" />
-            组织管理
-          </DropdownMenuItem>
-        )}
-        {isPlatformAdmin && (
-          <DropdownMenuItem onClick={() => navigate("/platform/orgs")}>
-            <ShieldCheck className="size-4" />
-            系统管理
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
-        <ThemeSubMenu />
-        <DropdownMenuItem onClick={() => navigate("/change-password")}>
-          <KeyRound className="size-4" />
-          修改密码
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={() => {
-            clear()
-            navigate("/login", { replace: true })
-          }}
-        >
-          <LogOut className="size-4" />
-          退出登录
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
+  function openPlatform() {
+    if (!platformOrg) return
+    if (currentOrg && !currentOrg.is_platform) sessionStorage.setItem(`wispjar-workspace-org:${user!.id}`, currentOrg.id)
+    setOrg(platformOrg.id)
+    navigate("/platform/orgs")
+  }
+
+  async function switchOrg(org: UserOrg) {
+    if (org.id === currentOrg?.id || switching) return
+    const token = useIdentityStore.getState().token
+    setSwitching(true)
+    setOrg(org.id)
+    navigate(orgSwitchPath(location.pathname, org), { replace: true })
+    try {
+      const me = await authApi.me()
+      if (useIdentityStore.getState().token === token && useIdentityStore.getState().currentOrgId === org.id) useIdentityStore.getState().setIdentity(me.user, me.orgs)
+    } catch (e) { toast.error(errorMessage(e)) }
+    finally { setSwitching(false) }
+  }
+
+  const entry = (name: string, Icon: typeof Sun, active: boolean, onClick: () => void) => <DropdownMenuItem onClick={onClick} className={cn("gap-2", active && "bg-selected")}>
+    <Icon className="size-4" /><span className="flex-1">{name}</span>{active && <Check className="size-3.5 text-muted-foreground" />}
+  </DropdownMenuItem>
+
+  return <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <button type="button" title="用户菜单" aria-label={`用户菜单 · ${user.display_name || user.username}`} className={variant === "icon" ? "flex size-8 items-center justify-center rounded-full hover:bg-accent" : "flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm hover:bg-accent"}>
+        <Avatar className="size-6 shrink-0"><AvatarFallback><CircleUserRound className="size-4" /></AvatarFallback></Avatar>
+        {variant === "sidebar" && <span className="min-w-0 flex-1 truncate text-left">{user.display_name || user.username}</span>}
+      </button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent side="top" align="start" className="w-60">
+      <DropdownMenuLabel><div className="flex flex-col"><span>{user.display_name || user.username}</span><span className="text-xs font-normal text-muted-foreground">@{user.username}</span>
+        {currentOrg && <span className="mt-1 flex items-center gap-1.5 text-xs font-normal text-muted-foreground"><span className="truncate">{currentOrg.name}</span>{currentOrg.is_platform && <Badge variant="secondary">系统</Badge>}</span>}
+      </div></DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger className="gap-2" disabled={switching}><Building2 className="size-4" />切换组织</DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="w-56">{orgs.map((org) => <DropdownMenuItem key={org.id} onClick={() => void switchOrg(org)} className="gap-2">
+          <span className={cn("size-1.5 rounded-full", org.id === currentOrg?.id ? "bg-primary" : "bg-transparent")} /><span className="flex-1 truncate">{org.name}</span>
+          {org.is_platform && <Badge variant="secondary">系统</Badge>}{org.role === "admin" && <span className="text-xs text-muted-foreground">管理员</span>}
+        </DropdownMenuItem>)}</DropdownMenuSubContent>
+      </DropdownMenuSub>
+      <DropdownMenuSeparator />
+      {entry("工作区", LayoutDashboard, section === "workspace", returnToWorkspace)}
+      {entry("个人中心", CircleUserRound, section === "personal", () => navigate("/personal/computers"))}
+      {currentOrg?.role === "admin" && entry("组织管理", Settings2, section === "organization", () => navigate("/admin/agents"))}
+      {platformOrg && entry("系统管理", ShieldCheck, section === "system", openPlatform)}
+      <DropdownMenuSeparator />
+      <ThemeSubMenu />
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={() => { clear(); navigate("/login", { replace: true }) }}><LogOut className="size-4" />退出登录</DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
 }
 
-export function SecondaryLayout({
-  title,
-  icon,
-  items,
-}: {
-  title: string
-  icon?: React.ReactNode
-  items: Array<{ to: string; label: string }>
-}) {
-  return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
-        <Button variant="ghost" size="sm" asChild className="gap-1.5 px-2">
-          <Link to="/">
-            <ArrowLeft className="size-4" />
-            工作区
-          </Link>
-        </Button>
-        <Separator orientation="vertical" className="h-5" />
-        <div className="flex items-center gap-2 text-sm font-medium">
-          {icon}
-          {title}
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <OrgSwitcher />
-          <UserMenu />
-        </div>
-      </header>
-      <div className="flex flex-1">
-        <nav className="w-44 shrink-0 border-r p-2">
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                cn(
-                  "block rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground",
-                  isActive && "bg-selected font-medium text-foreground",
-                )
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-        <main className="min-w-0 flex-1 p-6">
-          <Outlet />
-        </main>
-      </div>
-    </div>
-  )
+function SecondaryLayout({ title }: { title: string }) {
+  const org = useCurrentOrg()
+  const { pathname } = useLocation()
+  const accountScope = pathname === "/personal/account" || pathname === "/personal/appearance"
+  return <div className="flex h-full min-h-0 flex-col">
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b px-6 text-sm">
+      <span className="font-medium">{title}</span><span className="text-muted-foreground">/</span><span className="truncate text-muted-foreground">{title === "系统管理" ? "平台范围" : accountScope ? "账号设置 · 所有组织通用" : org?.name}</span>
+    </header>
+    <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"><Outlet /></div>
+  </div>
 }
 
-export function AdminLayout() {
-  const currentOrg = useCurrentOrg()
-  return (
-    <SecondaryLayout
-      title={`组织管理 · ${currentOrg?.name ?? ""}`}
-      items={[
-        { to: "/admin/agents", label: "智能体" },
-        { to: "/admin/skills", label: "技能" },
-        { to: "/admin/members", label: "成员" },
-        { to: "/admin/usage", label: "用量" },
-      ]}
-    />
-  )
-}
-
-export function PlatformLayout() {
-  return (
-    <SecondaryLayout
-      title="系统管理"
-      icon={<ShieldCheck className="size-4" />}
-      items={[
-        { to: "/platform/orgs", label: "组织" },
-        { to: "/platform/users", label: "用户" },
-        { to: "/platform/providers", label: "供应商" },
-        { to: "/platform/models", label: "模型" },
-        { to: "/platform/usage", label: "用量" },
-        { to: "/platform/audit", label: "审计" },
-        { to: "/platform/settings", label: "设置" },
-      ]}
-    />
-  )
-}
+export function PersonalLayout() { return <SecondaryLayout title="个人中心" /> }
+export function AdminLayout() { return <SecondaryLayout title="组织管理" /> }
+export function PlatformLayout() { return <SecondaryLayout title="系统管理" /> }

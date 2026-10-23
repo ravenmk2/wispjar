@@ -1,6 +1,6 @@
 import { Plus, RefreshCw } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Link, useLocation } from "react-router"
+import { Link } from "react-router"
 import { toast } from "sonner"
 import { computersApi } from "@/api/computers"
 import { errorMessage } from "@/api/client"
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { useOrgAgents } from "@/features/agents/AgentPicker"
-import { canMutateComputer, computerOperationError, computerStatus, computerTransitioning, selectableComputer, type AgentBinding, type Computer, type ComputerConfig, type ComputerRun, type OperationAccepted, type UserVolume } from "@/lib/computers"
+import { canMutateComputer, computerOperationError, computerStatus, computerTransitioning, type Computer, type ComputerConfig, type ComputerRun, type OperationAccepted, type UserVolume } from "@/lib/computers"
 import { ComputerFailure } from "./ComputerFailure"
 import { EnvEditor } from "@/components/EnvEditor"
 import { envPatch, envRowsError, type EnvRow } from "@/lib/env"
@@ -22,36 +22,28 @@ import { useComputerStore } from "@/stores/computers"
 const selectClass = "h-9 w-full rounded-md border bg-background px-3 text-sm"
 
 export default function ComputersPage() {
-  const { hash } = useLocation()
   const org = useCurrentOrg()
-  const agents = useOrgAgents()
   const computers = useComputerStore((s) => s.items)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState("")
   const [volumes, setVolumes] = useState<UserVolume[]>([])
-  const [bindings, setBindings] = useState<AgentBinding[]>([])
   const [runs, setRuns] = useState<Record<string, ComputerRun[]>>({})
   const [operations, setOperations] = useState<OperationAccepted[]>([])
   const [busy, setBusy] = useState(false)
   const [editor, setEditor] = useState<"create" | Computer | null>(null)
   const [deleting, setDeleting] = useState<Computer | null>(null)
   const [recovering, setRecovering] = useState<Computer | null>(null)
-  const [bindingBusy, setBindingBusy] = useState<string | null>(null)
-  useEffect(() => {
-    if (hash === "#agent-bindings") document.getElementById("agent-bindings")?.scrollIntoView({ block: "start" })
-  }, [hash, loaded])
   const deleteKey = useRef("")
   const recoverKey = useRef("")
-  const bindingAgents = [...(agents ?? []), ...bindings.filter((b) => !agents?.some((a) => a.id === b.agent_id)).map((b) => ({ id: b.agent_id, name: `已下线智能体 ${b.agent_id.slice(0, 8)}` }))]
   const load = useCallback(async () => {
     if (!org) return
     const orgId = org.id
     const token = useIdentityStore.getState().token
     try {
-      const [cs, vs, bs] = await Promise.all([computersApi.list(orgId), computersApi.volumes(orgId), computersApi.bindings(orgId)])
+      const [cs, vs] = await Promise.all([computersApi.list(orgId), computersApi.volumes(orgId)])
       if (useIdentityStore.getState().currentOrgId !== orgId || useIdentityStore.getState().token !== token) return
       useComputerStore.getState().baseline(orgId, cs.items)
-      setVolumes(vs.items); setBindings(bs.items); setError(""); setLoaded(true)
+      setVolumes(vs.items); setError(""); setLoaded(true)
       const entries = await Promise.all(cs.items.map(async (c) => [c.id, (await computersApi.runs(c.id)).items] as const))
       if (useIdentityStore.getState().currentOrgId === orgId && useIdentityStore.getState().token === token) setRuns(Object.fromEntries(entries))
     } catch (e) {
@@ -59,7 +51,7 @@ export default function ComputersPage() {
     }
   }, [org?.id])
   useEffect(() => {
-    setLoaded(false); setOperations([]); setRuns({}); setBindings([]); setVolumes([]); setEditor(null); setDeleting(null); setRecovering(null)
+    setLoaded(false); setOperations([]); setRuns({}); setVolumes([]); setEditor(null); setDeleting(null); setRecovering(null)
     if (org) useComputerStore.getState().reset(org.id)
     void load()
     const timer = setInterval(() => void load(), 5000)
@@ -101,19 +93,13 @@ export default function ComputersPage() {
       setDeleting(null)
     } catch (e) { toast.error(errorMessage(e)) } finally { setBusy(false) }
   }
-  async function bind(agent: string, computer: string) {
-    if (!org) return
-    setBindingBusy(agent)
-    try { if (computer) await computersApi.bind(org.id, agent, computer); else await computersApi.unbind(org.id, agent); await load(); toast.success(computer ? "已更新新会话的默认电脑" : "已清除默认电脑，已有会话不受影响") }
-    catch (e) { toast.error(errorMessage(e)) } finally { setBindingBusy(null) }
-  }
   async function recover(c: Computer) {
     setBusy(true)
     try { track(await computersApi.recover(c.id, recoverKey.current)); setRecovering(null) }
     catch (e) { toast.error(errorMessage(e)) } finally { setBusy(false) }
   }
-  return <div className="mx-auto max-w-5xl space-y-6 p-6">
-    <PageHeader title="我的云电脑" description="多台电脑共享你的长期文件、智能体文件和会话工作空间。">
+  return <div className="mx-auto max-w-5xl space-y-6">
+    <PageHeader title="云电脑" description="多台电脑共享你的长期文件、智能体文件和会话工作空间。">
       <Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw className="size-4" />刷新</Button>
       <Button size="sm" onClick={() => setEditor("create")} disabled={!org}><Plus className="size-4" />创建电脑</Button>
     </PageHeader>
@@ -152,14 +138,7 @@ export default function ComputersPage() {
       })}</div>
       <p className="text-xs text-muted-foreground">暂停、重建或删除电脑均保留这三类存储。会话和智能体目录按各自的数据保留策略管理。</p>
     </section>
-    <section id="agent-bindings" className="scroll-mt-6 space-y-3"><h2 className="font-medium">智能体绑定云电脑</h2><p className="text-sm text-muted-foreground">为每个智能体绑定一台你的云电脑，新聊天自动使用。也可从侧边栏智能体旁的菜单设置；已有聊天继续使用原电脑。</p>
-      {bindingAgents.map((agent) => <div className="flex items-center gap-4" key={agent.id}>
-        <Label className="w-40 truncate" htmlFor={`binding-${agent.id}`}>{agent.name}</Label>
-        <select id={`binding-${agent.id}`} className={`${selectClass} max-w-sm`} value={bindings.find((b) => b.agent_id === agent.id)?.computer_id ?? ""} disabled={bindingBusy === agent.id} onChange={(e) => void bind(agent.id, e.target.value)}>
-          <option value="">未绑定（无法开始新聊天）</option>{computers.filter(selectableComputer).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </div>)}
-    </section>
+    <p className="text-sm text-muted-foreground">为智能体配置默认云电脑，请前往 <Link className="text-link hover:underline" to="/personal/agents">个人中心 / 智能体</Link>。</p>
     {editor && org && <ComputerEditor key={editor === "create" ? "create" : editor.id} orgId={org.id} computer={editor === "create" ? undefined : editor} onClose={() => setEditor(null)} onSaved={track} onRenamed={() => void load()} />}
     <ConfirmDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)} title={`删除「${deleting?.name ?? ""}」`} description="将停止并删除这台电脑，三类持久存储继续保留。有会话或默认设置引用时，需要先切换绑定。" destructive confirmText="删除电脑" loading={busy} onConfirm={() => deleting && void act(deleting, "delete")} />
     <ConfirmDialog open={!!recovering} onOpenChange={(open) => !open && !busy && setRecovering(null)} title={`终止「${recovering?.name ?? ""}」的全部任务并恢复`} description="将强制终止这台电脑所有会话、子任务和维护进程（包括正常运行的任务），停止并移除当前实例，清理遗留占用。确认停止后可重新启动；系统临时文件会丢失，storage、agents、sessions 三类持久文件及会话绑定保留。此操作无法撤销。" destructive confirmText="终止全部任务并恢复" loading={busy} onConfirm={() => recovering && void recover(recovering)} />

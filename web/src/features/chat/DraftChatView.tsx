@@ -8,6 +8,7 @@ import { Composer } from "@/features/chat/Composer"
 import { MessageList } from "@/features/chat/MessageList"
 import { useComposerStore } from "@/stores/composer"
 import { useSessionStore } from "@/stores/session"
+import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 
 // 草稿聊天页（/c/new?agent=<id>）：不创建聊天、不 follow 流，首条消息发出时才建聊天（见 Composer draftAgent 分支）
 export default function DraftChatView() {
@@ -16,15 +17,17 @@ export default function DraftChatView() {
   const agents = useOrgAgents()
   const agent = agents?.find((a) => a.id === agentId) ?? null
   const resetSession = useSessionStore((s) => s.reset)
-  const composerReset = useComposerStore((s) => s.reset)
+  const enterContext = useComposerStore((s) => s.enterContext)
+  const org = useCurrentOrg()
+  const userId = useIdentityStore((s) => s.user?.id)
   const [ready, setReady] = useState(false)
 
-  // 清空上一聊天残留的事件流与输入草稿，保证消息区为空；reset 同步生效，ready 后再渲染
+  // Clear events while preserving this agent's draft when returning from settings.
   useEffect(() => {
     resetSession()
-    composerReset()
+    enterContext(`${userId}:${org?.id}:agent:${agentId}`)
     setReady(true)
-  }, [resetSession, composerReset])
+  }, [resetSession, enterContext, userId, org?.id, agentId])
 
   if (!agents || !ready) {
     return (

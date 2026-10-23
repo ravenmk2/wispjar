@@ -14,7 +14,7 @@ import { TrajectoryView } from "@/features/trajectory/TrajectoryView"
 import { followSession, type FollowHandle } from "@/mux/follow"
 import { cn } from "@/lib/utils"
 import { useComposerStore } from "@/stores/composer"
-import { useCurrentOrg } from "@/stores/identity"
+import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 import { useSessionStore } from "@/stores/session"
 import { useChatPresentationStore } from "@/stores/chatPresentation"
 import { WorkspaceFiles } from "@/features/computers/WorkspaceFiles"
@@ -42,7 +42,8 @@ export default function ChatView() {
   const loadHistory = useSessionStore((s) => s.loadHistory)
   const pendingApprovals = useSessionStore((s) => s.pendingApprovals)
   const pendingQuestions = useSessionStore((s) => s.pendingQuestions)
-  const composerReset = useComposerStore((s) => s.reset)
+  const enterContext = useComposerStore((s) => s.enterContext)
+  const userId = useIdentityStore((s) => s.user?.id)
   const [loadError, setLoadError] = useState<LoadError | null>(null)
   const [tab, setTab] = useState<"chat" | "trajectory">("chat")
   const [sandboxOpen, setSandboxOpen] = useState(false)
@@ -76,10 +77,10 @@ export default function ChatView() {
   useEffect(() => {
     if (!sessionId || !currentOrg) return
     useChatPresentationStore.getState().enterSession(sessionId)
-    composerReset()
+    enterContext(`${userId}:${currentOrg.id}:session:${sessionId}`)
     const handle: FollowHandle = followSession(currentOrg.id, sessionId)
     return () => handle.close()
-  }, [sessionId, currentOrg, composerReset])
+  }, [sessionId, currentOrg, enterContext, userId])
   useEffect(() => {
     if (!detail || header?.sessionId !== sessionId || !header.computerId || header.computerId === detail.computer_id) return
     let active = true
