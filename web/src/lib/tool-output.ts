@@ -33,7 +33,7 @@ export function execOutput(result?: ToolResultData, live?: ToolOutput) {
 export function toolCancelled(node: ToolCallNode): boolean {
   if (node.endReason !== "interrupted") return false
   if (!node.result) return true
-  const error = node.name === "exec" ? execOutput(node.result).error : node.result.error
+  const error = node.name === "exec" ? execOutput(node.result).error : node.result.error || node.result.content
   return !!error && /(?:context|operation) cancel(?:l)?ed|已取消|已中止/i.test(error)
 }
 

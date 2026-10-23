@@ -27,9 +27,11 @@ export function normalizeAgentDetail(raw: unknown): AdminAgentDetail {
     avatar: typeof obj.avatar === "string" ? obj.avatar : "",
     system_prompt: typeof obj.system_prompt === "string" ? obj.system_prompt : "",
     model_id: typeof obj.model_id === "string" ? obj.model_id : "",
+    search_provider_id: typeof obj.search_provider_id === "string" ? obj.search_provider_id : null,
     model_params: (obj.model_params as AdminAgentDetail["model_params"]) ?? null,
     max_iterations: typeof obj.max_iterations === "number" ? obj.max_iterations : 20,
     tools_enabled: {
+      web_search: false,
       exec: true,
       read: true,
       write: true,

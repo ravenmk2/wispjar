@@ -26,6 +26,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/provider"
 	"github.com/ravenmk2/wispjar/internal/runtime"
 	"github.com/ravenmk2/wispjar/internal/sandbox"
+	"github.com/ravenmk2/wispjar/internal/search"
 	"github.com/ravenmk2/wispjar/internal/session"
 	"github.com/ravenmk2/wispjar/internal/skill"
 	"github.com/ravenmk2/wispjar/internal/store"
@@ -118,6 +119,7 @@ func main() {
 		bus.PublishControl(row.OrgID, frame)
 	})
 	orch := runtime.NewOrchestrator(runtime.Deps{
+		WebSearch:        search.NewService(db, cfg.MasterKey()),
 		AgentEnvs:        agentSvc.LoadEnvs,
 		MaxParallelTasks: cfg.Runtime.MaxParallelTasks,
 		Computers:        computerSvc,

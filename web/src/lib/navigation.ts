@@ -41,10 +41,11 @@ export const sectionNavigation = {
         { to: "/platform/users", label: "用户", icon: "members" },
       ] },
       { label: "模型服务", items: [
-        { to: "/platform/providers", label: "供应商", icon: "provider" },
+        { to: "/platform/providers", label: "模型供应商", icon: "provider" },
         { to: "/platform/models", label: "模型", icon: "model" },
       ] },
       { label: "运行与维护", items: [
+        { to: "/platform/web-search", label: "网络搜索", icon: "search" },
         { to: "/platform/usage", label: "全局用量", icon: "usage" },
         { to: "/platform/audit", label: "操作审计", icon: "audit" },
         { to: "/platform/settings", label: "系统配置", icon: "settings" },

@@ -32,6 +32,7 @@ type AttachmentReader interface {
 }
 
 type Deps struct {
+	WebSearch        tools.WebSearcher
 	AgentEnvs        func(context.Context, string, []string) (map[string]map[string]string, error)
 	Computers        ComputerService
 	Skills           SkillCoordinator

@@ -1,5 +1,6 @@
 // 工具名中文映射；含后端改名前的新旧名兼容（question←ask_user_question，skill←activate_skill）
 const TOOL_LABELS: Record<string, string> = {
+  web_search: "联网搜索",
   exec: "执行",
   read: "读取",
   write: "写入",

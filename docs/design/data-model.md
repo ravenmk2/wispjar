@@ -512,3 +512,50 @@ ALTER TABLE skill
 ## 15. 旧会话沙箱退役（000008）
 
 历史 000001–000007 迁移保持原样。000008 清理未绑定电脑、持有旧实例 ID 或含旧 session/sandbox 事件的会话，以及关联事件、检查点、computer_run 和 run_skill_lease；删除 workspace/migrate 操作和维护运行。保留正常电脑会话及完整连续的事件序列，不改写其历史。删除 session.sandbox，computer_id 改为 NOT NULL。三卷、电脑、用户、Agent、Skill 和共享附件不删除。停止应用与远端执行后升级；down 仅恢复 schema，不恢复旧数据。
+
+
+## 16. 网络搜索（000009）
+
+搜索供应商实例与模型供应商独立；同类型没有唯一约束。`search_config` 固定 id=1，默认初始为空；`agent.search_provider_id` 为可空外键（null 继承当前全局默认）。调用账本与模型 token 分离，详细行为见 [search.md](search.md)。以下为增量 DDL，应用于上述既有表结构：
+
+```sql
+CREATE TABLE search_provider (
+  id CHAR(32) NOT NULL PRIMARY KEY,
+  name VARCHAR(128) NOT NULL,
+  type VARCHAR(32) NOT NULL,
+  base_url VARCHAR(512) NOT NULL,
+  api_key_enc BLOB NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'active',
+  created_by CHAR(32) NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE search_config (
+  id TINYINT NOT NULL PRIMARY KEY,
+  default_provider_id CHAR(32) NULL,
+  CONSTRAINT fk_search_default FOREIGN KEY (default_provider_id) REFERENCES search_provider(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO search_config (id, default_provider_id) VALUES (1, NULL);
+
+ALTER TABLE agent ADD COLUMN search_provider_id CHAR(32) NULL AFTER tools_enabled,
+  ADD CONSTRAINT fk_agent_search_provider FOREIGN KEY (search_provider_id) REFERENCES search_provider(id);
+
+CREATE TABLE search_call (
+  id CHAR(32) NOT NULL PRIMARY KEY,
+  provider_id CHAR(32) NOT NULL,
+  org_id CHAR(32) NOT NULL DEFAULT '',
+  user_id CHAR(32) NOT NULL DEFAULT '',
+  agent_id CHAR(32) NOT NULL DEFAULT '',
+  session_id CHAR(32) NOT NULL DEFAULT '',
+  call_id VARCHAR(128) NOT NULL DEFAULT '',
+  success BOOLEAN NOT NULL,
+  result_count INT NOT NULL DEFAULT 0,
+  duration_ms BIGINT NOT NULL,
+  credits DOUBLE NULL,
+  error_code VARCHAR(32) NOT NULL DEFAULT '',
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY idx_search_call_provider (provider_id, created_at),
+  KEY idx_search_call_org (org_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```

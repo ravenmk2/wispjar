@@ -16,6 +16,7 @@ import { ApiError, errorMessage } from "@/api/client"
 import { adminSkillsApi } from "@/api/skills"
 import { settingsApi } from "@/api/settings"
 import { workspaceApi } from "@/api/workspace"
+import { SEARCH_TYPES, webSearchApi, type SearchProviderOption } from "@/api/web-search"
 import { TableSkeleton } from "@/components/common"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -47,6 +48,7 @@ import {
 import { useCurrentOrg } from "@/stores/identity"
 
 const DEFAULT_FORM: AgentBody = {
+  search_provider_id: null,
   name: "",
   description: "",
   avatar: "bot",
@@ -109,6 +111,9 @@ export default function AgentEditorPage() {
   const [loaded, setLoaded] = useState(false)
   const [section, setSection] = useState<SectionId>("basic")
   const [models, setModels] = useState<OrgModel[]>([])
+  const [searchOptions, setSearchOptions] = useState<SearchProviderOption[]>([])
+  const [searchDefault, setSearchDefault] = useState<string | null>(null)
+  const [searchOptionsError, setSearchOptionsError] = useState<string | null>(null)
   const [skills, setSkills] = useState<SkillSummary[]>([])
   const [agents, setAgents] = useState<AdminAgentSummary[]>([])
   const [sandboxImages, setSandboxImages] = useState<string[] | null>(null)
@@ -121,6 +126,16 @@ export default function AgentEditorPage() {
     setForm((f) => ({ ...f, ...p }))
     setSaveError(null)
   }, [])
+
+  useEffect(() => {
+    if (!currentOrg) return
+    let stale = false
+    setSearchOptions([]); setSearchDefault(null); setSearchOptionsError(null)
+    webSearchApi.options(currentOrg.id).then((res) => {
+      if (!stale) { setSearchOptions(res.items); setSearchDefault(res.default_provider_id) }
+    }).catch((e) => { if (!stale) setSearchOptionsError(errorMessage(e)) })
+    return () => { stale = true }
+  }, [currentOrg])
 
   useEffect(() => {
     if (!currentOrg) return
@@ -330,7 +345,7 @@ export default function AgentEditorPage() {
             {section === "basic" && <BasicSection form={form} patch={patch} />}
             {section === "model" && <ModelSection form={form} patch={patch} models={models} />}
             {section === "prompt" && <PromptSection form={form} patch={patch} />}
-            {section === "tools" && <ToolsSection form={form} patch={patch} />}
+            {section === "tools" && <ToolsSection form={form} patch={patch} searchOptions={searchOptions} searchDefault={searchDefault} searchOptionsError={searchOptionsError} />}
             {section === "skills" && <SkillsSection form={form} patch={patch} skills={skills} />}
             {section === "subagents" && (
               <SubAgentsSection form={form} patch={patch} candidates={subAgentCandidates} />
@@ -589,10 +604,13 @@ function PromptSection({ form, patch }: { form: AgentBody; patch: (p: Partial<Ag
   )
 }
 
-function ToolsSection({ form, patch }: { form: AgentBody; patch: (p: Partial<AgentBody>) => void }) {
+function ToolsSection({ form, patch, searchOptions, searchDefault, searchOptionsError }: { form: AgentBody; patch: (p: Partial<AgentBody>) => void; searchOptions: SearchProviderOption[]; searchDefault: string | null; searchOptionsError: string | null }) {
+  const defaultOption = searchOptions.find((p) => p.id === searchDefault)
+  const selected = searchOptions.find((p) => p.id === (form.search_provider_id || searchDefault))
+  const missingSelection = !!form.search_provider_id && !searchOptions.some((p) => p.id === form.search_provider_id)
   return (
     <div>
-      <SectionTitle title="工具" hint="云电脑工具开关，默认全开" />
+      <SectionTitle title="工具" hint="分别配置云电脑工具和联网搜索能力" />
       <div className="divide-y rounded-md border">
         {TOOL_LABELS.map((tool) => (
           <div key={tool.key} className="flex items-center gap-3 px-3 py-2.5">
@@ -601,13 +619,25 @@ function ToolsSection({ form, patch }: { form: AgentBody; patch: (p: Partial<Age
               <div className="text-xs text-muted-foreground">{tool.description}</div>
             </div>
             <Switch
-              checked={form.tools_enabled[tool.key]}
+              checked={!!form.tools_enabled[tool.key]}
               onCheckedChange={(checked) =>
                 patch({ tools_enabled: { ...form.tools_enabled, [tool.key]: checked } })
               }
             />
           </div>
         ))}
+      </div>
+      <div className="mt-4 space-y-4 rounded-md border p-3">
+        <div className="flex items-center gap-3"><div className="flex-1"><Label htmlFor="agent-web-search">联网搜索</Label><p className="mt-1 text-xs text-muted-foreground">搜索互联网中的最新信息，并返回来源链接。</p></div><Switch id="agent-web-search" checked={!!form.tools_enabled.web_search} onCheckedChange={(checked) => patch({ tools_enabled: { ...form.tools_enabled, web_search: checked } })} /></div>
+        {form.tools_enabled.web_search && <div className="space-y-2">
+          <Label>搜索供应商实例</Label>
+          <Select value={form.search_provider_id || "default"} onValueChange={(v) => patch({ search_provider_id: v === "default" ? null : v })}>
+            <SelectTrigger aria-label="搜索供应商实例"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="default">跟随全局默认（{defaultOption ? `${defaultOption.name}${defaultOption.status !== "active" ? " · 已停用" : ""}` : "尚未设置"}）</SelectItem>{missingSelection && <SelectItem value={form.search_provider_id!} disabled>原实例不可用</SelectItem>}{searchOptions.map((p) => <SelectItem key={p.id} value={p.id} disabled={p.status !== "active"}>{p.name} · {SEARCH_TYPES[p.type].label}{p.status !== "active" ? "（已停用）" : ""}</SelectItem>)}</SelectContent>
+          </Select>
+          {searchOptionsError ? <p role="alert" className="text-xs text-destructive">搜索配置加载失败：{searchOptionsError}</p> : !selected || selected.status !== "active" ? <p role="alert" className="text-xs text-destructive">尚未配置可用实例；调用联网搜索时会报错，请联系系统管理员。</p> : null}
+          <p className="text-xs text-muted-foreground">严格使用所选实例，失败时不自动回退。保存后的选择影响新会话；跟随默认的会话在下次搜索时使用当前全局默认。</p>
+        </div>}
       </div>
     </div>
   )

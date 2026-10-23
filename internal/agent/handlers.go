@@ -43,32 +43,34 @@ func fail(c *gin.Context, err error) {
 }
 
 type agentRequest struct {
-	Name          string          `json:"name" binding:"required"`
-	Description   string          `json:"description"`
-	Avatar        string          `json:"avatar"`
-	SystemPrompt  string          `json:"system_prompt"`
-	ModelID       string          `json:"model_id" binding:"required"`
-	ModelParams   json.RawMessage `json:"model_params"`
-	MaxIterations int             `json:"max_iterations"`
-	ToolsEnabled  json.RawMessage `json:"tools_enabled"`
-	SkillIDs      []string        `json:"skill_ids"`
-	SubAgentIDs   []string        `json:"sub_agent_ids"`
-	SandboxConfig json.RawMessage `json:"sandbox_config"`
+	SearchProviderID *string         `json:"search_provider_id"`
+	Name             string          `json:"name" binding:"required"`
+	Description      string          `json:"description"`
+	Avatar           string          `json:"avatar"`
+	SystemPrompt     string          `json:"system_prompt"`
+	ModelID          string          `json:"model_id" binding:"required"`
+	ModelParams      json.RawMessage `json:"model_params"`
+	MaxIterations    int             `json:"max_iterations"`
+	ToolsEnabled     json.RawMessage `json:"tools_enabled"`
+	SkillIDs         []string        `json:"skill_ids"`
+	SubAgentIDs      []string        `json:"sub_agent_ids"`
+	SandboxConfig    json.RawMessage `json:"sandbox_config"`
 }
 
 func (r *agentRequest) input() AgentInput {
 	return AgentInput{
-		Name:          r.Name,
-		Description:   r.Description,
-		Avatar:        r.Avatar,
-		SystemPrompt:  r.SystemPrompt,
-		ModelID:       r.ModelID,
-		ModelParams:   r.ModelParams,
-		MaxIterations: r.MaxIterations,
-		ToolsEnabled:  r.ToolsEnabled,
-		SkillIDs:      r.SkillIDs,
-		SubAgentIDs:   r.SubAgentIDs,
-		SandboxConfig: r.SandboxConfig,
+		SearchProviderID: r.SearchProviderID,
+		Name:             r.Name,
+		Description:      r.Description,
+		Avatar:           r.Avatar,
+		SystemPrompt:     r.SystemPrompt,
+		ModelID:          r.ModelID,
+		ModelParams:      r.ModelParams,
+		MaxIterations:    r.MaxIterations,
+		ToolsEnabled:     r.ToolsEnabled,
+		SkillIDs:         r.SkillIDs,
+		SubAgentIDs:      r.SubAgentIDs,
+		SandboxConfig:    r.SandboxConfig,
 	}
 }
 

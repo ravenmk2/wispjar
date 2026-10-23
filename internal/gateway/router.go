@@ -15,6 +15,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/gateway/ws"
 	"github.com/ravenmk2/wispjar/internal/provider"
 	"github.com/ravenmk2/wispjar/internal/runtime"
+	"github.com/ravenmk2/wispjar/internal/search"
 	"github.com/ravenmk2/wispjar/internal/session"
 	"github.com/ravenmk2/wispjar/internal/skill"
 	"github.com/ravenmk2/wispjar/internal/tenant"
@@ -50,6 +51,7 @@ func NewRouter(deps Deps) *gin.Engine {
 
 	tenantH := tenant.NewHandler(tenant.NewService(deps.DB))
 	providerH := provider.NewHandler(provider.NewService(deps.DB, deps.Config.MasterKey()))
+	searchH := search.NewHandler(search.NewService(deps.DB, deps.Config.MasterKey()))
 	agentSvc := agent.NewService(deps.DB)
 	sessionSvc := session.NewService(deps.DB, agentSvc)
 	if deps.Computers != nil {
@@ -137,6 +139,7 @@ func NewRouter(deps Deps) *gin.Engine {
 	admin.GET("/skills/:id/file", skillH.GetSkillFile)
 	admin.DELETE("/skills/:id", skillH.DeleteSkill)
 	admin.GET("/sandbox-settings", providerH.GetSandboxSettings)
+	admin.GET("/search-providers", searchH.Options)
 	usageH := usage.NewHandler(usage.NewService(deps.DB))
 	admin.GET("/usage", usageH.OrgUsage)
 
@@ -152,6 +155,13 @@ func NewRouter(deps Deps) *gin.Engine {
 	platform.PATCH("/users/:id/orgs/:orgId", tenantH.UpdateUserOrgRole)
 	platform.DELETE("/users/:id/orgs/:orgId", tenantH.RemoveUserOrg)
 	platform.GET("/providers", providerH.ListProviders)
+	platform.GET("/web-search/providers", searchH.List)
+	platform.POST("/web-search/providers", searchH.Save)
+	platform.PUT("/web-search/providers/:id", searchH.Save)
+	platform.DELETE("/web-search/providers/:id", searchH.Delete)
+	platform.POST("/web-search/providers/:id/check", searchH.Check)
+	platform.GET("/web-search/config", searchH.Config)
+	platform.PUT("/web-search/config", searchH.SetDefault)
 	platform.POST("/providers", providerH.CreateProvider)
 	platform.GET("/providers/:id", providerH.GetProvider)
 	platform.PUT("/providers/:id", providerH.UpdateProvider)

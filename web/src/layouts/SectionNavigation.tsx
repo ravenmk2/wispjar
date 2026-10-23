@@ -1,10 +1,10 @@
-import { Bot, Boxes, Building2, FileClock, Folder, KeyRound, Palette, Plug, Settings2, Sparkles, Users, ChartNoAxesCombined } from "lucide-react"
+import { Bot, Boxes, Building2, FileClock, Folder, KeyRound, Palette, Plug, Search, Settings2, Sparkles, Users, ChartNoAxesCombined } from "lucide-react"
 import { NavLink } from "react-router"
 import { CloudComputerIcon } from "@/components/CloudComputerIcon"
 import { sectionNavigation, type MainSection } from "@/lib/navigation"
 import { cn } from "@/lib/utils"
 
-const icons = { computer: CloudComputerIcon, agent: Bot, storage: Folder, account: KeyRound, appearance: Palette, skill: Sparkles, members: Users, usage: ChartNoAxesCombined, organization: Building2, provider: Plug, model: Boxes, audit: FileClock, settings: Settings2 }
+const icons = { computer: CloudComputerIcon, agent: Bot, storage: Folder, account: KeyRound, appearance: Palette, skill: Sparkles, members: Users, usage: ChartNoAxesCombined, organization: Building2, provider: Plug, model: Boxes, audit: FileClock, settings: Settings2, search: Search }
 
 export function SectionNavigation({ section }: { section: Exclude<MainSection, "workspace"> }) {
   const navigation = sectionNavigation[section]

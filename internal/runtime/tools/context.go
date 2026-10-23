@@ -53,6 +53,7 @@ const (
 
 // Context 是一个 turn 内全部工具共享的运行上下文（经 ctx 传递）。
 type Context struct {
+	WebSearch WebSearcher
 	SessionID string
 	OrgID     string
 	// UserID 会话所属用户（read_media 图片入库的 created_by，贴合 attachment 表 CHAR(32)）。
@@ -153,6 +154,7 @@ func (c *Context) Fork(agentID, runID string, skills []agent.SnapshotSkill) *Con
 	child.WorkDir = c.WorkDir
 	child.ComputerEnv = sandbox.MergeEnv(c.ComputerEnv)
 	child.Skills, child.Images = skills, c.Images
+	child.WebSearch = c.WebSearch
 	child.BoundHandle, child.BoundSandboxID = c.BoundHandle, c.BoundSandboxID
 	child.PublishToolOutput = c.PublishToolOutput
 	child.SkillsDir = "/agents/" + agentID + "/skills"

@@ -190,17 +190,18 @@ func (o *orchestrator) buildSubAgent(ctx context.Context, sess *store.Session, s
 		return nil, err
 	}
 	subSnap := &agent.Snapshot{
-		AgentID:       sub.ID,
-		Name:          sub.Name,
-		Description:   sub.Description,
-		Avatar:        sub.Avatar,
-		SystemPrompt:  sub.SystemPrompt,
-		MaxIterations: sub.MaxIterations,
-		ModelParams:   sub.ModelParams,
-		ToolsEnabled:  sub.ToolsEnabled,
-		SandboxConfig: sub.SandboxConfig,
-		Model:         sub.Model,
-		Skills:        sub.Skills,
+		SearchProviderID: sub.SearchProviderID,
+		AgentID:          sub.ID,
+		Name:             sub.Name,
+		Description:      sub.Description,
+		Avatar:           sub.Avatar,
+		SystemPrompt:     sub.SystemPrompt,
+		MaxIterations:    sub.MaxIterations,
+		ModelParams:      sub.ModelParams,
+		ToolsEnabled:     sub.ToolsEnabled,
+		SandboxConfig:    sub.SandboxConfig,
+		Model:            sub.Model,
+		Skills:           sub.Skills,
 	}
 	toolList, _, err := buildTools(nil, subSnap, sess.ApprovalMode, o.visionOf(ctx, sub.Model.ID))
 	if err != nil {

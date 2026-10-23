@@ -314,6 +314,20 @@
 
 `capabilities.api_protocol` 可选 `chat_completions`（缺省）或 `responses`。`tool_images` 默认为 false，启用需同时满足 responses、vision、tools。仅支持已实现 Responses 适配的供应商。含工具图片历史切换到不支持工具图片的模型返回 409 `session/media_locked`。图片与租户授权、供应商文件有效期规则见 [media.md](media.md)。
 
+### 网络搜索
+
+独立于模型供应商，全部路径加 `/api/v1`：
+
+| 方法/路径 | 说明 |
+|---|---|
+| `GET/POST /platform/web-search/providers` | 列表/创建搜索实例，类型 deepseek/tavily/bocha，同类型可有多个实例 |
+| `PUT/DELETE /platform/web-search/providers/{id}` | 更新/删除；被全局默认或智能体引用时禁止删除 |
+| `POST /platform/web-search/providers/{id}/check` | `{query}`，实际搜索一次，失败明确报错 |
+| `GET/PUT /platform/web-search/config` | `{default_provider_id:string|null}`，可清空全局默认 |
+| `GET /orgs/{orgId}/admin/search-providers` | 组织管理员只读的实例选项和默认 ID，不包含地址/密钥 |
+
+智能体创建/更新增加 `search_provider_id:string|null`（null 跟随全局默认）和 `tools_enabled.web_search:boolean`（默认 false）。主/子智能体选择均进入会话快照；没有配置或实例不可用时不自动切换。完整请求、响应和错误码见 [search.md §3](search.md#3-配置与-rest)。
+
 ### 系统设置与报表
 
 | 方法/路径 | 说明 |

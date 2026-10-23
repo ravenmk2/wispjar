@@ -286,6 +286,10 @@ eino ToolsNode 会把工具返回的 Go error 升级为整个 run 失败（turn 
 
 链序：`approvalMiddleware`（外层，interrupt/deny 不经归一化层）→ `errorResultMiddleware`（内层）。grep 在缺 `rg` 的沙箱（exit 127 / "command not found"）自动降级 `grep -rInE --color=never`（`--ignore-case→-i`、`-g→--include`、`-l` 保持），重试仍失败按执行失败归一化。
 
+### 4.12 web_search（风险 low，render web_search）
+
+输入 `{query,count?}`；`query` 最长 512 Unicode 字符（DeepSeek 最长 128），`count` 默认 5，上限 10。服务端调用独立搜索服务，实例选择取主/子智能体各自快照的 `search_provider_id`；null 跟随当前全局默认。密钥每次读取，严格调用一个实例一次，不重试、不回退。结果归一化、截断后写入原有 tool/result，历史不重新搜索。失败沿用 §4.11 文本错误语义。接口、限制、数据与 UI 详见 [search.md](search.md)。
+
 ## 5. 审批实现（internal/runtime/approval）
 
 ### 5.1 拦截点与状态机

@@ -51,7 +51,7 @@ const glyphs = {
 }
 
 export function ActivityIcon({ name, active = false }: { name: string; active?: boolean }) {
-  const kind = name === "glob" || name === "grep" ? "search"
+  const kind = name === "glob" || name === "grep" || name === "web_search" ? "search"
     : name === "edit" ? "write"
     : name === "activate_skill" ? "skill" : name
   const glyph = Object.hasOwn(glyphs, kind) ? glyphs[kind as keyof typeof glyphs] : undefined

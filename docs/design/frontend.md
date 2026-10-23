@@ -101,7 +101,7 @@ web/src/
 | `/admin/skills` | Skills 管理 | 组织 admin |
 | `/admin/members` | 成员管理 | 组织 admin |
 | `/admin/usage` | 组织用量 | 组织 admin |
-| `/platform/orgs` `/platform/users` `/platform/providers` `/platform/models` `/platform/settings` `/platform/usage` `/platform/audit` | 系统后台 | 系统管理员 |
+| `/platform/orgs` `/platform/users` `/platform/providers` `/platform/web-search` `/platform/models` `/platform/settings` `/platform/usage` `/platform/audit` | 系统后台 | 系统管理员 |
 
 四个主界面共用现有侧栏外框：顶部品牌与折叠按钮，中间为当前界面的导航，底部固定用户菜单。工作区保留智能体及聊天列表布局；个人、组织、系统界面中间区域改用各自菜单。无全局顶部页签，主界面切换及组织切换均在左下角用户菜单；当前界面带选中标记，普通成员看不到组织管理，无系统管理员资格时看不到系统管理。独立改密路由 `/change-password` 保留强制改密流程；旧 `/computers` 跳转个人云电脑，`/computers#agent-bindings` 跳转个人智能体。
 
@@ -215,7 +215,7 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 1. **基本信息**：名称、描述（hint：将作为 task 委派时的能力说明）、头像（内置图标集选择）。
 2. **模型**：下拉（`/orgs/{org}/models`，显示供应商/上下文长度）；参数：temperature 滑块（0-2）、max_tokens 数字。
 3. **提示词**：等宽字体 textarea（行数自适应，支持全屏）。
-4. **工具**：云电脑工具开关组（exec/read/write/edit/glob/grep/read_media，默认全开）。
+4. **工具**：云电脑工具开关组（exec/read/write/edit/glob/grep/read_media，默认全开）；另设联网搜索开关（默认关闭）和搜索实例选择器，支持跟随全局默认或指定实例，见 [search.md](search.md)。
 5. **Skills**：本组织 skills 多选列表（名称+描述），可排序（拖拽）。
 6. **子智能体**：本组织其他 published 智能体多选；保存时前端提示环/层级限制（服务端 409 校验为准）；hint 说明"通过 task 工具委派"。
 7. **云电脑**：镜像下拉（`GET /orgs/{orgId}/admin/sandbox-settings` 的 images 只读展示）、资源覆盖（CPU/内存，留空用系统默认）。
@@ -256,3 +256,8 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 思考、工具摘要、展开普通输出及过程折叠标题使用独立过程语义色，输入占位符使用独立 placeholder 色，色值见 theme.md。类型图标 18px（思考为圆润细线灯泡、技能为魔杖＋星星），灯泡使用加宽灯罩与短灯颈，`viewBox=0 0 24 24`、描边 1.65，继承过程图标颜色，折叠箭头 14px。共用 `ActivityIcon` 以 SVG 内部元素播放语义动画：思考灯泡轮廓保持稳定，活动时灯丝与内部柔光以 2.4s 周期同步呼吸，静止时隐藏柔光并保留灯丝，搜索沿小圆弧移动，读取文字逐行扫描，写入／编辑笔尖往复，执行命令提示符轻推与光标闪烁，任务机器人双眼交替亮起，技能星星错峰闪烁，图片轮廓与光点明暗变化。运行图标提亮，文字保留弱扫光；待审批、待回答及结束后图标静止。减少动态效果时灯泡与其它类型图标均保留轻微活动动画以指示运行状态，文字扫光静止并保持过程文字色；动作周期与幅度见 theme.md。运行中的过程组、整轮折叠后在可见摘要行显示当前阶段的类型图标，避免内部图标隐藏后失去运行反馈。上下文圆环使用独立轨道色，深色 #858585，普通进度使用 link 色，0% 时轨道也清晰可见。聊天普通内容（含思考、工具摘要、路径、普通输出）统一正文系统字体；代码、命令、JSON 参数及 diff 保留西文等宽字体，CJK 明确回退到苹方、微软雅黑及其它中文系统字体；数字以 tabular-nums 对齐。
 
 过程行使用浅黑 .6 / 深白 .56，过程次要信息使用浅黑 .45 / 深白 .42，思考及工具标题使用常规字重；hover/focus-visible 时统一增强至浅黑 .9 / 深白 .84，详情正文和语义状态色保持原层级。
+
+
+## 网络搜索界面
+
+系统管理新增独立「网络搜索」菜单 `/platform/web-search`，原供应商菜单标为「模型供应商」。网络搜索页管理同类型多实例和全局默认；智能体工具区配置开关及实例选择。`ToolCallCard` 新增 `web_search` 渲染，展示来源链接、域名、日期、短摘要、数量、耗时和截断提示；严格区分失败、取消、空结果。完整交互见 [search.md §5](search.md#5-ui-与验收)。

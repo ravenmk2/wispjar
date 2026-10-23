@@ -271,7 +271,7 @@ export type StreamChunk =
 
 export type TurnEndReason = "completed" | "interrupted" | "failed"
 
-export type ToolRender = "terminal" | "diff" | "search" | "read" | "generic"
+export type ToolRender = "terminal" | "diff" | "search" | "web_search" | "read" | "generic"
 
 // runtime.md §4.9：ask_user_question 提问；无 options=自由输入，有 options 按 multi_select 分单/多选
 export interface QuestionOption {
@@ -596,6 +596,7 @@ export interface OrgModel {
 export type AgentStatus = "draft" | "published" | "archived"
 
 export interface AgentToolsEnabled {
+  web_search?: boolean
   exec: boolean
   read: boolean
   write: boolean
@@ -621,6 +622,7 @@ export interface AgentSandboxConfig {
 }
 
 export interface AgentBody {
+  search_provider_id?: string | null
   name: string
   description: string
   avatar: string

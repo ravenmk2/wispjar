@@ -19,6 +19,7 @@ import OrgUsagePage from "@/features/admin/OrgUsagePage"
 import ModelsPage from "@/platform/ModelsPage"
 import OrgsPage from "@/platform/OrgsPage"
 import ProvidersPage from "@/platform/ProvidersPage"
+import WebSearchPage from "@/platform/WebSearchPage"
 import SettingsPage from "@/platform/SettingsPage"
 import UsersPage from "@/platform/UsersPage"
 import AuditPage from "@/platform/AuditPage"
@@ -106,6 +107,7 @@ export const router = createBrowserRouter([
                   { path: "orgs", element: <OrgsPage /> },
                   { path: "users", element: <UsersPage /> },
                   { path: "providers", element: <ProvidersPage /> },
+                  { path: "web-search", element: <WebSearchPage /> },
                   { path: "models", element: <ModelsPage /> },
                   { path: "usage", element: <PlatformUsagePage /> },
                   { path: "audit", element: <AuditPage /> },

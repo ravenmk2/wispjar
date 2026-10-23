@@ -95,7 +95,7 @@ export default function ProvidersPage() {
 
   return (
     <div>
-      <PageHeader title="供应商" description="模型供应商配置，密钥加密存储且不回显明文">
+      <PageHeader title="模型供应商" description="模型供应商配置，密钥加密存储且不回显明文">
         <Button size="sm" onClick={() => setEditTarget("new")}>
           新建供应商
         </Button>

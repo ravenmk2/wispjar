@@ -79,21 +79,22 @@ type PlatformSetting struct {
 func (PlatformSetting) TableName() string { return "platform_setting" }
 
 type Agent struct {
-	ID            string          `gorm:"column:id;primaryKey;size:32" json:"id"`
-	OrgID         string          `gorm:"column:org_id;size:32" json:"org_id"`
-	Name          string          `gorm:"column:name;size:128" json:"name"`
-	Description   string          `gorm:"column:description;size:1024" json:"description"`
-	Avatar        string          `gorm:"column:avatar;size:512" json:"avatar"`
-	SystemPrompt  string          `gorm:"column:system_prompt;type:mediumtext" json:"system_prompt"`
-	ModelID       string          `gorm:"column:model_id;size:32" json:"model_id"`
-	ModelParams   json.RawMessage `gorm:"column:model_params;type:json" json:"model_params"`
-	MaxIterations int             `gorm:"column:max_iterations" json:"max_iterations"`
-	ToolsEnabled  json.RawMessage `gorm:"column:tools_enabled;type:json" json:"tools_enabled"`
-	SandboxConfig json.RawMessage `gorm:"column:sandbox_config;type:json" json:"sandbox_config"`
-	Status        string          `gorm:"column:status;size:16" json:"status"`
-	CreatedBy     string          `gorm:"column:created_by;size:32" json:"created_by"`
-	CreatedAt     time.Time       `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt     time.Time       `gorm:"column:updated_at" json:"updated_at"`
+	ID               string          `gorm:"column:id;primaryKey;size:32" json:"id"`
+	OrgID            string          `gorm:"column:org_id;size:32" json:"org_id"`
+	Name             string          `gorm:"column:name;size:128" json:"name"`
+	Description      string          `gorm:"column:description;size:1024" json:"description"`
+	Avatar           string          `gorm:"column:avatar;size:512" json:"avatar"`
+	SystemPrompt     string          `gorm:"column:system_prompt;type:mediumtext" json:"system_prompt"`
+	ModelID          string          `gorm:"column:model_id;size:32" json:"model_id"`
+	ModelParams      json.RawMessage `gorm:"column:model_params;type:json" json:"model_params"`
+	MaxIterations    int             `gorm:"column:max_iterations" json:"max_iterations"`
+	ToolsEnabled     json.RawMessage `gorm:"column:tools_enabled;type:json" json:"tools_enabled"`
+	SearchProviderID *string         `gorm:"column:search_provider_id;size:32" json:"search_provider_id"`
+	SandboxConfig    json.RawMessage `gorm:"column:sandbox_config;type:json" json:"sandbox_config"`
+	Status           string          `gorm:"column:status;size:16" json:"status"`
+	CreatedBy        string          `gorm:"column:created_by;size:32" json:"created_by"`
+	CreatedAt        time.Time       `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt        time.Time       `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (Agent) TableName() string { return "agent" }

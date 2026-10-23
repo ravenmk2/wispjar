@@ -8,6 +8,8 @@ import { DisclosureChevron, DisclosureContent, useDisclosureMotion } from "@/com
 import { DiffBlock } from "@/components/Markdown"
 import { NodeList } from "@/features/chat/NodeList"
 import { MessageImages } from "@/features/chat/MessageImages"
+import { WebSearchResults } from "@/features/chat/WebSearchResults"
+import { parseSearchResponse } from "@/lib/web-search"
 import { QuestionAnswerList } from "@/features/chat/QuestionCard"
 import { safeParseJson } from "@/lib/format"
 import { isQuestionTool, toolDisplayName } from "@/lib/tool-names"
@@ -20,6 +22,8 @@ import type { ToolRender } from "@/lib/types"
 
 function defaultRender(name: string): ToolRender {
   switch (name) {
+    case "web_search":
+      return "web_search"
     case "exec":
       return "terminal"
     case "write":
@@ -203,6 +207,14 @@ function DiffBody({ node }: { node: ToolCallNode }) {
   )
 }
 
+function WebSearchBody({ node }: { node: ToolCallNode }) {
+  const failure = toolFailure(node)
+  const parsed = node.result ? parseSearchResponse(node.result.content) : null
+  return <div className="rounded-lg bg-muted/50 p-3">
+    {toolCancelled(node) ? <p className="text-sm text-muted-foreground">搜索已取消</p> : failure ? <p role="alert" className="break-words text-sm text-destructive">{failure.replace(/^Tool execution failed: /, "")}</p> : parsed ? <WebSearchResults result={parsed} /> : <p className="text-sm text-muted-foreground">{node.result ? "无法展示搜索结果" : node.endReason ? "搜索已中止" : "正在搜索网页…"}</p>}
+  </div>
+}
+
 function SearchBody({ node }: { node: ToolCallNode }) {
   const args = safeParseJson(node.arguments)
   const query = (args?.pattern ?? args?.query ?? "") as string
@@ -306,12 +318,14 @@ export function ToolCallCard({
       return taskTarget ? `委派给 ${taskTarget}${task ? `：${task}` : ""}` : task
     }
     if (node.name === "exec") return (args?.command as string) ?? ""
+    if (node.name === "web_search") return typeof args?.query === "string" ? args.query : ""
     if (node.name === "skill" || node.name === "activate_skill") return typeof args?.name === "string" ? args.name : ""
     if (isQuestion) return node.question?.questions[0]?.question ?? ""
     return (args?.path ?? args?.pattern ?? "") as string
   })()
 
   const stats = node.name === "write" || node.name === "edit" ? diffStats(node.result?.meta?.diff) : null
+  const searchResult = node.name === "web_search" && node.result && !toolFailure(node) ? parseSearchResponse(node.result.content) : null
   const writeOperation = node.name === "write" ? writeOutput(node).operation : undefined
   const displayName = writeOperation === "create" ? "创建文件" : writeOperation === "update" ? "覆盖文件" : toolDisplayName(node.name)
 
@@ -347,6 +361,7 @@ export function ToolCallCard({
             {stats.removed > 0 && <span className="text-destructive">-{stats.removed}</span>}
           </span>
         )}
+        {searchResult && <span className="shrink-0 text-meta text-fg-process-muted">{searchResult.results.length} 条</span>}
         {pendingApproval && (
           <Badge variant="outline" className="shrink-0 gap-1 border-amber-500/50 text-meta font-normal text-amber-600 dark:text-amber-400">
             待审批
@@ -366,6 +381,7 @@ export function ToolCallCard({
           {!isQuestion && render === "terminal" && <TerminalBody node={node} liveOutput={liveOutput} sessionId={sessionId} />}
           {!isQuestion && render === "diff" && (node.name === "write" ? <WriteBody node={node} sessionId={sessionId} /> : <DiffBody node={node} />)}
           {!isQuestion && render === "search" && <SearchBody node={node} />}
+          {!isQuestion && render === "web_search" && <WebSearchBody node={node} />}
           {!isQuestion && render === "read" && <ReadBody node={node} />}
           {!isQuestion && render === "generic" && <GenericBody node={node} />}
           {node.children.length > 0 && (

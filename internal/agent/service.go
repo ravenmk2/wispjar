@@ -59,6 +59,7 @@ type ToolsEnabled struct {
 	Glob      bool `json:"glob"`
 	Grep      bool `json:"grep"`
 	ReadMedia bool `json:"read_media"`
+	WebSearch bool `json:"web_search"`
 }
 
 func defaultToolsEnabled() json.RawMessage {
@@ -92,7 +93,7 @@ func parseToolsEnabled(raw json.RawMessage) (json.RawMessage, error) {
 	}
 	tools := ToolsEnabled{}
 	if err := json.Unmarshal(raw, &tools); err != nil {
-		return nil, errInvalid("tools_enabled 必须是 {exec,read,write,edit,glob,grep,read_media} 布尔对象", map[string]any{"field": "tools_enabled"})
+		return nil, errInvalid("tools_enabled 必须是 {exec,read,write,edit,glob,grep,read_media,web_search} 布尔对象", map[string]any{"field": "tools_enabled"})
 	}
 	b, err := json.Marshal(tools)
 	if err != nil {
@@ -132,17 +133,18 @@ func parseSandboxConfig(raw json.RawMessage) (json.RawMessage, error) {
 }
 
 type AgentInput struct {
-	Name          string
-	Description   string
-	Avatar        string
-	SystemPrompt  string
-	ModelID       string
-	ModelParams   json.RawMessage
-	MaxIterations int
-	ToolsEnabled  json.RawMessage
-	SkillIDs      []string
-	SubAgentIDs   []string
-	SandboxConfig json.RawMessage
+	SearchProviderID *string
+	Name             string
+	Description      string
+	Avatar           string
+	SystemPrompt     string
+	ModelID          string
+	ModelParams      json.RawMessage
+	MaxIterations    int
+	ToolsEnabled     json.RawMessage
+	SkillIDs         []string
+	SubAgentIDs      []string
+	SandboxConfig    json.RawMessage
 }
 
 func dedupe(ids []string) []string {
@@ -160,17 +162,18 @@ func dedupe(ids []string) []string {
 }
 
 type validatedInput struct {
-	name          string
-	description   string
-	avatar        string
-	systemPrompt  string
-	modelID       string
-	modelParams   json.RawMessage
-	maxIterations int
-	toolsEnabled  json.RawMessage
-	skillIDs      []string
-	subAgentIDs   []string
-	sandboxConfig json.RawMessage
+	searchProviderID *string
+	name             string
+	description      string
+	avatar           string
+	systemPrompt     string
+	modelID          string
+	modelParams      json.RawMessage
+	maxIterations    int
+	toolsEnabled     json.RawMessage
+	skillIDs         []string
+	subAgentIDs      []string
+	sandboxConfig    json.RawMessage
 }
 
 func (s *Service) validateInput(orgID, agentID string, in AgentInput) (*validatedInput, error) {
@@ -215,6 +218,17 @@ func (s *Service) validateInput(orgID, agentID string, in AgentInput) (*validate
 	}
 	if v.toolsEnabled, err = parseToolsEnabled(in.ToolsEnabled); err != nil {
 		return nil, err
+	}
+	if in.SearchProviderID != nil && strings.TrimSpace(*in.SearchProviderID) != "" {
+		providerID := strings.TrimSpace(*in.SearchProviderID)
+		var count int64
+		if err := s.db.Model(&store.SearchProvider{}).Where("id = ?", providerID).Count(&count).Error; err != nil {
+			return nil, err
+		}
+		if count == 0 {
+			return nil, errInvalid("所选搜索实例不存在", map[string]any{"field": "search_provider_id"})
+		}
+		v.searchProviderID = &providerID
 	}
 	if v.sandboxConfig, err = parseSandboxConfig(in.SandboxConfig); err != nil {
 		return nil, err
@@ -507,19 +521,20 @@ func (s *Service) Create(actorID, orgID string, in AgentInput) (*Detail, error) 
 		return nil, err
 	}
 	a := store.Agent{
-		ID:            id.New(),
-		OrgID:         orgID,
-		Name:          v.name,
-		Description:   v.description,
-		Avatar:        v.avatar,
-		SystemPrompt:  v.systemPrompt,
-		ModelID:       v.modelID,
-		ModelParams:   v.modelParams,
-		MaxIterations: v.maxIterations,
-		ToolsEnabled:  v.toolsEnabled,
-		SandboxConfig: v.sandboxConfig,
-		Status:        StatusDraft,
-		CreatedBy:     actorID,
+		ID:               id.New(),
+		OrgID:            orgID,
+		Name:             v.name,
+		Description:      v.description,
+		Avatar:           v.avatar,
+		SystemPrompt:     v.systemPrompt,
+		ModelID:          v.modelID,
+		ModelParams:      v.modelParams,
+		MaxIterations:    v.maxIterations,
+		ToolsEnabled:     v.toolsEnabled,
+		SearchProviderID: v.searchProviderID,
+		SandboxConfig:    v.sandboxConfig,
+		Status:           StatusDraft,
+		CreatedBy:        actorID,
 	}
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&a).Error; err != nil {
@@ -553,15 +568,16 @@ func (s *Service) Update(actorID, orgID, agentID string, in AgentInput) (*Detail
 	}
 	transitioned := a.Status == StatusPublished
 	updates := map[string]any{
-		"name":           v.name,
-		"description":    v.description,
-		"avatar":         v.avatar,
-		"system_prompt":  v.systemPrompt,
-		"model_id":       v.modelID,
-		"model_params":   v.modelParams,
-		"max_iterations": v.maxIterations,
-		"tools_enabled":  v.toolsEnabled,
-		"sandbox_config": v.sandboxConfig,
+		"name":               v.name,
+		"description":        v.description,
+		"avatar":             v.avatar,
+		"system_prompt":      v.systemPrompt,
+		"model_id":           v.modelID,
+		"model_params":       v.modelParams,
+		"max_iterations":     v.maxIterations,
+		"tools_enabled":      v.toolsEnabled,
+		"search_provider_id": v.searchProviderID,
+		"sandbox_config":     v.sandboxConfig,
 	}
 	if transitioned {
 		updates["status"] = StatusDraft
