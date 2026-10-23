@@ -638,7 +638,7 @@ function SkillsSection({
     <div>
       <SectionTitle title="技能" hint="选择并排序，顺序即激活优先级" />
       {skills.length === 0 ? (
-        <p className="text-sm text-muted-foreground">本机构暂无技能，可先在技能管理页上传。</p>
+        <p className="text-sm text-muted-foreground">本组织暂无技能，可先在技能管理页上传。</p>
       ) : (
         <div className="space-y-4">
           {selected.length > 0 && (
@@ -724,7 +724,7 @@ function SubAgentsSection({
     <div>
       <SectionTitle title="子智能体" hint="通过 task 工具委派；子智能体不能再有下级" />
       {candidates.length === 0 ? (
-        <p className="text-sm text-muted-foreground">本机构暂无其他已发布的智能体可作为子智能体。</p>
+        <p className="text-sm text-muted-foreground">本组织暂无其他已发布的智能体可作为子智能体。</p>
       ) : (
         <div className="divide-y rounded-md border">
           {candidates.map((agent) => {
@@ -785,7 +785,7 @@ function SandboxSection({
 
   return (
     <div>
-      <SectionTitle title="云电脑" hint="留空使用平台默认配置" />
+      <SectionTitle title="云电脑" hint="留空使用系统默认配置" />
       <div className="space-y-4">
         <div className="space-y-1.5">
           <Label>镜像</Label>
@@ -800,7 +800,7 @@ function SandboxSection({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__default__">平台默认</SelectItem>
+                <SelectItem value="__default__">系统默认</SelectItem>
                 {images.map((img) => (
                   <SelectItem key={img} value={img}>
                     {img}
@@ -812,7 +812,7 @@ function SandboxSection({
             <Input
               value={form.sandbox_config.image}
               onChange={(e) => patch({ sandbox_config: { ...form.sandbox_config, image: e.target.value } })}
-              placeholder="留空使用平台默认镜像"
+              placeholder="留空使用系统默认镜像"
               className="font-mono"
             />
           )}

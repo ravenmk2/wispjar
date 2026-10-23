@@ -21,5 +21,5 @@ export default function OrgUsagePage() {
 
   if (!currentOrgId) return null
 
-  return <UsageReport title="用量" description="本机构 token 用量统计" groupOptions={GROUP_OPTIONS} query={query} />
+  return <UsageReport title="用量" description="本组织 token 用量统计" groupOptions={GROUP_OPTIONS} query={query} />
 }

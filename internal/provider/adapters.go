@@ -62,7 +62,7 @@ func applyCommonParams(cfg *openai.ChatModelConfig, params map[string]any) {
 	}
 }
 
-// applyReasoningEffort 原生支持平台档位的 API：保留值，由目标模型执行其兼容映射。
+// applyReasoningEffort 原生支持系统档位的 API：保留值，由目标模型执行其兼容映射。
 func applyReasoningEffort(cfg *openai.ChatModelConfig, params map[string]any) {
 	if v, ok := stringParam(params, "reasoning_effort"); ok && isReasoningEffort(v) {
 		cfg.ReasoningEffort = openai.ReasoningEffortLevel(v)

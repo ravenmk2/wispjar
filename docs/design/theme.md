@@ -69,7 +69,7 @@ body 基准 14px；聊天正文使用 `--chat-font-size: 16px`、`--chat-line-he
 | `--tooltip-bg` | #FFFFFF | #292929 | Tooltip 与 HoverCard |
 | `--toast-bg` | #2B2B2B | #404040 | Toast 深底提示 |
 
-机构管理、系统管理的主按钮统一使用 `primary`／`primary-hover`／`primary-active`，以启用态为基准，禁用态保留透明度区分。已发布、管理员等信息徽章统一使用 `bg-primary-soft text-link border-primary/20`，不使用实心主按钮填充或无操作的 hover 反馈；成功、警告、危险等语义状态保持各自颜色。云电脑状态采用 6px 圆点，运行/创建使用 `bg-primary`，其他状态使用 `bg-fg-tertiary`，20px 悬浮与键盘聚焦区域通过 Tooltip 展示状态文字。文字链接在深色主题使用更亮的同系蓝以保证可读性。Tooltip 与聊天列表悬浮信息卡随主题切换底色、文字、边框与阴影，内部时间／状态／空闲圆点使用主题辅助色，不固定白字。
+组织管理、系统管理的主按钮统一使用 `primary`／`primary-hover`／`primary-active`，以启用态为基准，禁用态保留透明度区分。已发布、管理员等信息徽章统一使用 `bg-primary-soft text-link border-primary/20`，不使用实心主按钮填充或无操作的 hover 反馈；成功、警告、危险等语义状态保持各自颜色。云电脑状态采用 6px 圆点，运行/创建使用 `bg-primary`，其他状态使用 `bg-fg-tertiary`，20px 悬浮与键盘聚焦区域通过 Tooltip 展示状态文字。文字链接在深色主题使用更亮的同系蓝以保证可读性。Tooltip 与聊天列表悬浮信息卡随主题切换底色、文字、边框与阴影，内部时间／状态／空闲圆点使用主题辅助色，不固定白字。
 
 界面以黑／白的分层 alpha 色表达主次，不在整块容器上叠加低 opacity；助手正文通过独立 `--text-body` 保留深色 #EEEEEE，避免界面主色调整连带改变正文。禁用控件及按需浮现的操作条仍保留禁用、hover、focus 状态。用户气泡必须配套使用 `text-bubble-foreground`；链接使用 `text-link`。
 

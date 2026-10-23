@@ -213,8 +213,8 @@ func (h *Handler) GetSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"items": settings})
 }
 
-// GetSandboxSettings GET /orgs/:orgId/admin/sandbox-settings：机构 admin 只读
-// sandbox.* 设置子集（编辑器沙箱分区取镜像列表/默认资源用，不暴露其它平台 KV）。
+// GetSandboxSettings GET /orgs/:orgId/admin/sandbox-settings：组织 admin 只读
+// sandbox.* 设置子集（编辑器沙箱分区取镜像列表/默认资源用，不暴露其它系统 KV）。
 func (h *Handler) GetSandboxSettings(c *gin.Context) {
 	settings, err := h.svc.ListSettings()
 	if err != nil {

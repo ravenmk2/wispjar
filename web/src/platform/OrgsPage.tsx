@@ -76,16 +76,16 @@ export default function OrgsPage() {
 
   return (
     <div>
-      <PageHeader title="机构" description="平台全部机构">
+      <PageHeader title="组织" description="系统内全部组织">
         <Button size="sm" onClick={() => setCreateOpen(true)}>
-          新建机构
+          新建组织
         </Button>
       </PageHeader>
 
       {orgs === null ? (
         <TableSkeleton />
       ) : orgs.length === 0 ? (
-        <EmptyState title="暂无机构" />
+        <EmptyState title="暂无组织" />
       ) : (
         <div className="rounded-md border">
           <Table>
@@ -104,7 +104,7 @@ export default function OrgsPage() {
                 <TableRow key={org.id}>
                   <TableCell className="font-medium">
                     <span className="mr-2">{org.name}</span>
-                    {org.is_platform && <Badge variant="secondary">平台</Badge>}
+                    {org.is_platform && <Badge variant="secondary">系统</Badge>}
                   </TableCell>
                   <TableCell>
                     <Badge variant={org.status === "active" ? "default" : "outline"}>
@@ -183,10 +183,10 @@ export default function OrgsPage() {
       <ConfirmDialog
         open={toggleTarget !== null}
         onOpenChange={(open) => !open && setToggleTarget(null)}
-        title={toggleTarget?.status === "active" ? "停用机构" : "启用机构"}
+        title={toggleTarget?.status === "active" ? "停用组织" : "启用组织"}
         description={
           toggleTarget?.status === "active"
-            ? `停用后「${toggleTarget?.name}」的成员将无法使用该机构，确定继续？`
+            ? `停用后「${toggleTarget?.name}」的成员将无法使用该组织，确定继续？`
             : `确定启用「${toggleTarget?.name}」？`
         }
         confirmText={toggleTarget?.status === "active" ? "停用" : "启用"}
@@ -216,7 +216,7 @@ function CreateOrgDialog({
     setLoading(true)
     try {
       await platformOrgsApi.create(name.trim())
-      toast.success("机构已创建")
+      toast.success("组织已创建")
       setName("")
       onOpenChange(false)
       onCreated()
@@ -231,11 +231,11 @@ function CreateOrgDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>新建机构</DialogTitle>
+          <DialogTitle>新建组织</DialogTitle>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="org-name">机构名称</Label>
+            <Label htmlFor="org-name">组织名称</Label>
             <Input id="org-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </div>
           <DialogFooter>

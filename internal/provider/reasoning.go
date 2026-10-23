@@ -6,7 +6,7 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/openai"
 )
 
-// 平台档位保存在 capabilities/session.model_params，供应商参数仅在调用边界转换。
+// 系统档位保存在 capabilities/session.model_params，供应商参数仅在调用边界转换。
 func isReasoningEffort(effort string) bool {
 	switch effort {
 	case "none", "minimal", "low", "medium", "high", "xhigh", "max":
@@ -37,7 +37,7 @@ func applyDeepSeekEffort(cfg *openai.ChatModelConfig, effort string) {
 }
 
 // Qwen3.8 提供原生 low/medium/xhigh；更早的 Qwen 用连续 thinking_budget。
-// 预算数值是平台分档约定，不是供应商提供的枚举。max 不设预算，使用模型最大值。
+// 预算数值是系统分档约定，不是供应商提供的枚举。max 不设预算，使用模型最大值。
 // https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions/
 func applyQwenEffort(cfg *openai.ChatModelConfig, effort string) {
 	if !isReasoningEffort(effort) {

@@ -68,8 +68,8 @@ func (c *Client) createSandbox(ctx context.Context, sessionID string, o Options)
 	return sb, nil
 }
 
-// mergeEnv 以用户配置（平台默认经 applySettings 合并后的 Agent 级 env）为基础，
-// 最后写入平台保留键，保证标记不可被配置覆盖。
+// mergeEnv 以用户配置（系统默认经 applySettings 合并后的 Agent 级 env）为基础，
+// 最后写入系统保留键，保证标记不可被配置覆盖。
 func mergeEnv(env map[string]string) map[string]string {
 	out := make(map[string]string, len(env)+1)
 	for k, v := range env {

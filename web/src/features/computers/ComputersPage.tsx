@@ -217,11 +217,11 @@ function ComputerEditor({ orgId, computer, onClose, onSaved, onRenamed }: { orgI
   }
   function changed(fn: () => void) { fn(); key.current = uuid() }
   return <Dialog open onOpenChange={(open) => !open && !busy && onClose()}><DialogContent className="max-h-[85vh] overflow-y-auto">
-    <DialogHeader><DialogTitle>{computer ? "编辑云电脑" : "创建云电脑"}</DialogTitle><DialogDescription>{computer ? "名称和变量可直接保存；修改镜像或资源需要空闲后重建，三类持久存储保留。" : "镜像和资源可使用智能体模板；环境变量以平台默认值为基础。"}</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>{computer ? "编辑云电脑" : "创建云电脑"}</DialogTitle><DialogDescription>{computer ? "名称和变量可直接保存；修改镜像或资源需要空闲后重建，三类持久存储保留。" : "镜像和资源可使用智能体模板；环境变量以系统默认值为基础。"}</DialogDescription></DialogHeader>
     <div className="space-y-3">
       <div><Label htmlFor="computer-name">名称</Label><Input id="computer-name" maxLength={128} value={name} onChange={(e) => changed(() => setName(e.target.value))} /></div>
-      {!computer && <div><Label htmlFor="computer-template">环境模板</Label><select id="computer-template" className={selectClass} value={agent} onChange={(e) => changed(() => setAgent(e.target.value))}><option value="">平台默认</option>{agents?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>}
-      <div><Label htmlFor="computer-image">镜像（平台已启用）</Label><Input id="computer-image" value={image} placeholder="使用默认镜像" onChange={(e) => changed(() => setImage(e.target.value))} /></div>
+      {!computer && <div><Label htmlFor="computer-template">环境模板</Label><select id="computer-template" className={selectClass} value={agent} onChange={(e) => changed(() => setAgent(e.target.value))}><option value="">系统默认</option>{agents?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>}
+      <div><Label htmlFor="computer-image">镜像（系统已启用）</Label><Input id="computer-image" value={image} placeholder="使用默认镜像" onChange={(e) => changed(() => setImage(e.target.value))} /></div>
       <div className="grid grid-cols-2 gap-3"><div><Label htmlFor="computer-cpu">CPU</Label><Input id="computer-cpu" value={cpu} placeholder="默认" onChange={(e) => changed(() => setCPU(e.target.value))} /></div><div><Label htmlFor="computer-memory">内存</Label><Input id="computer-memory" value={memory} placeholder="默认，例如 1Gi" onChange={(e) => changed(() => setMemory(e.target.value))} /></div></div>
       <div className="space-y-2"><Label>电脑环境变量</Label><EnvEditor rows={envRows} savedKeys={envKeys} disabled={busy || !envLoaded} onChange={(rows) => changed(() => setEnvRows(rows))} /><p className="text-xs text-muted-foreground">下一轮任务生效。同名变量可由智能体和单次命令覆盖。</p></div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

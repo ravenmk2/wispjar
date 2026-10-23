@@ -18,16 +18,17 @@
 ## 1. 迁移与种子
 
 - 迁移文件命名：`000001_init.up.sql` / `000001_init.down.sql` 递增。
-- 种子数据在 `000001_init.up.sql` 内完成（见 §11）：平台管理机构、默认平台设置。
-- 初始超管：用户名 `admin`，由应用启动时播种（bcrypt 需应用层计算）：初始密码取环境变量 `WISPJAR_ADMIN_PASSWORD`，未提供则生成随机值打印到启动日志；`must_change_password=1` 强制首登改密。
+- 种子数据在 `000001_init.up.sql` 内完成（见 §12），内置组织通过 `000007_system_display_names.up.sql` 统一默认显示名为「系统管理」。历史迁移保持原样。
+- 初始系统管理员：用户名 `admin`，由应用启动时播种（bcrypt 需应用层计算）：初始密码取环境变量 `WISPJAR_ADMIN_PASSWORD`，未提供则生成随机值打印到启动日志；`must_change_password=1` 强制首登改密。
+- 默认显示名迁移：`000007_system_display_names.up.sql` 仅把固定内置组织且名称仍为旧默认值的记录改为「系统管理」；仅把用户名为 `admin`、拥有内置组织管理员成员关系且显示名仍为旧默认值的账号改为「系统管理员」。名称使用二进制精确匹配，自定义名称及其他账号保持原样。新建默认账号直接使用「系统管理员」。降级仅回退迁移版本，保留显示名，避免覆盖后来设置的名称；旧应用可继续读取。
 
-## 2. organization（机构）
+## 2. organization（组织）
 
 ```sql
 CREATE TABLE organization (
   id          CHAR(32)     NOT NULL PRIMARY KEY,
   name        VARCHAR(128) NOT NULL,
-  is_platform TINYINT(1)   NOT NULL DEFAULT 0,          -- 1=内置平台管理机构，全局唯一
+  is_platform TINYINT(1)   NOT NULL DEFAULT 0,          -- 1=内置「系统管理」组织，全局唯一
   status      VARCHAR(16)  NOT NULL DEFAULT 'active',   -- active / disabled
   created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)
@@ -58,7 +59,7 @@ CREATE TABLE user (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-## 4. org_member（机构成员）
+## 4. org_member（组织成员）
 
 ```sql
 CREATE TABLE org_member (
@@ -74,7 +75,7 @@ CREATE TABLE org_member (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-## 5. model_provider（供应商，平台级）
+## 5. model_provider（供应商，系统级）
 
 ```sql
 CREATE TABLE model_provider (
@@ -94,7 +95,7 @@ CREATE TABLE model_provider (
 
 加密约定（`internal/provider/crypto.go`）：密钥明文只在内存出现；`api_key_enc = nonce(12字节) || AES-256-GCM(key=master_key, nonce, plaintext)`；master key 为 32 字节，来自环境变量 `WISPJAR_MASTER_KEY`（base64 或 hex 编码，启动时解码校验长度）。备注、连通性检查结果等扩展信息一律放 `extra`，不加列。
 
-## 6. model（上架模型，平台级）
+## 6. model（上架模型，系统级）
 
 ```sql
 CREATE TABLE model (
@@ -114,7 +115,7 @@ CREATE TABLE model (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-## 7. platform_setting（平台设置 KV）
+## 7. platform_setting（系统设置 KV）
 
 ```sql
 CREATE TABLE platform_setting (
@@ -125,7 +126,7 @@ CREATE TABLE platform_setting (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-已定义的 key（新平台配置一律新增 key，不改表结构）：
+已定义的 key（新系统配置一律新增 key，不改表结构）：
 
 | key | value 结构 | 默认 |
 |---|---|---|
@@ -136,7 +137,7 @@ CREATE TABLE platform_setting (
 | `sandbox.idle_ttl_seconds` | `number`（空闲多久暂停沙箱，见 runtime.md §7.2） | `28800` |
 | `sandbox.ttl_seconds` | `number`（沙箱硬 TTL，随活动续约） | `3600` |
 
-## 8. agent / skill / agent_skill / agent_subagent（机构级）
+## 8. agent / skill / agent_skill / agent_subagent（组织级）
 
 ```sql
 CREATE TABLE agent (
@@ -195,7 +196,7 @@ CREATE TABLE agent_subagent (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-`agent_subagent` 业务约束（service 层校验，DB 不表达）：同机构；`sub_agent_id != agent_id`；保存时做环检测（限 1 层深度：子 Agent 自身不得再出现在任何 agent_subagent 的 agent_id 列——即子 Agent 不能再有下级）；仅 published Agent 可被委派（被引用者下线时，主 Agent 的 task 工具描述中将其移除并记审计）。
+`agent_subagent` 业务约束（service 层校验，DB 不表达）：同组织；`sub_agent_id != agent_id`；保存时做环检测（限 1 层深度：子 Agent 自身不得再出现在任何 agent_subagent 的 agent_id 列——即子 Agent 不能再有下级）；仅 published Agent 可被委派（被引用者下线时，主 Agent 的 task 工具描述中将其移除并记审计）。
 
 ## 9. session / session_event / agent_checkpoint（核心）
 
@@ -254,7 +255,7 @@ CREATE TABLE agent_checkpoint (
 5. `agent_checkpoint` 定期清理：`DELETE WHERE created_at < NOW() - INTERVAL 7 DAY`（审批 checkpoint 在 decided 后立即删除）。
 6. 旧会话沙箱状态由 `session.sandbox` 保存，仅供兼容和迁移。绑定云电脑的新会话使用 `session.computer_id`；实例状态以 `computer` 为准，不能根据某个会话删除状态回收共享电脑。
 
-## 10. attachment（图片附件，机构级）
+## 10. attachment（图片附件，组织级）
 
 ```sql
 CREATE TABLE attachment (
@@ -272,8 +273,8 @@ CREATE TABLE attachment (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-- 字节本体在库外内容寻址存储（§13），表只存元数据；org_id 记录首发机构，当前授权与租户文件名在 attachment_access 中（§10.1），宽高、MIME、大小为全局不变校验依据。
-- 同字节内容全局只有一行；租户权限由 attachment_access 独立保存，不能因为首发机构不同而禁止其他机构上传相同字节。
+- 字节本体在库外内容寻址存储（§13），表只存元数据；org_id 记录首发组织，当前授权与租户文件名在 attachment_access 中（§10.1），宽高、MIME、大小为全局不变校验依据。
+- 同字节内容全局只有一行；租户权限由 attachment_access 独立保存，不能因为首发组织不同而禁止其他组织上传相同字节。
 - 写入方有两类：用户上传（`POST /sessions/{id}/attachments`）与 read_media 工具（agent 读沙箱图片入库，created_by 记会话所属用户 id；与用户上传同一套魔数/8MB/64M 像素闸门）。
 - **附件永不自动删除**：删除会话不删 blob 与表行（fork 共享同一不可变对象）；引用感知 GC（扫描 `session_event` 引用 + orphan 清理）后续另做。
 
@@ -324,7 +325,7 @@ CREATE TABLE usage_daily (
 
 CREATE TABLE audit_log (
   id         CHAR(32)    NOT NULL PRIMARY KEY,
-  org_id     CHAR(32)    NOT NULL DEFAULT '',           -- 平台级操作为空串
+  org_id     CHAR(32)    NOT NULL DEFAULT '',           -- 系统级操作为空串
   actor_id   CHAR(32)    NOT NULL,
   action     VARCHAR(64) NOT NULL,                      -- provider.create / provider.update_key / agent.publish / member.add / skill.upload ...
   target     VARCHAR(128) NOT NULL DEFAULT '',
@@ -336,14 +337,14 @@ CREATE TABLE audit_log (
 
 `usage_daily` 聚合方式：runtime 在每个 `assistant/message` 事件提交后，从事件 `data.usage` 异步 `INSERT ... ON DUPLICATE KEY UPDATE ... = ... + VALUES(...)`（按事件发生日的本地日期）。子 Agent 的用量记在主 Agent 行上（事件中保留 `sub_agent_id` 供明细分析，报表 v1 不展示）。
 
-## 12. 种子数据（000001_init.up.sql 尾部）
+## 12. 种子数据（初始种子与后续迁移完成后的状态）
 
 ```sql
--- 平台管理机构（固定 id 便于引用：全 0 变体不符合 UUIDv7，仅作内置常量，见 internal/id/wellknown.go）
+-- 「系统管理」组织（固定 id 便于引用：全 0 变体不符合 UUIDv7，仅作内置常量，见 internal/id/wellknown.go）
 INSERT INTO organization (id, name, is_platform) VALUES
-  ('00000000000000000000000000000001', '平台管理机构', 1);
+  ('00000000000000000000000000000001', '系统管理', 1);
 
--- 默认平台设置
+-- 默认系统设置
 INSERT INTO platform_setting (`key`, value, updated_by) VALUES
   ('sandbox.default_image',    '"python:3.12"',                'system'),
   ('sandbox.images',           '["python:3.12"]',              'system'),
@@ -356,7 +357,7 @@ INSERT INTO platform_setting (`key`, value, updated_by) VALUES
 后续迁移新增的种子数据：
 
 ```sql
--- 000004_sandbox_env.up.sql：平台级沙箱默认环境变量（agent.sandbox_config.env 逐键覆盖）
+-- 000004_sandbox_env.up.sql：系统级沙箱默认环境变量（agent.sandbox_config.env 逐键覆盖）
 INSERT INTO platform_setting (`key`, value, updated_by) VALUES
   ('sandbox.env', '{}', 'system');
 ```
@@ -371,7 +372,7 @@ INSERT INTO platform_setting (`key`, value, updated_by) VALUES
 
 ## 14. 云电脑与持久卷（000005_computers）
 
-以下 DDL 是在上述基础表上的增量定义，与 `000005_computers.up.sql` 保持一致。资源归属由应用层同时校验机构成员关系和用户身份；外部资源操作不放在 SQL 事务中。
+以下 DDL 是在上述基础表上的增量定义，与 `000005_computers.up.sql` 保持一致。资源归属由应用层同时校验组织成员关系和用户身份；外部资源操作不放在 SQL 事务中。
 
 ```sql
 -- Additive migration. No backend resources are created or deleted by SQL.
@@ -505,6 +506,6 @@ ALTER TABLE skill
 - `ready/missing` 只允许 Inspect，不允许 Ensure；发现缺失写 missing。显式恢复的卷只有全部归属标签匹配时才能回到 ready。
 - `config/policy/usage/execution/manifest/progress` 由模型写入前初始化为 `{}`，避免 JSON `NULL`；旧 `session.workspace` 保持 nullable 以兼容旧插入，新流程显式写入工作区状态。
 - `skill.revision` 初始为 1；旧包 `content_hash` 初始空串，技能同步负责计算摘要。单版本安装不意味着丢失运行记录中的修订审计。
-- `resource_operation.idempotency_key` 可空（无幂等键），非空值使用二进制排序规则；唯一约束按机构、用户、action 限定。相同键且 request_hash 不同由服务返回 conflict。
+- `resource_operation.idempotency_key` 可空（无幂等键），非空值使用二进制排序规则；唯一约束按组织、用户、action 限定。相同键且 request_hash 不同由服务返回 conflict。
 - `computer_run` 的活动主任务互斥由运行服务锁定 session 行后检查并登记，不能仅依赖进程 map。过期 lease 不等同于远端进程结束。
 - 删除电脑使用 status=deleted，不级联删除用户卷。schema down 会删除资源索引表，执行前应导出资源身份；已有工作区新写入需要独立数据回滚计划。

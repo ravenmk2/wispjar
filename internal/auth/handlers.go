@@ -76,7 +76,7 @@ func (s *Service) Login(c *gin.Context) {
 	}
 	orgs, err := s.orgsOf(user.ID)
 	if err != nil {
-		respond.Error(c, http.StatusInternalServerError, respond.CodeInternal, "查询机构失败", nil)
+		respond.Error(c, http.StatusInternalServerError, respond.CodeInternal, "查询组织失败", nil)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"token": token, "user": toUserEntry(user), "orgs": orgs})
@@ -133,7 +133,7 @@ func (s *Service) Me(c *gin.Context) {
 	}
 	orgs, err := s.orgsOf(user.ID)
 	if err != nil {
-		respond.Error(c, http.StatusInternalServerError, respond.CodeInternal, "查询机构失败", nil)
+		respond.Error(c, http.StatusInternalServerError, respond.CodeInternal, "查询组织失败", nil)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"user": toUserEntry(user), "orgs": orgs})

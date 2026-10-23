@@ -68,7 +68,7 @@ function DetailDialog({ item, orgName, onClose }: { item: AuditItem | null; orgN
               </span>
               <span className="text-muted-foreground">目标</span>
               <span className="break-all">{item.target || "-"}</span>
-              <span className="text-muted-foreground">机构</span>
+              <span className="text-muted-foreground">组织</span>
               <span>{orgName || "-"}</span>
             </div>
             {detail && (
@@ -150,17 +150,17 @@ export default function AuditPage() {
 
   return (
     <div>
-      <PageHeader title="审计" description="平台操作审计日志" />
+      <PageHeader title="审计" description="系统操作审计日志" />
 
       <div className="mb-4 flex items-end gap-3">
         <div className="space-y-1.5">
-          <Label>机构</Label>
+          <Label>组织</Label>
           <Select value={orgId} onValueChange={setOrgId}>
             <SelectTrigger className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">全部机构</SelectItem>
+              <SelectItem value="all">全部组织</SelectItem>
               {orgs.map((o) => (
                 <SelectItem key={o.id} value={o.id}>
                   {o.name}
@@ -185,7 +185,7 @@ export default function AuditPage() {
                   <TableHead>操作者</TableHead>
                   <TableHead>动作</TableHead>
                   <TableHead>目标</TableHead>
-                  <TableHead>机构</TableHead>
+                  <TableHead>组织</TableHead>
                   <TableHead className="w-20">详情</TableHead>
                 </TableRow>
               </TableHeader>

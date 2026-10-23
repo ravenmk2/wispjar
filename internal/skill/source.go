@@ -95,7 +95,7 @@ func (s *Service) ReplacePackage(ctx context.Context, actorID, orgID, skillID st
 
 func (s *Service) publishPackage(ctx context.Context, actorID, orgID, skillID string, expected uint64, fh *multipart.FileHeader) (result *ListItem, err error) {
 	if !validID(orgID) || (skillID != "" && !validID(skillID)) {
-		return nil, errInvalid("无效的技能或机构 ID", nil)
+		return nil, errInvalid("无效的技能或组织 ID", nil)
 	}
 	data, err := readPackageFile(fh)
 	if err != nil {
@@ -130,7 +130,7 @@ func (s *Service) publishPackage(ctx context.Context, actorID, orgID, skillID st
 		}
 		for _, name := range pkg.Files {
 			if name == "_source.zip" {
-				return errInvalidSkill("_source.zip 是平台保留文件名", nil)
+				return errInvalidSkill("_source.zip 是系统保留文件名", nil)
 			}
 		}
 		meta, err := buildMeta(pkg)
@@ -210,7 +210,7 @@ func (s *Service) publishPackage(ctx context.Context, actorID, orgID, skillID st
 // It is safe after an unknown SQL commit outcome. It never changes the row.
 func (s *Service) RecoverSources(ctx context.Context, orgID, skillID string) error {
 	if !validID(orgID) || !validID(skillID) {
-		return errInvalid("无效的技能或机构 ID", nil)
+		return errInvalid("无效的技能或组织 ID", nil)
 	}
 	return withDBLock(ctx, s.db, "source:"+orgID+":"+skillID, func() error {
 		return s.cleanCandidates(ctx, orgID, skillID, filepath.Join(s.dataDir, "skills", orgID, ".sources", skillID))

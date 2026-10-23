@@ -164,7 +164,7 @@ func (s *Service) ensureResumed(ctx context.Context, sessionID string, h *Handle
 	return true
 }
 
-// applySettings 用平台设置补齐 opts 缺省字段（调用方只传会话/Agent 级覆盖），
+// applySettings 用系统设置补齐 opts 缺省字段（调用方只传会话/Agent 级覆盖），
 // 设置经短 TTL 缓存源读取，PUT /platform/settings 后无需重启即可生效。
 func (s *Service) applySettings(ctx context.Context, opts Options) Options {
 	if s.settings == nil {
@@ -187,7 +187,7 @@ func (s *Service) applySettings(ctx context.Context, opts Options) Options {
 	if len(opts.NetworkPolicy) == 0 {
 		opts.NetworkPolicy = st.EgressPolicy
 	}
-	// Env 逐键合并（不同于 ResourceLimits 整体替换）：平台默认打底，会话/Agent 级覆盖同名键。
+	// Env 逐键合并（不同于 ResourceLimits 整体替换）：系统默认打底，会话/Agent 级覆盖同名键。
 	if len(st.Env) > 0 {
 		merged := make(map[string]string, len(st.Env)+len(opts.Env))
 		for k, v := range st.Env {

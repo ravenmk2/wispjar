@@ -7,7 +7,7 @@ import (
 )
 
 // validateSubagentDAG 校验子智能体指派关系：不得包含自身、不得成环、深度限 1 层
-// （被指定为子智能体者自身不得再有下级）。childOf 为机构内既有的
+// （被指定为子智能体者自身不得再有下级）。childOf 为组织内既有的
 // agent_id -> sub_agent_ids 边集（不含被编辑智能体自身的行）。
 func validateSubagentDAG(agentID string, subIDs []string, childOf map[string][]string) *Error {
 	seen := map[string]bool{}

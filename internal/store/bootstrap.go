@@ -45,7 +45,7 @@ func BootstrapAdmin(db *gorm.DB, password string) error {
 				ID:                 id.New(),
 				Username:           "admin",
 				PasswordHash:       string(hash),
-				DisplayName:        "平台管理员",
+				DisplayName:        "系统管理员",
 				Status:             "active",
 				MustChangePassword: true,
 				CreatedAt:          time.Now(),

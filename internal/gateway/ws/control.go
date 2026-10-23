@@ -34,7 +34,7 @@ func (c *conn) openControl(f clientFrame) {
 		return
 	}
 	if !member {
-		c.sendFrame(errorFrame(f.StreamID, respond.CodeForbidden, "不是该机构成员", nil))
+		c.sendFrame(errorFrame(f.StreamID, respond.CodeForbidden, "不是该组织成员", nil))
 		c.sendFrame(endFrame(f.StreamID))
 		return
 	}

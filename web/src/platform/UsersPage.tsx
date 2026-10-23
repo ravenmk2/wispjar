@@ -106,7 +106,7 @@ export default function UsersPage() {
 
   return (
     <div>
-      <PageHeader title="用户" description="平台全部用户">
+      <PageHeader title="用户" description="系统内全部用户">
         <Button size="sm" onClick={() => setCreateOpen(true)}>
           新建用户
         </Button>
@@ -138,7 +138,7 @@ export default function UsersPage() {
                 <TableHead>用户名</TableHead>
                 <TableHead>显示名</TableHead>
                 <TableHead>状态</TableHead>
-                <TableHead>所属机构</TableHead>
+                <TableHead>所属组织</TableHead>
                 <TableHead>创建时间</TableHead>
                 <TableHead className="w-14">操作</TableHead>
               </TableRow>
@@ -176,7 +176,7 @@ export default function UsersPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setOrgsTarget(u)}>编辑机构归属</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setOrgsTarget(u)}>编辑组织归属</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setResetTarget(u)}>重置密码</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => setToggleTarget(u)}>
@@ -355,10 +355,10 @@ function CreateUserDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>初始机构</Label>
+            <Label>初始组织</Label>
             <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border p-2">
               {orgs.length === 0 ? (
-                <p className="px-1 py-2 text-sm text-muted-foreground">暂无可选机构</p>
+                <p className="px-1 py-2 text-sm text-muted-foreground">暂无可选组织</p>
               ) : (
                 orgs.map((org) => (
                   <label key={org.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-accent">
@@ -467,8 +467,8 @@ function UserOrgsDialog({ user, onClose }: { user: PlatformUser; onClose: (chang
     <Dialog open onOpenChange={(open) => !open && onClose(changed)}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>机构归属 · {user.username}</DialogTitle>
-          <DialogDescription>将用户加入机构、调整角色或移出机构</DialogDescription>
+          <DialogTitle>组织归属 · {user.username}</DialogTitle>
+          <DialogDescription>将用户加入组织、调整角色或移出组织</DialogDescription>
         </DialogHeader>
         <div className="max-h-96 space-y-1 overflow-y-auto">
           {orgs.map((org) => {
@@ -477,7 +477,7 @@ function UserOrgsDialog({ user, onClose }: { user: PlatformUser; onClose: (chang
               <div key={org.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <span className="text-sm font-medium">{org.name}</span>
-                  {org.is_platform && <Badge variant="secondary" className="ml-2">平台</Badge>}
+                  {org.is_platform && <Badge variant="secondary" className="ml-2">系统</Badge>}
                 </div>
                 {m ? (
                   <>

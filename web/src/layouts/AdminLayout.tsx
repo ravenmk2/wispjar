@@ -57,26 +57,26 @@ export function OrgSwitcher({ variant = "header" }: { variant?: "header" | "side
           >
             <Building2 className="size-4 shrink-0 text-muted-foreground" />
             <span className="min-w-0 flex-1 truncate text-left font-medium">{currentOrg.name}</span>
-            {currentOrg.is_platform && <Badge variant="secondary">平台</Badge>}
+            {currentOrg.is_platform && <Badge variant="secondary">系统</Badge>}
             <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
           </button>
         ) : (
           <Button variant="outline" size="sm" className="max-w-56 gap-1.5">
             <Building2 className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate">{currentOrg.name}</span>
-            {currentOrg.is_platform && <Badge variant="secondary">平台</Badge>}
+            {currentOrg.is_platform && <Badge variant="secondary">系统</Badge>}
             <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
           </Button>
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuLabel>切换机构</DropdownMenuLabel>
+        <DropdownMenuLabel>切换组织</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {orgs.map((org) => (
           <DropdownMenuItem key={org.id} onClick={() => switchOrg(org.id)} className="gap-2">
             <span className={cn("size-1.5 rounded-full", org.id === currentOrg.id ? "bg-primary" : "bg-transparent")} />
             <span className="flex-1 truncate">{org.name}</span>
-            {org.is_platform && <Badge variant="secondary">平台</Badge>}
+            {org.is_platform && <Badge variant="secondary">系统</Badge>}
             {org.role === "admin" && <span className="text-xs text-muted-foreground">管理员</span>}
           </DropdownMenuItem>
         ))}
@@ -191,7 +191,7 @@ export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar
             {currentOrg && (
               <span className="mt-1 flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
                 <span className="truncate">{currentOrg.name}</span>
-                {currentOrg.is_platform && <Badge variant="secondary">平台</Badge>}
+                {currentOrg.is_platform && <Badge variant="secondary">系统</Badge>}
               </span>
             )}
           </div>
@@ -200,14 +200,14 @@ export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar
         <DropdownMenuSub>
           <DropdownMenuSubTrigger className="gap-2">
             <Building2 className="size-4" />
-            切换机构
+            切换组织
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-56">
             {orgs.map((org) => (
               <DropdownMenuItem key={org.id} onClick={() => switchOrg(org.id)} className="gap-2">
                 <span className={cn("size-1.5 rounded-full", org.id === currentOrg?.id ? "bg-primary" : "bg-transparent")} />
                 <span className="flex-1 truncate">{org.name}</span>
-                {org.is_platform && <Badge variant="secondary">平台</Badge>}
+                {org.is_platform && <Badge variant="secondary">系统</Badge>}
                 {org.role === "admin" && <span className="text-xs text-muted-foreground">管理员</span>}
               </DropdownMenuItem>
             ))}
@@ -220,7 +220,7 @@ export function UserMenu({ variant = "header" }: { variant?: "header" | "sidebar
         {isAdmin && (
           <DropdownMenuItem onClick={() => navigate("/admin/members")}>
             <Settings2 className="size-4" />
-            机构管理
+            组织管理
           </DropdownMenuItem>
         )}
         {isPlatformAdmin && (
@@ -307,7 +307,7 @@ export function AdminLayout() {
   const currentOrg = useCurrentOrg()
   return (
     <SecondaryLayout
-      title={`机构管理 · ${currentOrg?.name ?? ""}`}
+      title={`组织管理 · ${currentOrg?.name ?? ""}`}
       items={[
         { to: "/admin/agents", label: "智能体" },
         { to: "/admin/skills", label: "技能" },
@@ -324,7 +324,7 @@ export function PlatformLayout() {
       title="系统管理"
       icon={<ShieldCheck className="size-4" />}
       items={[
-        { to: "/platform/orgs", label: "机构" },
+        { to: "/platform/orgs", label: "组织" },
         { to: "/platform/users", label: "用户" },
         { to: "/platform/providers", label: "供应商" },
         { to: "/platform/models", label: "模型" },

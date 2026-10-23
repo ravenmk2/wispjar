@@ -86,7 +86,7 @@ func (s *Service) ResolveOrg() gin.HandlerFunc {
 		orgID := c.Param("orgId")
 		var member store.OrgMember
 		if err := s.db.Where("org_id = ? AND user_id = ?", orgID, UID(c)).First(&member).Error; err != nil {
-			respond.Error(c, http.StatusForbidden, respond.CodeNotMember, "不是该机构成员", nil)
+			respond.Error(c, http.StatusForbidden, respond.CodeNotMember, "不是该组织成员", nil)
 			return
 		}
 		c.Set(ctxOrg, orgID)
@@ -98,7 +98,7 @@ func (s *Service) ResolveOrg() gin.HandlerFunc {
 func RequireOrgAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if Role(c) != "admin" {
-			respond.Error(c, http.StatusForbidden, respond.CodeForbidden, "需要机构管理员权限", gin.H{"required": "admin"})
+			respond.Error(c, http.StatusForbidden, respond.CodeForbidden, "需要组织管理员权限", gin.H{"required": "admin"})
 			return
 		}
 		c.Next()
@@ -111,7 +111,7 @@ func (s *Service) RequirePlatformAdmin() gin.HandlerFunc {
 		if err := s.db.Model(&store.OrgMember{}).
 			Where("org_id = ? AND user_id = ? AND role = ?", id.PlatformOrgID, UID(c), "admin").
 			Count(&count).Error; err != nil || count == 0 {
-			respond.Error(c, http.StatusForbidden, respond.CodeForbidden, "需要平台管理员权限", gin.H{"required": "platform admin"})
+			respond.Error(c, http.StatusForbidden, respond.CodeForbidden, "需要系统管理员权限", gin.H{"required": "platform admin"})
 			return
 		}
 		c.Next()

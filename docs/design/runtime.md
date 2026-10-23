@@ -77,9 +77,9 @@ type ChatModelFactory interface {
   - `NormalizeUsage(raw)`：原始 usage 归一化（见下）。
 - 参数映射（白名单，未识别键忽略）：
   - `temperature/top_p/max_tokens` → 组件对应字段（各家通用）；
-  - `reasoning_effort` 是平台统一档位 `none/minimal/low/medium/high/xhigh/max`，保存值不变，仅调用边界转换，具体见下表；缺省或非法值不额外注入思考参数；
+  - `reasoning_effort` 是系统统一档位 `none/minimal/low/medium/high/xhigh/max`，保存值不变，仅调用边界转换，具体见下表；缺省或非法值不额外注入思考参数；
   - `prompt_cache_key`（string）→ `cfg.ExtraFields`，**仅 ark 放行**：ark 上下文缓存的路由亲和参数，上下文连续的请求用同一取值（builder 对 ark 供应商注入 `sessionID`，同 key 流量 ≤15 rpm）；其余各家（含 openai_compat）不放行。
-- 模型能力声明 `capabilities.reasoning_efforts`（上述七档的可选子集）+ `reasoning_effort_default`（必须属于已选集合）由平台逐模型录入；空 = 不支持选档。供应商/模型不支持关闭思考或不支持某档位时，配置中不应勾选该档位；不因统一词表而推断所有模型均支持全部七档。
+- 模型能力声明 `capabilities.reasoning_efforts`（上述七档的可选子集）+ `reasoning_effort_default`（必须属于已选集合）由系统逐模型录入；空 = 不支持选档。供应商/模型不支持关闭思考或不支持某档位时，配置中不应勾选该档位；不因统一词表而推断所有模型均支持全部七档。
 
 推理等级调用映射（2026-10-16 核对官方文档）：
 
@@ -93,7 +93,7 @@ type ChatModelFactory interface {
 
 - DeepSeek 的非 none 档位同时发送 `thinking.type=enabled`，表中值发到顶层 `reasoning_effort`。依据：[DeepSeek Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)。
 - 方舟支持选档的模型接受全部七档并按模型版本执行官方兼容映射，例如豆包 `none→minimal`、`xhigh/max→high`；DeepSeek/GLM 的规则不同，`ep-*` 接入点又不暴露真实模型，因此保留原值交由方舟转换，不能全局压到 high。`minimal` 在部分方舟模型上也会关闭思考。依据：[方舟深度思考](https://docs.volcengine.com/docs/ark/deep-thinking)。
-- Qwen 非 none 档位发送 `enable_thinking=true`。Qwen3.8-* 用顶层 `reasoning_effort`，不发 `thinking_budget`，二者互斥；较早 Qwen 表中的数字是平台约定的思考 token 预算，通过顶层 `thinking_budget` 传入（`ExtraFields`），并非阿里云官方枚举或官方档位等价表；max 省略预算，按官方默认使用该模型最大思维链长度。依据：[百炼 Chat Completions 参数](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions/)、[思考预算说明](https://www.alibabacloud.com/help/en/model-studio/deep-thinking)。
+- Qwen 非 none 档位发送 `enable_thinking=true`。Qwen3.8-* 用顶层 `reasoning_effort`，不发 `thinking_budget`，二者互斥；较早 Qwen 表中的数字是系统约定的思考 token 预算，通过顶层 `thinking_budget` 传入（`ExtraFields`），并非阿里云官方枚举或官方档位等价表；max 省略预算，按官方默认使用该模型最大思维链长度。依据：[百炼 Chat Completions 参数](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions/)、[思考预算说明](https://www.alibabacloud.com/help/en/model-studio/deep-thinking)。
 - OpenAI compatible 是开放集合，按模型实际支持情况配置可选子集，原值传入顶层 `reasoning_effort`，不猜测第三方兼容服务的私有映射。依据：[OpenAI reasoning effort](https://developers.openai.com/api/docs/guides/reasoning)。
 
 ### 3.1 usage 按供应商归一化（原始 usage 旁路抓取）
@@ -203,11 +203,11 @@ eino acl（`libs/acl/openai` 的 `toEinoTokenUsage`）只映射 OpenAI 标准字
 //         "files": ["scripts/a.py", ...], "dir": "/skills/<name>/" }
 ```
 
-新云电脑路径：根据主运行取得的 `skill.Manifest`，读取当前执行 Agent 的 `/agents/<agent_id>/skills/<name>/SKILL.md`。不能读取已更新的平台源包来搭配尚未同步的安装脚本。SKILL.md >32KB 截断并提示用 read 工具读包内具体文件。旧会话兼容路径仍读取平台源包，待迁移后切换。
+新云电脑路径：根据主运行取得的 `skill.Manifest`，读取当前执行 Agent 的 `/agents/<agent_id>/skills/<name>/SKILL.md`。不能读取已更新的系统源包来搭配尚未同步的安装脚本。SKILL.md >32KB 截断并提示用 read 工具读包内具体文件。旧会话兼容路径仍读取系统源包，待迁移后切换。
 
 `skill.Coordinator.Acquire(ctx, AcquireRequest{OrgID,UserID,RootRunID,AgentIDs}, installer)` 要求先登记主 `computer_run`；AgentIDs 包含主 Agent 和所有可达 subagent。它在新主任务边界解析当前关联，整组取权后把 `skill_manifest` 合并写入运行 manifest。同 rootRunID 的审批恢复返回原 manifest，不重新解析新版本。所有主/子任务和后台命令均确认结束后才能 `Release(..., commandsStopped=true)`；租约失效不能代替确认。
 
-平台通过 `skill.NewSandboxInstaller(upload, run)` 使用原始 root 执行能力，同步校验后将技能文件设为只读。`/agents`、Agent 根和 `skills` 根归 root，任务只能写自己的 `files` 与会话目录；`/agents/.wispjar` 是 root-only 控制区。实际任务采用非 root 身份。安装失败已确认退出可重试；进程状态未知则保留屏障，须经带审计的 `Recover` 确认停止后推进 fence。
+系统通过 `skill.NewSandboxInstaller(upload, run)` 使用原始 root 执行能力，同步校验后将技能文件设为只读。`/agents`、Agent 根和 `skills` 根归 root，任务只能写自己的 `files` 与会话目录；`/agents/.wispjar` 是 root-only 控制区。实际任务采用非 root 身份。安装失败已确认退出可重试；进程状态未知则保留屏障，须经带审计的 `Recover` 确认停止后推进 fence。
 
 电脑显式恢复在删除旧实例且 Inspect 证实消失、旧代次运行已终结后，调用 `Coordinator.RecoverComputer` 收敛该电脑代次的技能状态。安装计划归属来自持久运行记录；旧无归属计划继续阻塞。安装结果与整组租约提交再次锁运行行并校验终态、释放标记和代次，拒绝恢复期间晚到的旧安装结果；锁顺序与生命周期 hook 契约见 computers.md §7。
 
@@ -263,7 +263,7 @@ Use this when a subtask is focused and independent; include everything the subag
 // 返回（eino ToolResult，tool 消息直接携带多模态 parts）：
 //   parts[0] text:  { "path", "mime", "width", "height", "bytes",
 //                     "sha256": "<前8位>", "attachment_id": "sha256:<64 hex>" }（确定性信封）
-//   parts[1] image: wispjar-attachment:<attachment_id> + MIMEType（仅平台内部引用）
+//   parts[1] image: wispjar-attachment:<attachment_id> + MIMEType（仅系统内部引用）
 // 域拒绝均为文本工具结果（非 Go error，不中断 run）：
 //   当前路由不支持原生工具图片 → "read_media requires vision, tools, tool_images…"（先于任何图片 I/O）
 //   非图片（魔数嗅探 png/jpeg/webp/gif）→ "is not a supported image…"
@@ -386,11 +386,11 @@ type Handle struct {
 { "image": {"uri": computer.config.image},
   "timeout": settings.sandbox_ttl_seconds,
   "resourceLimits": computer.config.resources,  // {"cpu":"1","memory":"1Gi"}
-  "networkPolicy": settings.egress_policy,   // 平台统一黑白名单
+  "networkPolicy": settings.egress_policy,   // 系统统一黑白名单
   "env": {"WISPJAR": "1", "EXECD_ACCESS_TOKEN": "<platform-managed>"} }
 ```
 
-电脑 env 创建时合并平台 `sandbox.env` 与显式配置，不从 Agent 模板复制。每轮开始读取电脑变量和主/子 Agent 最新 `sandbox_config.env`，本轮固定；exec 按电脑 → 当前 Agent → 命令 env 逐键覆盖，再注入 `WISPJAR=1`。变量只传入非 root 任务进程，不传给容器级 execd 或维护进程。子 Agent 不继承父 Agent env。电脑变量可通过 PATCH 编辑，Agent 变量可独立保存且不改变发布状态，已有会话下一轮任务生效，无需重建或改写历史快照。读取失败终止准备，不静默使用旧值。
+电脑 env 创建时合并系统 `sandbox.env` 与显式配置，不从 Agent 模板复制。每轮开始读取电脑变量和主/子 Agent 最新 `sandbox_config.env`，本轮固定；exec 按电脑 → 当前 Agent → 命令 env 逐键覆盖，再注入 `WISPJAR=1`。变量只传入非 root 任务进程，不传给容器级 execd 或维护进程。子 Agent 不继承父 Agent env。电脑变量可通过 PATCH 编辑，Agent 变量可独立保存且不改变发布状态，已有会话下一轮任务生效，无需重建或改写历史快照。读取失败终止准备，不静默使用旧值。
 
 键名须匹配 `[A-Za-z_][A-Za-z0-9_]*`，每层及合并后最多 64 项、单值最多 4096 字节，值不可包含 NUL。WISPJAR、HOME、EXECD_* 为保留变量；HOME 固定 /tmp。
 
@@ -478,7 +478,7 @@ exec 的流式 stdout 为增强体验，在 `tool/result` 落库前经瞬态帧�
 5. **动态内容一律后置**：时间戳、检索结果、易变状态只出现在消息尾部或工具结果中，永不进入 system 与历史前缀。
 6. **历史只追加不改写**：历史由事件确定性重放（derive），已落库内容永不编辑/重排；中断产生的部分消息一旦落库即冻结。
 7. **裁剪对齐边界**：上下文裁剪必须确定性、阶梯式——按 turn 整块丢弃（§8.1），禁止窗口起点随输入量逐条漂移；中长期以 compaction 摘要替换头部而非滑动窗口。
-8. **子智能体前缀自治**：子智能体独立上下文，不追求与父会话共享前缀；其 system 与工具定义须稳定，以命中平台级公共前缀缓存。
+8. **子智能体前缀自治**：子智能体独立上下文，不追求与父会话共享前缀；其 system 与工具定义须稳定，以命中系统级公共前缀缓存。
 9. **采样参数与缓存解耦**：`temperature/top_p`、`reasoning_effort` 等是请求级参数，不进消息前缀、不影响命中，只影响输出，纳入会话级配置稳定治理；接入 ark 显式缓存时保持 thinking/caching 字段逐轮一致。
 10. **命中可观测**：所有模型调用记录 cache_read/cache_write tokens（字段口径按供应商归一化，§3.1），按会话/模型/供应商聚合；命中率突降视为回归。
 11. **供应商能力路由**：ark 会话设置稳定 `prompt_cache_key`（取 sessionID，同 key ≤15 rpm，§3）；认知各供应商最小命中粒度（ark/qwen 默认 1024 tokens），前缀过短场景不预期命中；usage 按供应商归一化——各家缓存字段口径不同（§3.1），观测命中率须经适配器归一化并以 `cache_reported` 区分「未命中」与「未上报」，禁止把 `cached_tokens==0` 一律当未命中。

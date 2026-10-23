@@ -120,7 +120,7 @@ func (s *Service) memberEntryOf(db *gorm.DB, orgID, userID string) (*MemberEntry
 		return nil, err
 	}
 	if len(rows) == 0 {
-		return nil, errNotFound("该用户不是机构成员")
+		return nil, errNotFound("该用户不是组织成员")
 	}
 	entries := toMemberEntries(rows)
 	return &entries[0], nil
@@ -174,7 +174,7 @@ func (s *Service) ListOrgs(cursor string, limit int) ([]OrgSummary, string, erro
 func (s *Service) CreateOrg(actorID, name string) (*store.Organization, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len(name) > 128 {
-		return nil, errInvalid("机构名称必填且不超过 128 字符", nil)
+		return nil, errInvalid("组织名称必填且不超过 128 字符", nil)
 	}
 	org := store.Organization{
 		ID:     id.New(),
@@ -209,7 +209,7 @@ func (s *Service) GetOrg(orgID string) (*OrgDetail, error) {
 	var org store.Organization
 	if err := s.db.First(&org, "id = ?", orgID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errNotFound("机构不存在")
+			return nil, errNotFound("组织不存在")
 		}
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (s *Service) UpdateOrg(actorID, orgID string, in UpdateOrgInput) (*store.Or
 	var org store.Organization
 	if err := s.db.First(&org, "id = ?", orgID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errNotFound("机构不存在")
+			return nil, errNotFound("组织不存在")
 		}
 		return nil, err
 	}
@@ -249,7 +249,7 @@ func (s *Service) UpdateOrg(actorID, orgID string, in UpdateOrgInput) (*store.Or
 	if in.Name != nil {
 		name := strings.TrimSpace(*in.Name)
 		if name == "" || len(name) > 128 {
-			return nil, errInvalid("机构名称必填且不超过 128 字符", nil)
+			return nil, errInvalid("组织名称必填且不超过 128 字符", nil)
 		}
 		updates["name"] = name
 	}
@@ -258,7 +258,7 @@ func (s *Service) UpdateOrg(actorID, orgID string, in UpdateOrgInput) (*store.Or
 			return nil, errInvalid("status 必须是 active 或 disabled", map[string]any{"status": *in.Status})
 		}
 		if *in.Status == StatusDisabled && org.IsPlatform {
-			return nil, errConflict("平台管理机构不可停用")
+			return nil, errConflict("系统管理组织不可停用")
 		}
 		updates["status"] = *in.Status
 	}
@@ -460,7 +460,7 @@ func (s *Service) CreateUser(actorID string, in CreateUserInput) (*UserView, str
 			return nil, "", err
 		}
 		if int(orgCount) != len(in.OrgIDs) {
-			return nil, "", errNotFound("部分机构不存在")
+			return nil, "", errNotFound("部分组织不存在")
 		}
 	}
 	hash, err := auth.HashPassword(password)
@@ -612,7 +612,7 @@ func (s *Service) addMember(tx *gorm.DB, actorID, orgID string, user store.User,
 		return nil, err
 	}
 	if count > 0 {
-		return nil, errConflict("用户已是该机构成员")
+		return nil, errConflict("用户已是该组织成员")
 	}
 	member := store.OrgMember{
 		ID:     id.New(),
@@ -651,7 +651,7 @@ func (s *Service) AddUserToOrg(actorID, userID, orgID, role string) (*MemberEntr
 		return nil, err
 	}
 	if orgCount == 0 {
-		return nil, errNotFound("机构不存在")
+		return nil, errNotFound("组织不存在")
 	}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		_, err := s.addMember(tx, actorID, orgID, user, role)
@@ -692,7 +692,7 @@ func (s *Service) UpdateMemberRole(actorID, orgID, userID, role string) (*Member
 		var m store.OrgMember
 		if err := tx.Where("org_id = ? AND user_id = ?", orgID, userID).First(&m).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errNotFound("该用户不是机构成员")
+				return errNotFound("该用户不是组织成员")
 			}
 			return err
 		}
@@ -705,7 +705,7 @@ func (s *Service) UpdateMemberRole(actorID, orgID, userID, role string) (*Member
 				return err
 			}
 			if removingLastAdmin(m.Role, count) {
-				return errConflict("不得移除本机构最后一名管理员")
+				return errConflict("不得移除本组织最后一名管理员")
 			}
 		}
 		if err := tx.Model(&m).Update("role", role).Error; err != nil {
@@ -730,7 +730,7 @@ func (s *Service) RemoveMember(actorID, orgID, userID string) error {
 		var m store.OrgMember
 		if err := tx.Where("org_id = ? AND user_id = ?", orgID, userID).First(&m).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return errNotFound("该用户不是机构成员")
+				return errNotFound("该用户不是组织成员")
 			}
 			return err
 		}
@@ -740,7 +740,7 @@ func (s *Service) RemoveMember(actorID, orgID, userID string) error {
 				return err
 			}
 			if removingLastAdmin(m.Role, count) {
-				return errConflict("不得移除本机构最后一名管理员")
+				return errConflict("不得移除本组织最后一名管理员")
 			}
 		}
 		if err := tx.Delete(&m).Error; err != nil {

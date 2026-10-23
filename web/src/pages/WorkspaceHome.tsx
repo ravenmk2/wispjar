@@ -34,7 +34,7 @@ export default function WorkspaceHome() {
           className="w-full max-w-lg border-none"
           icon={<Bot className="size-10" />}
           title="还没有可用的智能体"
-          description={isAdmin ? "先创建一个智能体，即可开始聊天。" : "当前机构暂无已发布的智能体，请联系机构管理员创建。"}
+          description={isAdmin ? "先创建一个智能体，即可开始聊天。" : "当前组织暂无已发布的智能体，请联系组织管理员创建。"}
           action={
             isAdmin ? (
               <Button asChild size="sm">

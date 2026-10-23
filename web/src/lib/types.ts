@@ -598,7 +598,7 @@ export interface OrgModel {
   context_size: number
 }
 
-// ============ api.md §5：机构管理（智能体 / Skills）DTO ============
+// ============ api.md §5：组织管理（智能体 / Skills）DTO ============
 
 export type AgentStatus = "draft" | "published" | "archived"
 

@@ -117,7 +117,7 @@ export default function SettingsPage() {
         return
       }
       if (key === "WISPJAR") {
-        toast.error("WISPJAR 为平台保留变量名，不可使用")
+        toast.error("WISPJAR 为系统保留变量名，不可使用")
         return
       }
       cleanEnv[key] = row.value
@@ -144,7 +144,7 @@ export default function SettingsPage() {
   if (!loaded) {
     return (
       <div>
-        <PageHeader title="设置" description="平台云电脑全局配置" />
+        <PageHeader title="设置" description="系统云电脑全局配置" />
         <TableSkeleton rows={4} />
       </div>
     )
@@ -152,7 +152,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-3xl">
-      <PageHeader title="设置" description="平台云电脑全局配置">
+      <PageHeader title="设置" description="系统云电脑全局配置">
         <Button size="sm" onClick={save} disabled={saving}>
           {saving ? "保存中…" : "保存"}
         </Button>

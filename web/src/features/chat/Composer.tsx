@@ -249,7 +249,7 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
       if (draftAgent) {
         // 惰性建聊天：首条消息先创建聊天，再补传附件、发 prompt，最后切换到正式聊天页；
         // 任一步失败都停留在草稿页，输入内容与附件保留
-        if (!currentOrg) throw new Error("当前机构不可用")
+        if (!currentOrg) throw new Error("当前组织不可用")
         const session = await sessionsApi.create(currentOrg.id, {
           agent_id: draftAgent.id,
           model_id: modelId,

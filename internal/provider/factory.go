@@ -97,7 +97,7 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 }
 
 // 参数映射已收敛进适配器注册表（adapters.go，runtime.md §3）：
-// temperature/top_p/max_tokens 通用；平台 reasoning_effort 在 reasoning.go
+// temperature/top_p/max_tokens 通用；系统 reasoning_effort 在 reasoning.go
 // 按供应商/模型转换；prompt_cache_key 仅 ark 放行。
 
 func setExtraField(cfg *openai.ChatModelConfig, key string, val any) {

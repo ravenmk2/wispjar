@@ -59,7 +59,7 @@ func parseReportQuery(from, to, groupBy, orgID string, platform bool) (reportQue
 		return reportQuery{}, err
 	}
 	if groupBy == GroupByOrg && !platform {
-		return reportQuery{}, errInvalid("机构用量不支持 group_by=org", map[string]any{"group_by": groupBy})
+		return reportQuery{}, errInvalid("组织用量不支持 group_by=org", map[string]any{"group_by": groupBy})
 	}
 	return reportQuery{from: from, to: to, groupBy: groupBy, orgID: orgID, platform: platform}, nil
 }

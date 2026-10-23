@@ -101,7 +101,7 @@ export default function AgentsPage() {
 
   return (
     <div>
-      <PageHeader title="智能体" description="本机构全部智能体（含草稿与已下线）">
+      <PageHeader title="智能体" description="本组织全部智能体（含草稿与已下线）">
         <Button size="sm" onClick={() => navigate("/admin/agents/new")}>
           <Plus className="size-4" />
           新建智能体

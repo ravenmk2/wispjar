@@ -4,7 +4,7 @@
 
 > 全部端点以 `/api/v1` 为前缀（WS 实时协议 `/api/ws` 见 protocol.md）。
 > 认证：除 `/api/v1/auth/login` 外全部需要 `Authorization: Bearer <jwt>`。
-> 机构上下文：机构域端点路径内带 `orgId`；中间件校验当前用户是该机构成员并注入 `(uid, org_id, role)`。
+> 组织上下文：组织域端点路径内带 `orgId`；中间件校验当前用户是该组织成员并注入 `(uid, org_id, role)`。
 
 ## 1. 通用约定
 
@@ -26,7 +26,7 @@
 | 401 | `auth/credentials` | 用户名或密码错误 |
 | 401 | `auth/password_change_required` | 首次登录需先改密 |
 | 403 | `auth/forbidden` | 已登录但角色不足（details.required 说明需要的角色） |
-| 403 | `tenant/not_member` | 不是该机构成员 |
+| 403 | `tenant/not_member` | 不是该组织成员 |
 | 404 | `*/not_found` | 资源不存在或无权访问（不区分，防枚举） |
 | 409 | `*/conflict` | 唯一性冲突（username、skill name 等） |
 | 409 | `session/running` | 会话有进行中的 turn，冲突操作（如重复 prompt 未走队列） |
@@ -55,7 +55,7 @@
 
 ### 1.4 权限记号
 
-- `member+`：该机构任意成员；`admin`：该机构 admin；`platform`：平台管理机构 admin（超管）；`owner`：资源属主本人。
+- `member+`：该组织任意成员；`admin`：该组织 admin；`platform`：「系统管理」组织 admin（系统管理员）；`owner`：资源属主本人。
 
 ---
 
@@ -81,7 +81,7 @@
 
 ### GET /api/v1/auth/me
 
-响应同 login 的 `user + orgs`（每次机构变更后前端刷新）。
+响应同 login 的 `user + orgs`（每次组织变更后前端刷新）。
 
 ---
 
@@ -97,7 +97,7 @@
 { "agent_id": "...", "model_id": "可选，缺省使用智能体模型", "title": "可选，默认空（首条 prompt 后自动生成）", "reasoning_effort": "可选，思考强度档位" }
 ```
 
-- 校验 agent 属于该机构且 `status=published`。
+- 校验 agent 属于该组织且 `status=published`。
 - `model_id` 可选，必须为已上架（active）模型；选择与推理档位在创建时一并保存。
 - `reasoning_effort` 必须在目标模型 `capabilities.reasoning_efforts` 内，否则 400；缺省 = 模型的 `reasoning_effort_default`，模型未配默认则不注入。生效值写入 `session.model_params`（如 `{"reasoning_effort":"high"}`）。
 - 服务端：写 `session`（`agent_snapshot` 为创建时刻 Agent 全量配置 + 解析后的 skills/subagents 清单；`model_id` 使用所选模型，缺省 `agent.model_id`）→ 201 返回会话对象。
@@ -135,7 +135,7 @@
 
 - `request_id` 幂等：相同 `(session_id, request_id)` 重复投递直接返回 200 + 已存在的 `user/message` seq（乐观对账，见 protocol.md §8）。
 - `content` 允许为空字符串当且仅当携带 `attachments`（纯图消息）；两者皆空 → 400。纯图消息组装时不带空文本 part，首条为纯图时会话标题静态兜底"图片会话"。
-- `attachments`（可选）：附件 id 数组，≤9 个；每个 id 必须已存在并授权给会话机构（attachment_access；迁移兼容首发机构），任一不满足 → 400 `request/invalid`（整条消息拒绝，不产生任何事件）。
+- `attachments`（可选）：附件 id 数组，≤9 个；每个 id 必须已存在并授权给会话组织（attachment_access；迁移兼容首发组织），任一不满足 → 400 `request/invalid`（整条消息拒绝，不产生任何事件）。
 - vision 门控：携带附件而当前模型 `capabilities.vision=false` → 422 `model/not_vision`（提示换模型；不静默降级，避免"模型假装看不见"）。
 - 会话 `running=1` 时返回 409 `session/running`（v1 不支持排队；steer/queue 在 M4）。
 - 成功 202：`{ "accepted": true, "seq": <user/message 事件 seq> }`。流式输出经 `session.follow` 推送（protocol.md）。
@@ -158,7 +158,7 @@
 
 ### GET /api/v1/attachments/{id}
 
-下载附件字节。登录 + 授权机构成员校验（attachment_access 中存在用户所属机构的授权关系；非成员按 404 `attachment/not_found` 处理，防枚举）。物理内容全局去重不等于跨机构授权。
+下载附件字节。登录 + 授权组织成员校验（attachment_access 中存在用户所属组织的授权关系；非成员按 404 `attachment/not_found` 处理，防枚举）。物理内容全局去重不等于跨组织授权。
 按表记录 mime 回字节（读时按 id 校验 sha256），响应头 `Cache-Control: private, immutable` + `ETag: "<sha256 hex>"`（支持 `If-None-Match` → 304）。
 前端 `<img>` 无法带 Authorization 头：fetch 拉 blob 转 objectURL，会话级缓存 attachmentId→objectURL。
 
@@ -210,27 +210,27 @@
 
 ### GET /api/v1/orgs/{orgId}/agents （member+）
 
-本机构 `published` 智能体列表（选择对话对象）：`{items:[{id, name, description, avatar, model_id, model_display_name}]}`。
+本组织 `published` 智能体列表（选择对话对象）：`{items:[{id, name, description, avatar, model_id, model_display_name}]}`。
 
 ### GET /api/v1/orgs/{orgId}/models （member+）
 
-平台上架且 `active` 的模型列表（会话切模型用，不含供应商密钥信息）：`{items:[{id, display_name, model_code, provider_name, capabilities, context_size}]}`。
+系统上架且 `active` 的模型列表（会话切模型用，不含供应商密钥信息）：`{items:[{id, display_name, model_code, provider_name, capabilities, context_size}]}`。
 
 ---
 
-## 5. 机构管理（`/api/v1/orgs/{orgId}/admin/*`，全部 `admin`）
+## 5. 组织管理（`/api/v1/orgs/{orgId}/admin/*`，全部 `admin`）
 
 ### 智能体管理
 
 | 方法/路径 | 说明 |
 |---|---|
-| `GET /admin/agents` | 本机构全部（含 draft/archived），游标分页；列表项含 `model_display_name` / `skill_count` / `sub_agent_count` |
+| `GET /admin/agents` | 本组织全部（含 draft/archived），游标分页；列表项含 `model_display_name` / `skill_count` / `sub_agent_count` |
 | `POST /admin/agents` | 创建（默认 draft）。body 见下 |
 | `GET /admin/agents/{id}` | 详情（含 skills/subagents 解析） |
 | `PUT /admin/agents/{id}` | 全量更新（仅 draft/archived 可直接改；published 修改自动转 draft 需重新发布——避免线上配置被悄悄改变） |
 | `POST /admin/agents/{id}/publish` | 发布：校验完整性（model 有效、prompt 非空、subagents DAG 合法且均 published） |
 | `POST /admin/agents/{id}/archive` | 下线（进行中的会话不受影响——会话持有快照；新会话不可选） |
-| `PATCH /admin/agents/{id}/env` | `{set:{KEY:value},unset:[KEY]}`；机构管理员独立修改变量，不改变发布状态；已有会话下一轮任务生效 |
+| `PATCH /admin/agents/{id}/env` | `{set:{KEY:value},unset:[KEY]}`；组织管理员独立修改变量，不改变发布状态；已有会话下一轮任务生效 |
 | `DELETE /admin/agents/{id}` | 删除（仅 draft/archived；有会话引用的置 archived 并标记） |
 
 创建/更新 body：
@@ -255,7 +255,7 @@
 | `GET /admin/skills/{id}/file?path=SKILL.md` | 查看包内文本文件（≤256KB）→ `{ "path", "content", "truncated" }` |
 | `DELETE /admin/skills/{id}` | 删除；被智能体引用、被运行使用、安装远端状态不明确或仍有安装副本时返回 409。解除关联后须在安全任务边界完成副本移除，再删除源包 |
 
-上传后 `revision=1`，`content_hash` 为排序文件路径与文件 SHA256 清单的摘要。`_source.zip` 为平台保留名称，上传包不能包含该文件。API 只公开当前源包；内部隐藏候选目录用于提交恢复，不提供多版本选择。源码读取、替换和回收使用同一跨进程锁，避免替换时在线预览读到已回收目录。
+上传后 `revision=1`，`content_hash` 为排序文件路径与文件 SHA256 清单的摘要。`_source.zip` 为系统保留名称，上传包不能包含该文件。API 只公开当前源包；内部隐藏候选目录用于提交恢复，不提供多版本选择。源码读取、替换和回收使用同一跨进程锁，避免替换时在线预览读到已回收目录。
 
 替换源包只建立用户安装更新屏障，不覆盖正在运行的技能目录。`skill/update_pending` 表示等待已有运行（包括审批等待）释放；`skill/sync_failed` 表示同步失败；`skill/sync_blocked` 表示远端结果未知，必须确认同步命令停止后显式恢复。恢复能力由领域 `Coordinator.Recover` 提供并记录审计，不能将租约超时视为停止证明。
 
@@ -263,7 +263,7 @@
 
 | 方法/路径 | 说明 |
 |---|---|
-| `GET /admin/sandbox-settings` | 平台 `sandbox.*` 设置子集（镜像列表/默认资源/TTL/ egress），机构 admin 只读（编辑器沙箱分区用；写仍走 `/platform/settings`） |
+| `GET /admin/sandbox-settings` | 系统 `sandbox.*` 设置子集（镜像列表/默认资源/TTL/ egress），组织 admin 只读（编辑器沙箱分区用；写仍走 `/platform/settings`） |
 
 ### 成员管理
 
@@ -271,37 +271,37 @@
 |---|---|
 | `GET /admin/members` | 成员列表 `{items:[{user_id, username, display_name, status, role, created_at}]}` |
 | `POST /admin/members` | 添加已有用户：`{ "username": "...", "role": "admin|member" }`（按 username 查找；不存在 404） |
-| `PATCH /admin/members/{userId}` | 改角色 `{ "role": "..." }`（不得移除本机构最后一名 admin） |
-| `DELETE /admin/members/{userId}` | 移出机构（同上约束） |
+| `PATCH /admin/members/{userId}` | 改角色 `{ "role": "..." }`（不得移除本组织最后一名 admin） |
+| `DELETE /admin/members/{userId}` | 移出组织（同上约束） |
 
-### 机构用量
+### 组织用量
 
 `GET /admin/usage?from=YYYY-MM-DD&to=YYYY-MM-DD&group_by=user|agent|model|day` →
-`{ "items": [ { "key": "...", "requests", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens", "total_tokens" } ], "totals": {...}, "names": { "<key>": "<显示名>" } }`（基于 `usage_daily`；`names` 把 user/agent/model/org 维度的 key 映射为显示名，`day` 维度为空）。机构端 `group_by=org` 返回 400。
+`{ "items": [ { "key": "...", "requests", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens", "total_tokens" } ], "totals": {...}, "names": { "<key>": "<显示名>" } }`（基于 `usage_daily`；`names` 把 user/agent/model/org 维度的 key 映射为显示名，`day` 维度为空）。组织端 `group_by=org` 返回 400。
 
 ---
 
-## 6. 平台管理（`/api/v1/platform/*`，全部 `platform`）
+## 6. 系统管理（`/api/v1/platform/*`，全部 `platform`）
 
-### 机构
+### 组织
 
 | 方法/路径 | 说明 |
 |---|---|
-| `GET /platform/orgs` | 全机构列表（含成员数/智能体数统计） |
-| `POST /platform/orgs` | 创建机构 `{ "name": "..." }` |
-| `PATCH /platform/orgs/{id}` | 改名 / 停用启用 `{ "name"?, "status"? }`（平台管理机构不可停用） |
+| `GET /platform/orgs` | 全组织列表（含成员数/智能体数统计） |
+| `POST /platform/orgs` | 创建组织 `{ "name": "..." }` |
+| `PATCH /platform/orgs/{id}` | 改名 / 停用启用 `{ "name"?, "status"? }`（系统管理组织不可停用） |
 | `GET /platform/orgs/{id}` | 详情（成员列表 + 统计） |
 
 ### 用户
 
 | 方法/路径 | 说明 |
 |---|---|
-| `GET /platform/users?q=&cursor=&limit=` | 用户列表；每项含 `orgs: [{org_id, org_name, role}]` 机构归属 |
-| `POST /platform/users` | 创建用户 `{ "username", "display_name", "password"（可空→随机生成）, "org_ids": ["..."], "role": "member" }`；201 返回 `{ "user": {...}, "password": "<初始密码，仅此一次展示>" }`，`must_change_password=1`；审计 `tenant.user_create`，且每个初始机构各记一条 `member.add` |
+| `GET /platform/users?q=&cursor=&limit=` | 用户列表；每项含 `orgs: [{org_id, org_name, role}]` 组织归属 |
+| `POST /platform/users` | 创建用户 `{ "username", "display_name", "password"（可空→随机生成）, "org_ids": ["..."], "role": "member" }`；201 返回 `{ "user": {...}, "password": "<初始密码，仅此一次展示>" }`，`must_change_password=1`；审计 `tenant.user_create`，且每个初始组织各记一条 `member.add` |
 | `PATCH /platform/users/{id}` | 改名/停用启用/重置密码 `{ "display_name"?, "status"?, "reset_password"? }`；返回 `{ "user": {...} }`，重置密码时顶层附带 `"password"`（同样强制改密） |
-| `POST /platform/users/{id}/orgs` | 把用户加入机构 `{ "org_id", "role" }`（已是成员返回 409）；201 返回成员条目 `{user_id, username, display_name, status, role, created_at}` |
-| `PATCH /platform/users/{id}/orgs/{orgId}` | 修改用户在该机构的角色 `{ "role": "admin\|member" }`；不得移除本机构最后一名 admin（409），审计 `member.update_role` |
-| `DELETE /platform/users/{id}/orgs/{orgId}` | 移出机构（同上最后一名 admin 约束） |
+| `POST /platform/users/{id}/orgs` | 把用户加入组织 `{ "org_id", "role" }`（已是成员返回 409）；201 返回成员条目 `{user_id, username, display_name, status, role, created_at}` |
+| `PATCH /platform/users/{id}/orgs/{orgId}` | 修改用户在该组织的角色 `{ "role": "admin\|member" }`；不得移除本组织最后一名 admin（409），审计 `member.update_role` |
+| `DELETE /platform/users/{id}/orgs/{orgId}` | 移出组织（同上最后一名 admin 约束） |
 
 ### 供应商与模型
 
@@ -318,17 +318,17 @@
 | `PUT /platform/models/{id}` | 更新/上下架（`status`） |
 | `DELETE /platform/models/{id}` | 删除；被智能体引用时 409 并列出 |
 
-`capabilities.reasoning_efforts` 可从 `none/minimal/low/medium/high/xhigh/max` 多选，非法值或重复值返回 400；可选 `reasoning_effort_default` 必须属于已选集合。此处与会话保存的都是平台档位，供应商实际请求参数按 runtime.md §3 转换，不回写为供应商枚举或 token 预算；字段缺省/空列表表示不提供选档。
+`capabilities.reasoning_efforts` 可从 `none/minimal/low/medium/high/xhigh/max` 多选，非法值或重复值返回 400；可选 `reasoning_effort_default` 必须属于已选集合。此处与会话保存的都是系统档位，供应商实际请求参数按 runtime.md §3 转换，不回写为供应商枚举或 token 预算；字段缺省/空列表表示不提供选档。
 
 `capabilities.api_protocol` 可选 `chat_completions`（缺省）或 `responses`。`tool_images` 默认为 false，启用需同时满足 responses、vision、tools。仅支持已实现 Responses 适配的供应商。含工具图片历史切换到不支持工具图片的模型返回 409 `session/media_locked`。图片与租户授权、供应商文件有效期规则见 [media.md](media.md)。
 
-### 平台设置与报表
+### 系统设置与报表
 
 | 方法/路径 | 说明 |
 |---|---|
 | `GET /platform/settings` | 全部 platform_setting KV |
 | `PUT /platform/settings/{key}` | 更新单 key（body 即 value JSON；仅允许 data-model.md §7 列出的 key） |
-| `GET /platform/usage?from=&to=&group_by=org|user|agent|model|day` | 全平台用量（结构同机构用量） |
+| `GET /platform/usage?from=&to=&group_by=org|user|agent|model|day` | 全系统用量（结构同组织用量） |
 | `GET /platform/audit?org_id=&cursor=&limit=` | 审计日志（id 倒序即时间倒序），`{items:[{id, org_id, actor_id, actor_name, action, target, detail, created_at}], next_cursor}`；`actor_name` 为操作者显示名（回退 username） |
 
 ---
@@ -340,11 +340,11 @@
 
 ## 8. 用户云电脑、绑定、卷与操作
 
-以下路径均以 `/api/v1` 为前缀。所有操作要求登录、当前机构成员关系及本人归属；资源 ID 不可见时返回 404，机构管理员不能通过此接口访问他人的私人电脑。列表返回 `{items:[]}`。查询不启动电脑、不创建卷。
+以下路径均以 `/api/v1` 为前缀。所有操作要求登录、当前组织成员关系及本人归属；资源 ID 不可见时返回 404，组织管理员不能通过此接口访问他人的私人电脑。列表返回 `{items:[]}`。查询不启动电脑、不创建卷。
 
 | 方法/路径 | 输入与行为 |
 |---|---|
-| `GET /orgs/{orgId}/computers` | 当前用户在机构内的未删除电脑 |
+| `GET /orgs/{orgId}/computers` | 当前用户在组织内的未删除电脑 |
 | `POST /orgs/{orgId}/computers` | `{name, agent_id?, config?}`；保存逻辑电脑和创建意图，再异步准备三卷及实例 |
 | `GET /computers/{id}` | 安全电脑视图 |
 | `PATCH /computers/{id}` | `{name?, env?:{set:{KEY:value},unset:[KEY]}}`，直接保存名称和变量；至少一项，变量下一轮任务生效 |
@@ -356,7 +356,7 @@
 | `DELETE /computers/{id}` | 有活动任务返回 `computer/busy`；存在未删除会话或 Agent 默认绑定返回 `computer/in_use`；成功仅删除电脑 |
 | `GET /computers/{id}/runs` | 非终态任务及维护占用，租约过期不隐藏记录 |
 | `GET /orgs/{orgId}/agent-bindings` | 本人的 `{org_id,user_id,agent_id,computer_id,created_at,updated_at}` 列表 |
-| `PUT /orgs/{orgId}/agent-bindings/{agentId}` | `{computer_id}`；Agent 必须属于机构且已发布，电脑必须属于本人；只影响后续解析 |
+| `PUT /orgs/{orgId}/agent-bindings/{agentId}` | `{computer_id}`；Agent 必须属于组织且已发布，电脑必须属于本人；只影响后续解析 |
 | `DELETE /orgs/{orgId}/agent-bindings/{agentId}` | 幂等清除本人默认绑定，返回 `{ok:true}`；保留已有会话绑定，已归档的 Agent 偏好也可清理 |
 | `GET /orgs/{orgId}/volumes` | 三类已登记卷摘要，首次创建电脑前可以为空 |
 | `GET /operations/{id}` | 本人电脑操作状态；不触发任何后端操作 |
@@ -372,9 +372,9 @@
 }
 ```
 
-- 创建镜像与资源优先级：显式配置 → 可选 Agent 模板 → 平台默认。电脑 env 只合并平台默认与显式 config.env，不复制 Agent env；resources 显式提供时整体替换。
-- 镜像必须是平台默认或 `sandbox.images` 中启用的镜像。resources 仅支持 cpu、memory 的正数资源量；env 沿用下述任务变量校验。TTL 为 60–604800 秒，表示底层续租时长，不是数据保留期。
-- `network_policy` 由平台 egress 设置决定，普通用户请求中出现该字段会被拒绝；不得通过电脑配置绕过统一出口策略。
+- 创建镜像与资源优先级：显式配置 → 可选 Agent 模板 → 系统默认。电脑 env 只合并系统默认与显式 config.env，不复制 Agent env；resources 显式提供时整体替换。
+- 镜像必须是系统默认或 `sandbox.images` 中启用的镜像。resources 仅支持 cpu、memory 的正数资源量；env 沿用下述任务变量校验。TTL 为 60–604800 秒，表示底层续租时长，不是数据保留期。
+- `network_policy` 由系统 egress 设置决定，普通用户请求中出现该字段会被拒绝；不得通过电脑配置绕过统一出口策略。
 - rebuild 的 config 在已有配置上合并，并在新实例创建时生效；变量通过顶层 env 补丁修改，不接受 config.env。补丁与新配置在同一意图事务保存，保留并发编辑过的最新变量。单独 PATCH env 无需重建，运行中的任务保留本轮值；生命周期转换期间修改变量返回 computer/busy。
 - env 保存在电脑配置中，但仅注入非 root 任务进程，不传入容器级 root execd/维护环境。WISPJAR、HOME、EXECD_* 为保留变量，值拒绝 NUL。每层及合并后的用户变量最多 64 项，每值最多 4096 字节。exec 按电脑 → 当前 Agent → 单次 env 覆盖，最后注入 WISPJAR=1；HOME 固定 /tmp。电脑强制启用 execd 认证。
 - 响应 config 仅包含 image、resources、ttl_seconds、has_env，不回传 env 值、网络策略、后端地址或卷物理名。
@@ -420,7 +420,7 @@
 
 错误沿用统一信封：`computer/not_found` 404；`computer/invalid` 400；`computer/required`、`computer/busy`、`computer/in_use`、`operation/conflict`、`volume/conflict`、`volume/missing` 为 409；后端未配置或不可用为 `computer/unavailable` 503。异步执行中发生的后端故障记录到 operation，不把“已接收”当作“已启动”。
 
-部署兼容：`opensandbox.legacy_sessions_enabled` 默认 true，保留旧会话管理器。共用 OpenSandbox 的新独立部署必须配置为 false，防止无 installation 标签的旧 `wispjar=1` 实例被扫描。电脑实例始终使用独立的 `wispjar=computer-<installation>` 标签，按机构、用户、电脑、存储域和 generation 完整校验后接管。
+部署兼容：`opensandbox.legacy_sessions_enabled` 默认 true，保留旧会话管理器。共用 OpenSandbox 的新独立部署必须配置为 false，防止无 installation 标签的旧 `wispjar=1` 实例被扫描。电脑实例始终使用独立的 `wispjar=computer-<installation>` 标签，按组织、用户、电脑、存储域和 generation 完整校验后接管。
 
 ### 8.1 工作区上传与大文件下载
 
@@ -430,6 +430,6 @@
 
 `GET /sessions/{id}/downloads/{downloadId}` 使用正常鉴权并重新校验会话归属；返回 `{id,status,name,bytes,message?,url?,expires_at}`。status 为 preparing/ready/failed/canceled；ready 的 url 为 `/api/v1/downloads/{downloadId}/file`，expires_at 为凭证到期时间。失败保留可读原因，查询不会重新创建任务。`DELETE` 同路径取消准备，或撤销就绪凭证并清理副本；返回 `{ok:true}`。
 
-浏览器直接 GET 下载 url，HEAD 可读长度。downloadId 为加密随机的 256 位限时资源凭证，不是登录 JWT；路由仍检查原用户账号可用、会话归属及机构成员关系。200/206 返回附件流、UTF-8 文件名、ETag、Accept-Ranges/Content-Length；支持单区间或多区间 Range、If-Range 和 416。固定副本不随源文件后续修改变化，可在有效期内续传。默认单文件及目录包上限 20 GiB、本地暂存配额 40 GiB、100,000 条目、准备时限 30 分钟、就绪有效期 30 分钟，可通过 `storage.downloads` 调整。任务状态只在当前应用进程有效，重启后需重新创建。超额并发返回 429 `file/download_busy`；非法、越权、失效或过期凭证返回 404 `file/download_not_found`。
+浏览器直接 GET 下载 url，HEAD 可读长度。downloadId 为加密随机的 256 位限时资源凭证，不是登录 JWT；路由仍检查原用户账号可用、会话归属及组织成员关系。200/206 返回附件流、UTF-8 文件名、ETag、Accept-Ranges/Content-Length；支持单区间或多区间 Range、If-Range 和 416。固定副本不随源文件后续修改变化，可在有效期内续传。默认单文件及目录包上限 20 GiB、本地暂存配额 40 GiB、100,000 条目、准备时限 30 分钟、就绪有效期 30 分钟，可通过 `storage.downloads` 调整。任务状态只在当前应用进程有效，重启后需重新创建。超额并发返回 429 `file/download_busy`；非法、越权、失效或过期凭证返回 404 `file/download_not_found`。
 
 目录包采用 ZIP64，包含顶层目录、隐藏文件及空目录。符号链接、特殊文件、不可读项和导出期间源文件变化导致整次失败。不得使用预览的截断内容作为完整文件；兼容 `GET /sessions/{id}/file?download=1` 保留原有小文件接口，大文件使用上述下载任务。

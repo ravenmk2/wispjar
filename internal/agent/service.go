@@ -229,7 +229,7 @@ func (s *Service) validateInput(orgID, agentID string, in AgentInput) (*validate
 			return nil, err
 		}
 		if int(skillCount) != len(v.skillIDs) {
-			return nil, errInvalid("部分 skill 不存在或不属于本机构", map[string]any{"field": "skill_ids"})
+			return nil, errInvalid("部分 skill 不存在或不属于本组织", map[string]any{"field": "skill_ids"})
 		}
 	}
 	if len(v.subAgentIDs) > 0 {
@@ -259,7 +259,7 @@ func (s *Service) subAgentsByIDs(orgID string, ids []string) ([]store.Agent, err
 		return nil, err
 	}
 	if len(subs) != len(ids) {
-		return nil, errInvalid("部分子智能体不存在或不属于本机构", map[string]any{"field": "sub_agent_ids"})
+		return nil, errInvalid("部分子智能体不存在或不属于本组织", map[string]any{"field": "sub_agent_ids"})
 	}
 	return subs, nil
 }

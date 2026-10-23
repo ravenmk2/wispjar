@@ -7,7 +7,7 @@
 
 ## 1. 目标与不变量
 
-1. 一个用户在一个机构内拥有多台逻辑云电脑；`computer_id` 稳定，底层 `sandbox_id` 可重建，`generation` 单调递增。
+1. 一个用户在一个组织内拥有多台逻辑云电脑；`computer_id` 稳定，底层 `sandbox_id` 可重建，`generation` 单调递增。
 2. 每个 `(org_id,user_id)` 只有 storage/agents/sessions 三个逻辑持久卷，所有电脑挂载同一组卷。
 3. 同一电脑允许多个会话并行；同一会话维持一个主 turn，主任务可并行委派 subagent。
 4. 会话固定绑定电脑，空闲时可显式切换；subagent 继承主任务电脑，不解析自己的电脑偏好。
@@ -15,9 +15,9 @@
 6. 数据保留优先级 `storage > agents > sessions`；没有明确配置的保留期时，不自动清理持久数据。
 7. 同一用户对同一 skill 只开放一个安装修订，技能更新在任务边界进行，不提供多版本选择。
 8. 同一用户的挂载文件构成共享信任域。会话目录是组织边界，不宣称是文件访问的强隔离边界。
-9. 资源查询和操作同时校验机构成员关系及用户归属；机构管理员不因管理员身份获得用户私人电脑和文件。
+9. 资源查询和操作同时校验组织成员关系及用户归属；组织管理员不因管理员身份获得用户私人电脑和文件。
 10. 未确认远端进程停止之前，不因数据库租约过期就释放技能使用权或开始覆盖安装。
-11. 新电脑的 execd 命令端点必须拒绝匿名调用，包括任务进程从实例内部访问的请求。电脑配置的 Env 仅传给非 root 任务进程，不作为容器或平台维护进程环境。缺少执行鉴权或任务环境隔离标记的旧实例返回 `computer/rebuild_required`，经显式重建保留三卷数据后继续使用。
+11. 新电脑的 execd 命令端点必须拒绝匿名调用，包括任务进程从实例内部访问的请求。电脑配置的 Env 仅传给非 root 任务进程，不作为容器或系统维护进程环境。缺少执行鉴权或任务环境隔离标记的旧实例返回 `computer/rebuild_required`，经显式重建保留三卷数据后继续使用。
 
 ## 2. 目录契约
 
@@ -40,7 +40,7 @@
 - 并行子任务可按需使用会话下 `.tasks/<run_id>/`；共同修改项目时，主任务明确文件分工。不得自动清理可能仍被引用的子任务成果。
 - 每次 exec 显式设置 cwd、任务环境；相对路径以会话 cwd 为根解析。绝不能通过全局 `/workspace` 软链接切换会话。
 - `/tmp`、系统目录、HOME 与镜像运行层不承诺重建后保留。镜像和可重建配置负责长期环境。
-- 平台的 `storage.data_dir` 保存附件和技能源包，与云电脑挂载点 `/storage` 不同。
+- 系统的 `storage.data_dir` 保存附件和技能源包，与云电脑挂载点 `/storage` 不同。
 - 跨卷“保存到我的存储”采用复制、校验、完成提交，不依赖跨卷 rename；默认不删除源文件。
 
 ## 3. 模块边界
@@ -88,9 +88,9 @@ runtime:
 
 第一版 Docker provider：通过配置端点创建/检查命名卷；OpenSandbox `Volume{PVC.ClaimName, MountPath}` 挂载已存在卷，名称分别为 storage/agents/sessions。卷生命周期不绑定沙箱终止。SDK 已有对应字段，部署端兼容性仍需真实集成测试。
 
-新模式的镜像需提供 Linux、Python 3、可切换到 UID/GID 65532 的平台维护进程，以及 `prctl` 子进程回收能力。仓库的 `scripts/sandbox-image/Dockerfile` 满足运行依赖；任意用户镜像不能仅凭名称加入可用列表，应先通过执行、安装和文件操作验收。任务进程以 UID/GID 65532 运行，平台维护权限不向任务开放。
+新模式的镜像需提供 Linux、Python 3、可切换到 UID/GID 65532 的系统维护进程，以及 `prctl` 子进程回收能力。仓库的 `scripts/sandbox-image/Dockerfile` 满足运行依赖；任意用户镜像不能仅凭名称加入可用列表，应先通过执行、安装和文件操作验收。任务进程以 UID/GID 65532 运行，系统维护权限不向任务开放。
 
-Docker 模式使用 execd 自身的 `EXECD_ACCESS_TOKEN` / `X-EXECD-ACCESS-TOKEN` 鉴权；OpenSandbox 的 `secureAccess` 为另一层入口鉴权，当前 Docker runtime 不支持，不能用它代替实例内部的访问保护。适配器以 lifecycle API key 为密钥，按 installation、computer ID、generation 通过带域分离的 HMAC-SHA256 派生执行令牌，仅注入平台 daemon；不写入 API、metadata 或电脑配置。服务重启可重建同一令牌，空密钥拒绝创建；更换 lifecycle 密钥后须显式重建已有电脑。SDK 代理模式的默认 header 回退在限定的 execd 代理路由上覆写为该令牌。任务环境不继承 daemon 令牌，非 root 任务不得读取 root 进程环境。
+Docker 模式使用 execd 自身的 `EXECD_ACCESS_TOKEN` / `X-EXECD-ACCESS-TOKEN` 鉴权；OpenSandbox 的 `secureAccess` 为另一层入口鉴权，当前 Docker runtime 不支持，不能用它代替实例内部的访问保护。适配器以 lifecycle API key 为密钥，按 installation、computer ID、generation 通过带域分离的 HMAC-SHA256 派生执行令牌，仅注入系统 daemon；不写入 API、metadata 或电脑配置。服务重启可重建同一令牌，空密钥拒绝创建；更换 lifecycle 密钥后须显式重建已有电脑。SDK 代理模式的默认 header 回退在限定的 execd 代理路由上覆写为该令牌。任务环境不继承 daemon 令牌，非 root 任务不得读取 root 进程环境。
 
 一个用户的三卷与其电脑必须位于同一个 backend/storage domain。`backend_id` 是该存储域的稳定身份，切换到其他后端时不得重新解释已有卷名。第一版不支持普通本地卷跨宿主机调度。未来共享存储 provider 可扩展，不改变数据库身份或容器路径。配额能力由 provider 声明，不把用量估算称为硬配额。
 
@@ -125,7 +125,7 @@ Docker 模式使用 execd 自身的 `EXECD_ACCESS_TOKEN` / `X-EXECD-ACCESS-TOKEN
 
 绑定优先级：创建会话显式 computer_id → user_agent_binding → 返回 computer/required，要求选择或创建；不得随机选电脑。会话创建后固定引用，只有无活动任务时可切换。
 
-电脑镜像、资源在创建时确定：显式电脑配置 → 选定 Agent 模板 → 平台默认，修改需空闲后重建。Agent 模板不复制 env；电脑 env 在创建时由平台默认与显式配置按键合并，之后可直接编辑，无需重建。每轮任务固定电脑 env 和主/子 Agent 最新 env，exec 按电脑 → 当前 Agent → 单次命令依次覆盖。子 Agent 使用自己的变量，不继承父 Agent 变量；镜像和电脑仍跟随主任务。变量仅注入非 root 任务，不影响 execd 或维护进程。
+电脑镜像、资源在创建时确定：显式电脑配置 → 选定 Agent 模板 → 系统默认，修改需空闲后重建。Agent 模板不复制 env；电脑 env 在创建时由系统默认与显式配置按键合并，之后可直接编辑，无需重建。每轮任务固定电脑 env 和主/子 Agent 最新 env，exec 按电脑 → 当前 Agent → 单次命令依次覆盖。子 Agent 使用自己的变量，不继承父 Agent 变量；镜像和电脑仍跟随主任务。变量仅注入非 root 任务，不影响 execd 或维护进程。
 
 暂停：无活动 run、无后台执行/维护使用权、超过 idle TTL。SDK 租约与数据保留期分开。删除会话只取消其任务；删除电脑遇绑定/运行返回 conflict，要求先迁移。实例丢失可恢复电脑，但中断中的命令不得自动重放（可能产生重复副作用）。
 
@@ -154,12 +154,12 @@ Docker 模式使用 execd 自身的 `EXECD_ACCESS_TOKEN` / `X-EXECD-ACCESS-TOKEN
 7. skill 工具从该 run 使用的已安装内容读取说明，不能读已更新的源包搭配尚未更新的脚本。
 8. 提示词、模型、编排仍使用会话快照；技能绑定/内容和 Agent env 在新主任务边界解析最新状态，是明确的快照例外。主/子 Agent env 一次查询、本轮固定；读取失败则准备失败，不回退旧凭据。技能记录 revision/hash 与必要的环境变更事件，env 值不写入新增事件，保持历史事件不变。
 9. 修改技能关联也走同样的目录协调，不删除活跃任务还在用的技能。
-10. 技能目录平台维护、任务只读；files 目录任务可写。需要非 root 任务身份、目录权限及文件工具写入策略共同落实。
+10. 技能目录系统维护、任务只读；files 目录任务可写。需要非 root 任务身份、目录权限及文件工具写入策略共同落实。
 
 T3 实现约定：
 
 - `internal/skill.Coordinator` 通过注入的 Installer 工作，不依赖 computer/runtime。`Acquire` 要求已登记 root run，依赖集合含全部可达子 Agent；同 root run 重试返回原 manifest，释放后不得重新获取。整组租约与 `computer_run.manifest.skill_manifest` 同事务落库。
-- 使用按机构/用户的跨进程 advisory lock 串行化安装协调；实际发布还在共享卷上持有 flock，并验证单调 fence。`syncing/blocked` 不因时间过去自动恢复；只有确认远端停止后的 `Recover` 才可推进 fence 并重试，动作记录审计。
+- 使用按组织/用户的跨进程 advisory lock 串行化安装协调；实际发布还在共享卷上持有 flock，并验证单调 fence。`syncing/blocked` 不因时间过去自动恢复；只有确认远端停止后的 `Recover` 才可推进 fence 并重试，动作记录审计。
 - 同步操作的持久 `InstallPlan` 包含从 `computer_run` 读取的 `root_run_id/computer_id/generation`，不接受调用方自行声明归属。电脑恢复先删除旧实例并 Inspect 确认消失、持久终结旧代次运行，再调用 `Coordinator.RecoverComputer(ctx, orgID, userID, computerID, oldGeneration)`。该 hook 在用户技能锁下清理对应根运行使用权，仅将归属和 fence 均匹配的未知同步转为 pending 并推进 fence；不影响其他电脑、其他代次或更晚同步。旧无归属计划继续 blocked，须另行确认该用户相关同步进程全部停止后使用审计恢复，不能根据时间推断。
 - 锁顺序为电脑 advisory lock → 用户技能 advisory lock → run 行锁 → 技能状态行锁；调用恢复 hook 时不能持有 SQL 事务或 run 行锁。技能协调不反向获取电脑锁。安装意图、安装结果和最终整组取权事务都重新锁定运行行，检查终态、使用权释放标记和电脑代次；晚到结果不能重新插入租约或覆盖恢复后的 fence。
 - Linux Python3 安装器使用 root-only `/agents/.wispjar/inbox` 和暂存目录；拒绝被替换成符号链接或非 root 所有的目录。先验证摘要并准备完整内容，再替换所有副本、移除旧文件；部分失败保持屏障。任务不得取得 root 安装能力。
@@ -169,7 +169,7 @@ T3 实现约定：
 
 ## 8. REST 契约
 
-前缀 `/api/v1`，沿用现有错误信封和机构认证。资源查询均校验本人归属。字段详细定义由 API 文档同步维护。
+前缀 `/api/v1`，沿用现有错误信封和组织认证。资源查询均校验本人归属。字段详细定义由 API 文档同步维护。
 
 | 方法/路径 | 契约 |
 |---|---|
@@ -181,7 +181,7 @@ T3 实现约定：
 | GET /computers/:id/runs | 活动任务与状态 |
 | POST /computers/:id/recover | 显式终止全部任务并恢复，需 confirm_stop_all:true；保留三卷，完成后 stopped |
 | GET /orgs/:orgId/agent-bindings | 当前用户的绑定 |
-| PUT /orgs/:orgId/agent-bindings/:agentId | body computer_id；验证同一机构和用户 |
+| PUT /orgs/:orgId/agent-bindings/:agentId | body computer_id；验证同一组织和用户 |
 | DELETE /orgs/:orgId/agent-bindings/:agentId | 幂等清除个人默认电脑偏好，不修改已有会话引用 |
 | GET /orgs/:orgId/volumes | 三卷摘要，不回显后端凭据或宿主位置 |
 | GET /operations/:id | 操作状态与资源摘要 |
@@ -192,7 +192,7 @@ T3 实现约定：
 | POST /sessions/:id/downloads | body path/scope/archive；202 返回后台下载任务 |
 | GET /sessions/:id/downloads/:downloadId | 只读查询 preparing/ready/failed/canceled；ready 含浏览器下载 URL |
 | DELETE /sessions/:id/downloads/:downloadId | 取消准备或撤销就绪任务并清理临时文件 |
-| GET、HEAD /downloads/:downloadId/file | 256 位随机、限时、仅授予固定文件副本的下载凭证；再次核对账号、会话归属和机构成员关系，支持 Range/If-Range |
+| GET、HEAD /downloads/:downloadId/file | 256 位随机、限时、仅授予固定文件副本的下载凭证；再次核对账号、会话归属和组织成员关系，支持 Range/If-Range |
 | PUT /orgs/:orgId/admin/skills/:id/package | multipart 包替换，预期 revision 防止覆盖并发更新 |
 
 新增电脑/重建等耗时操作返回 202 `{operation_id,status,resource_id}`；创建与重建接受 Idempotency-Key。操作轮询只读，不隐式启动实例。
@@ -205,7 +205,7 @@ T3 实现约定：
 
 新下载通道与预览、上传分离：默认单文件、目录原始内容及生成 ZIP 各限 20 GiB，最多 100,000 个条目，目录深度最多 128；应用实例的本地下载暂存总配额 40 GiB。限制由 `storage.downloads` 配置，准备时限及就绪下载有效期各默认 30 分钟。全实例最多 4 个准备任务、同一用户最多 2 个，任务总数最多 128；资源不足明确失败。上传仍限 32 MiB。
 
-准备任务注册会话维护占用；平台进程先创建 root 专属临时文件，再由降权到任务 UID/GID 的子进程通过继承的输出 FD 读取源目录，逐级 NOFOLLOW 打开路径。单文件复制和 ZIP64 打包均有界分块读写，不使用完整 base64/Blob。ZIP 包含顶层目录、空目录、隐藏文件及普通子文件；符号链接、特殊文件、不可读路径或打包期间的文件变化使整次打包失败，不静默漏文件。已经压缩的常见媒体与二进制资源采用 ZIP_STORED，其他文件采用 DEFLATE。
+准备任务注册会话维护占用；系统进程先创建 root 专属临时文件，再由降权到任务 UID/GID 的子进程通过继承的输出 FD 读取源目录，逐级 NOFOLLOW 打开路径。单文件复制和 ZIP64 打包均有界分块读写，不使用完整 base64/Blob。ZIP 包含顶层目录、空目录、隐藏文件及普通子文件；符号链接、特殊文件、不可读路径或打包期间的文件变化使整次打包失败，不静默漏文件。已经压缩的常见媒体与二进制资源采用 ZIP_STORED，其他文件采用 DEFLATE。
 
 远端父进程监督子进程的超时与取消并等待其终止，确认停止后才释放维护占用；传输不明仍保留占用供恢复。生成的不可变远端文件经 SDK 流读取到应用 `data_dir/.downloads`，边传输边校验长度与计算摘要，随后删除远端副本。浏览器通过固定副本原生下载；HTTP ServeContent 提供 Range/If-Range/ETag 和 64 位文件长度。原有预览与兼容 `download=1` 端点不用于大文件。下载有效期内可重试／续传，过期或撤销清理本地副本；重启会使凭证失效，遗留目录在后续准备任务中按过期时间回收。远端崩溃遗留物在后续导出时按两小时回收。
 
@@ -256,7 +256,7 @@ go run ./cmd/wispjar-migrate -config config.yaml -sessions <session-id> -apply -
 
 迁移范围仅为 `/workspace`。清单记录内容摘要、文件类型、rwx mode、mtime、符号链接目标和原 UID/GID，导出前后及目标导入后再次扫描源目录；任一变化返回 `source_changed`，不切换绑定。目标将所有者映射为任务 UID/GID `65532`，保留 rwx mode 和 mtime，去除特殊权限位。仅允许指向旧工作区内部的符号链接，内部绝对链接转换为等价相对链接；越界链接、设备/FIFO 等特殊文件及 inputs/outputs 同名非目录均拒绝。缺少的 inputs/outputs 自动创建。第一版单次上限为 100,000 个条目、1 GiB 文件内容；归档流还受独立大小限制。
 
-归档经本地受限临时文件转移，远端暂存目录只允许 root 使用；目标先在 `/sessions/.wispjar/migrations/<operation-id>/workspace` 校验完整清单，再原子发布到 `/sessions/<sid>`。目标已存在时，仅接受与完整清单一致的内容，不覆盖有差异的目录。`/root`、`/home`、`/tmp`、手工安装的软件和进程环境不随工作区复制，盘点输出明确列出该限制；新电脑保留旧镜像和会话环境配置，但平台当前网络策略继续生效。
+归档经本地受限临时文件转移，远端暂存目录只允许 root 使用；目标先在 `/sessions/.wispjar/migrations/<operation-id>/workspace` 校验完整清单，再原子发布到 `/sessions/<sid>`。目标已存在时，仅接受与完整清单一致的内容，不覆盖有差异的目录。`/root`、`/home`、`/tmp`、手工安装的软件和进程环境不随工作区复制，盘点输出明确列出该限制；新电脑保留旧镜像和会话环境配置，但系统当前网络策略继续生效。
 
 失败状态保留会话迁移门禁和持久操作，旧实例与源文件始终保留。未知远端结果不能凭超时自动重试；核实命令停止后，以相同参数和 `-confirm-stopped` 重试，工具重读操作、验证已发布目标并继续提交。同一已完成操作重复执行返回原结果。若源已变化或目标已产生其他写入，工具保持阻塞，须另行核对数据后制定恢复方案，不提供覆盖目标或自动回滚删除。迁移临时归档与目标暂存不会作为会话输入输出暴露，残留暂存由维护流程核验后处理。
 

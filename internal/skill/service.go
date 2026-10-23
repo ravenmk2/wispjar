@@ -300,7 +300,7 @@ func (s *Service) ReadFile(orgID, skillID, relPath string) (rel, content string,
 
 func (s *Service) Delete(actorID, orgID, skillID string) error {
 	if !validID(orgID) || !validID(skillID) {
-		return errInvalid("无效的技能或机构 ID", nil)
+		return errInvalid("无效的技能或组织 ID", nil)
 	}
 	return withDBLock(context.Background(), s.db, "source:"+orgID+":"+skillID, func() error {
 		var sk store.Skill

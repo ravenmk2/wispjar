@@ -85,7 +85,7 @@ export default function MembersPage() {
 
   return (
     <div>
-      <PageHeader title="成员" description="本机构成员与角色">
+      <PageHeader title="成员" description="本组织成员与角色">
         <Button size="sm" onClick={() => setAddOpen(true)}>
           添加成员
         </Button>
@@ -149,7 +149,7 @@ export default function MembersPage() {
         open={removeTarget !== null}
         onOpenChange={(open) => !open && setRemoveTarget(null)}
         title="移出成员"
-        description={`确定将「${removeTarget?.username}」移出本机构？`}
+        description={`确定将「${removeTarget?.username}」移出本组织？`}
         confirmText="移出"
         destructive
         loading={removing}
@@ -203,7 +203,7 @@ function AddMemberDialog({
             <Label htmlFor="am-username">用户名</Label>
             <Input
               id="am-username"
-              placeholder="平台已有用户的用户名"
+              placeholder="系统中已有用户的用户名"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoFocus

@@ -92,7 +92,7 @@ func (s *Service) Upload(ctx context.Context, orgID, actorID, name string, data 
 		ID: idPrefix + hexSum, OrgID: orgID, MIME: mime, Bytes: int64(len(data)),
 		Width: w, Height: h, Name: name, CreatedBy: actorID,
 	}
-	// 内容寻址全局去重：已存在（可能由他人/他机构上传同字节）时保留首发行。
+	// 内容寻址全局去重：已存在（可能由他人/他组织上传同字节）时保留首发行。
 	if err := s.db.WithContext(ctx).
 		Clauses(clause.OnConflict{DoNothing: true}).
 		Create(&row).Error; err != nil {
@@ -111,7 +111,7 @@ func (s *Service) Upload(ctx context.Context, orgID, actorID, name string, data 
 	return &ref, nil
 }
 
-// Resolve 校验 prompt 携带的附件引用：格式、存在性、机构一致、数量上限；按输入序返回引用。
+// Resolve 校验 prompt 携带的附件引用：格式、存在性、组织一致、数量上限；按输入序返回引用。
 func (s *Service) Resolve(ctx context.Context, orgID string, ids []string) ([]session.AttachmentRef, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -181,7 +181,7 @@ func (s *Service) Row(ctx context.Context, id string) (*store.Attachment, error)
 	return &row, nil
 }
 
-// IsMember 判断用户是否为指定机构成员（下载鉴权用）。
+// IsMember 判断用户是否为指定组织成员（下载鉴权用）。
 func (s *Service) IsMember(ctx context.Context, orgID, uid string) (bool, error) {
 	var n int64
 	if err := s.db.WithContext(ctx).Model(&store.OrgMember{}).

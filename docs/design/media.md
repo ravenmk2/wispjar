@@ -10,7 +10,7 @@ Responses 的工具输出为 `function_call_output.output[]`，图片使用 `inp
 
 ## 2. 持久化
 
-图片字节先写本地不可变内容寻址存储，再提交 tool/result 事件。事件仍使用 `content + attachments`，只保存平台附件 ID、MIME、尺寸、大小和名称。远端 file_id、签名 URL、base64 不进入事件；运行中的工具图片和新 checkpoint 也只保留平台引用。原文件变化、云电脑重建不影响已提交历史。
+图片字节先写本地不可变内容寻址存储，再提交 tool/result 事件。事件仍使用 `content + attachments`，只保存系统附件 ID、MIME、尺寸、大小和名称。远端 file_id、签名 URL、base64 不进入事件；运行中的工具图片和新 checkpoint 也只保留系统引用。原文件变化、云电脑重建不影响已提交历史。
 
 物理 blob 按 SHA-256 去重，租户附件授权独立于首个上传者。增加租户附件关系，旧 attachment 行迁移为所属租户的关系。按引用读取必须先验证租户权限。read_media 接受 `path` 或 `attachment_id`，两者互斥；后者用于从持久附件恢复卸载图片，不依赖原路径。
 

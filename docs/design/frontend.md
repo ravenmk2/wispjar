@@ -18,7 +18,7 @@
 | 活动任务 | 任务链接回对应会话；维护占用单独展示。失效租约仍视为占用，暂停／重建／删除禁用；服务器继续执行最终校验 |
 | 终止任务并恢复 | 独立危险操作，即使存在活动任务也可进入确认；明确提示会终止这台电脑所有正常任务／子任务／维护、丢失系统临时层，保留三卷与绑定。提交 confirm_stop_all:true 和稳定幂等键；recovering 时禁用其他操作并显示后台重试状态，只有完成后才可重新启动 |
 | 持久存储摘要 | 固定展示 `/storage`、`/agents`、`/sessions` 的状态和保留定位；未创建卷显示首次创建时准备，故障不当作空目录 |
-| Agent 绑定电脑 | 侧栏每个智能体的「… → 云电脑设置」可绑定一台本人电脑，管理页集中展示全部绑定并允许清除；残留的下线 Agent 绑定仍列出以便清理。绑定为当前用户、当前机构的个人设置，不修改已有会话 |
+| Agent 绑定电脑 | 侧栏每个智能体的「… → 云电脑设置」可绑定一台本人电脑，管理页集中展示全部绑定并允许清除；残留的下线 Agent 绑定仍列出以便清理。绑定为当前用户、当前组织的个人设置，不修改已有会话 |
 | 新会话 | 草稿页不显示电脑选择器，首次发送不传显式 computer_id，由服务端解析个人绑定。不自动选第一台；缺少绑定时保留草稿，提示绑定并提供「前往设置」入口 |
 | 已有会话 | 聊天主内容区移除整行云电脑状态／选择栏，保留原电脑绑定。聊天／轨迹切换采用 24px 高、12px 字号的紧凑按钮 |
 | 会话文件面板 | 已绑定电脑使用 `WorkspaceFiles`，旧未迁移会话继续使用 `SandboxPanel`。顶部合并目录选择及上传、刷新、关闭图标按钮，下方合并返回按钮、可逐级点击的地址面包屑和当前目录打包下载；根目录禁用上级按钮，预览文件时返回所在文件列表。范围为当前会话、我的存储、智能体文件，所有请求传显式 scope 和相对 path。目录行也有独立打包入口；新旧列表及预览标题共用常见文件类型图标。两种面板共用 `FilePanel`：桌面拖拽左边界调整宽度，最小 320px、最大主内容区 60%，空间不足时缩小下限；支持方向键微调、双击恢复 420px，并用 localStorage 记忆宽度。窄屏使用右侧覆盖面板 |
@@ -26,13 +26,13 @@
 | 预览／下载 | 复用 FilePreview；当前工作区完整下载通过后台任务获得限时凭证，再交由浏览器原生下载，不创建整个文件 Blob。目录包使用 ZIP64，准备期间显示可取消提示；完成后显示带“下载”操作的常驻通知，由用户点击启动浏览器下载，避免长时间准备后丢失浏览器用户激活状态。失败保留原因，不宣称已经下载完成，实际进度在浏览器查看。二进制工作文件不再点击即自动下载。图片文件以内联原图物理像素尺寸为上限（自然尺寸除以 max(1, devicePixelRatio)），同时限制宽度不超过面板可用宽度，超出等比缩小、小图不放大，长图允许纵向滚动；点击图片或“查看原图”进入已有缩放遮罩，支持原图 1:1、适应窗口与平移。文件预览时目录导航与文件标题合并为一行，面包屑包含文件名，右侧统一放置文件类型、预览模式、保存和下载操作；返回按钮回到所在目录。原始尺寸不会因面板拖宽自动放大，DPI 或浏览器缩放改变时重新计算。大文件限制和后端错误原样保留为失败 |
 | 技能管理 | 管理员技能列表显示 revision，提供“更新包”；PUT multipart file/expected_revision；并发冲突要求刷新重选，成功提示任务结束后同步安装 |
 
-`stores/computers.ts` 承接 control baseline 的 computers 与 computer/upsert/remove，按当前 org 及每项 org_id 校验投影。切换机构清空旧投影，迟到的旧请求不重新填入。电脑页还周期刷新 REST 状态和活动运行，用于显示操作、任务和卷摘要；WS 仍负责及时状态投影及重连覆盖。电脑配置只读取安全视图，不回显 env 值。
+`stores/computers.ts` 承接 control baseline 的 computers 与 computer/upsert/remove，按当前 org 及每项 org_id 校验投影。切换组织清空旧投影，迟到的旧请求不重新填入。电脑页还周期刷新 REST 状态和活动运行，用于显示操作、任务和卷摘要；WS 仍负责及时状态投影及重连覆盖。电脑配置只读取安全视图，不回显 env 值。
 
-Agent 编辑器提供“仅保存环境变量”，调用独立 env 补丁接口，不提交提示词或切换发布状态；已有会话下一轮任务生效。exec 的变量优先级为单次命令 > 当前 Agent > 电脑；子 Agent 使用自己的变量。平台 env 提示为新建电脑默认值，不宣称重建会自动读取平台或 Agent 变量。
+Agent 编辑器提供“仅保存环境变量”，调用独立 env 补丁接口，不提交提示词或切换发布状态；已有会话下一轮任务生效。exec 的变量优先级为单次命令 > 当前 Agent > 电脑；子 Agent 使用自己的变量。系统 env 提示为新建电脑默认值，不宣称重建会自动读取系统或 Agent 变量。
 
 `session/computer`、`workspace/ready`、`runtime/environment` 更新会话 header 中的 computerId/workspaceDir/computerStatus。其他客户端切换电脑后，当前聊天重新读取 Detail，不需要用户手动刷新页面。技能更新等待、同步失败、电脑忙、卷缺失等错误转为可行动的中文提示，不自动取消正在运行的任务。
 
-验收：`pnpm test` 覆盖默认绑定解析、不自动选机、活动／失效维护占用的控制禁用、跨机构迟到投影、幂等请求头、202 状态、409 错误、scope/inputs/跨卷保存与技能修订冲突；`pnpm build` 执行 TypeScript strict 与 Vite 构建。真实 HTTP、WS 权限与交互验收由独立测试实例完成，不以请求 mock 代替后端验收。
+验收：`pnpm test` 覆盖默认绑定解析、不自动选机、活动／失效维护占用的控制禁用、跨组织迟到投影、幂等请求头、202 状态、409 错误、scope/inputs/跨卷保存与技能修订冲突；`pnpm build` 执行 TypeScript strict 与 Vite 构建。真实 HTTP、WS 权限与交互验收由独立测试实例完成，不以请求 mock 代替后端验收。
 
 ## 1. 工程约定
 
@@ -79,8 +79,8 @@ web/src/
 │   ├── sessions/              # SessionList（搜索 + 行 hover "…" 菜单：重命名/分叉/归档/删除）
 │   ├── agents/                # AgentPicker（侧栏智能体列表）
 │   ├── sandbox/               # SandboxPanel（文件/预览双 tab + 刷新）、FilePreview（面板内文件预览）、previewUtils（取数/下载帮助函数）
-│   └── admin/                 # 机构管理：AgentEditor（§8）、SkillManager、MemberManager、OrgUsage
-├── platform/                  # 平台管理：Orgs、Users、Providers、Models、Settings、Usage、Audit
+│   └── admin/                 # 组织管理：AgentEditor（§8）、SkillManager、MemberManager、OrgUsage
+├── platform/                  # 系统管理：Orgs、Users、Providers、Models、Settings、Usage、Audit
 ├── layouts/                   # WorkspaceLayout（三栏）、AdminLayout、PlatformLayout
 └── lib/                       # utils、types（与 protocol.md 对齐的 TS 类型，单一事实源）
 ```
@@ -94,13 +94,15 @@ web/src/
 | `/login` | 登录 | 已登录跳 `/` |
 | `/` | 工作区（重定向到最近会话或空态） | 登录 |
 | `/c/:sessionId` | 会话（聊天/轨迹 tab + 右侧面板） | owner（403 友好页） |
-| `/admin/agents`、`/admin/agents/new`、`/admin/agents/:id` | 智能体管理/编辑器 | 机构 admin |
-| `/admin/skills` | Skills 管理 | 机构 admin |
-| `/admin/members` | 成员管理 | 机构 admin |
-| `/admin/usage` | 机构用量 | 机构 admin |
-| `/platform/orgs` `/platform/users` `/platform/providers` `/platform/models` `/platform/settings` `/platform/usage` `/platform/audit` | 平台后台 | 平台超管 |
+| `/admin/agents`、`/admin/agents/new`、`/admin/agents/:id` | 智能体管理/编辑器 | 组织 admin |
+| `/admin/skills` | Skills 管理 | 组织 admin |
+| `/admin/members` | 成员管理 | 组织 admin |
+| `/admin/usage` | 组织用量 | 组织 admin |
+| `/platform/orgs` `/platform/users` `/platform/providers` `/platform/models` `/platform/settings` `/platform/usage` `/platform/audit` | 系统后台 | 系统管理员 |
 
-机构上下文：URL 不含机构；当前机构存 localStorage + `identity` store，API 客户端统一注入 `X-Org-Id`。侧栏机构切换器（下拉展示 `auth/me` 的 orgs；平台管理机构在列表中标注"平台"，选中且角色 admin 时导航进 `/platform/*`）。
+组织上下文：URL 不含组织；当前组织存 localStorage + `identity` store，API 客户端统一注入 `X-Org-Id`。侧栏组织切换器（下拉展示 `auth/me` 的 orgs；「系统管理」组织在列表中标注"系统"，选中且角色 admin 时导航进 `/platform/*`）。
+
+已有登录态在页面启动及 token 变化时通过 `auth/me` 刷新用户和组织信息，使服务端名称修改在刷新页面后生效。请求结束时检查 token 与取消状态，退出或切换账号后的旧响应不得覆盖当前身份；网络失败保留缓存，认证失效仍由 API 客户端统一处理。
 
 ## 4. mux 客户端（src/mux/）
 
@@ -193,13 +195,13 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 
 ## 7. 侧栏（sessions + agents）
 
-- 宽度 240px，背景 `bg-sidebar`（亮 #FBFAF9 / 暗 #181817）；支持折叠为 48px 窄栏（顶部展开按钮 + 底部头像 icon 变体用户菜单），折叠状态持久化 localStorage `wispjar-sidebar-collapsed`。工作台无全局顶栏——机构切换与用户菜单均收进侧栏，主内容区保持原有直角与贴边布局。
-- 顶部：品牌行（Wispjar）→ 机构切换器行（variant=sidebar：全宽行，建筑图标 + 机构名 + ChevronsUpDown；下拉展示 `auth/me` 的 orgs，平台机构标注"平台"，选中且角色 admin 时可导航进 `/platform/*`）。
-- 智能体列表（AgentPicker）：本机构 published 智能体；点击 → 跳转 `/c/new?agent=<id>` 草稿页（不立即创建会话），首条消息发送时才 POST 创建会话并紧接发 prompt，成功后 replace 跳 `/c/<id>`；创建失败停留在草稿页且输入内容不丢。工作区首页智能体卡片行为相同。
+- 宽度 240px，背景 `bg-sidebar`（亮 #FBFAF9 / 暗 #181817）；支持折叠为 48px 窄栏（顶部展开按钮 + 底部头像 icon 变体用户菜单），折叠状态持久化 localStorage `wispjar-sidebar-collapsed`。工作台无全局顶栏——组织切换与用户菜单均收进侧栏，主内容区保持原有直角与贴边布局。
+- 顶部：品牌行（Wispjar）→ 组织切换器行（variant=sidebar：全宽行，建筑图标 + 组织名 + ChevronsUpDown；下拉展示 `auth/me` 的 orgs，系统组织标注"系统"，选中且角色 admin 时可导航进 `/platform/*`）。
+- 智能体列表（AgentPicker）：本组织 published 智能体；点击 → 跳转 `/c/new?agent=<id>` 草稿页（不立即创建会话），首条消息发送时才 POST 创建会话并紧接发 prompt，成功后 replace 跳 `/c/<id>`；创建失败停留在草稿页且输入内容不丢。工作区首页智能体卡片行为相同。
 - 侧栏智能体默认最多显示 5 个，超出时显示灰色「展开更多」，每次追加 5 个；展开后可「收起」至 5 个。智能体区最高占侧栏内容区的 45%，超出时区内滚动，为聊天保留空间。
 - 聊天列表：搜索框（防抖调 REST，"搜索聊天"）+ 行项：标题（自动生成中显示"新聊天"）、running 呼吸点、紧凑相对时间（刚刚/N分/N时/N天/M月D日）；hover 浮现 "…" 菜单：重命名 / 创建聊天副本 / 归档 / 删除（删除需确认对话框）；悬停出随主题切换的 HoverCard（标题 / 时间 / 运行状态，浅色浅底深字、深色深灰底浅字）。数据源 `control` 流投影。当前聊天选中态 `bg-selected`。界面可见文案统一称"聊天"；技术领域与 API 保留 session／会话命名。HTML 文档标题为 `WispJar`。
-- 聊天默认最多显示 10 个活动会话，超出时显示灰色「展开更多」；点击后在独立滚动区内每次追加 10 个，接近底部自动续页，保留「加载更多」供键盘操作。普通列表基于完整 `control` 投影分批渲染；搜索保留 300ms 防抖，按 REST `next_cursor` 每页 10 条加载、按 ID 去重，切换查询或机构丢弃旧响应。搜索加载中、失败重试和全部加载完成均有提示。「收起」恢复前 10 个并回到列表顶部；修改搜索或切换机构重置展开状态。品牌、搜索框和底部用户菜单不随聊天滚动。
-- 底部：机构管理（admin 可见）、平台管理（超管可见）链接 + 用户菜单行（variant=sidebar：avatar + 显示名 + ChevronsUpDown，dropdown 向上弹出；外观（浅色/深色/跟随系统）/修改密码/退出登录）。机构/平台管理页（SecondaryLayout）保留自身页头（返回工作区 + 标题 + header 变体的机构切换与用户菜单）。
+- 聊天默认最多显示 10 个活动会话，超出时显示灰色「展开更多」；点击后在独立滚动区内每次追加 10 个，接近底部自动续页，保留「加载更多」供键盘操作。普通列表基于完整 `control` 投影分批渲染；搜索保留 300ms 防抖，按 REST `next_cursor` 每页 10 条加载、按 ID 去重，切换查询或组织丢弃旧响应。搜索加载中、失败重试和全部加载完成均有提示。「收起」恢复前 10 个并回到列表顶部；修改搜索或切换组织重置展开状态。品牌、搜索框和底部用户菜单不随聊天滚动。
+- 底部：组织管理（admin 可见）、系统管理（系统管理员可见）链接 + 用户菜单行（variant=sidebar：avatar + 显示名 + ChevronsUpDown，dropdown 向上弹出；外观（浅色/深色/跟随系统）/修改密码/退出登录）。组织管理/系统管理页（SecondaryLayout）保留自身页头（返回工作区 + 标题 + header 变体的组织切换与用户菜单）。
 
 ## 8. 智能体编辑器（features/admin/AgentEditor）
 
@@ -209,24 +211,24 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
 2. **模型**：下拉（`/orgs/{org}/models`，显示供应商/上下文长度）；参数：temperature 滑块（0-2）、max_tokens 数字。
 3. **提示词**：等宽字体 textarea（行数自适应，支持全屏）。
 4. **工具**：云电脑工具开关组（exec/read/write/edit/glob/grep/read_media，默认全开）。
-5. **Skills**：本机构 skills 多选列表（名称+描述），可排序（拖拽）。
-6. **子智能体**：本机构其他 published 智能体多选；保存时前端提示环/层级限制（服务端 409 校验为准）；hint 说明"通过 task 工具委派"。
-7. **云电脑**：镜像下拉（`GET /orgs/{orgId}/admin/sandbox-settings` 的 images 只读展示）、资源覆盖（CPU/内存，留空用平台默认）。
+5. **Skills**：本组织 skills 多选列表（名称+描述），可排序（拖拽）。
+6. **子智能体**：本组织其他 published 智能体多选；保存时前端提示环/层级限制（服务端 409 校验为准）；hint 说明"通过 task 工具委派"。
+7. **云电脑**：镜像下拉（`GET /orgs/{orgId}/admin/sandbox-settings` 的 images 只读展示）、资源覆盖（CPU/内存，留空用系统默认）。
 8. **发布**：draft → 「发布」按钮（校验失败显示原因）；published → 「下线」；published 编辑后自动转 draft 并提示重新发布。
 
-## 9. 机构/平台管理页（规格摘要）
+## 9. 组织管理/系统管理页（规格摘要）
 
 - **SkillManager**：上传按钮（拖拽 zip，进度条）、列表（name/description/引用数/上传者/时间）、详情抽屉（frontmatter + 文件树 + 文件查看）、删除（被引用时禁用并提示）。
 - **MemberManager**：表格 + 「添加成员」（输入 username，角色下拉）、角色修改、移出（二次确认）。
 - **OrgUsage / PlatformUsage**：日期范围 + group_by 切换 + 表格 + 简单柱状图（recharts 或轻量自绘；token 三色系 input/output/cached）。
 - **Providers**：卡片列表（类型徽标、base_url、密钥掩码、连通状态点、最近检查时间）+ 新建/编辑对话框（类型下拉动态字段：deepseek/qwen/ark/openai_compat 各自 base_url 默认值）+ 「测试连通」按钮。
-- **Models**：按供应商分组的表格；上架对话框（model_code、显示名、能力复选：工具/推理/视觉/流式、上下文长度、默认参数 JSON）。勾选推理能力后可多选 `none/minimal/low/medium/high/xhigh/max` 并从已选档位中指定默认档（或“默认”，沿用提供方默认）；取消默认档的勾选时清空默认值。选择的是平台档位，调用时由供应商适配器转换（runtime.md §3）；各模型只勾选其支持的档位，空集表示不提供选档。
+- **Models**：按供应商分组的表格；上架对话框（model_code、显示名、能力复选：工具/推理/视觉/流式、上下文长度、默认参数 JSON）。勾选推理能力后可多选 `none/minimal/low/medium/high/xhigh/max` 并从已选档位中指定默认档（或“默认”，沿用提供方默认）；取消默认档的勾选时清空默认值。选择的是系统档位，调用时由供应商适配器转换（runtime.md §3）；各模型只勾选其支持的档位，空集表示不提供选档。
 - **Settings**：云电脑分区（默认镜像、镜像列表编辑器、egress 策略编辑器：defaultAction 切换 + 规则表格 allow/deny×target、资源默认、TTL）。
 - **Audit**：时间倒序表格（操作者/action/target/时间，detail 展开 JSON）。
 
 ## 10. 视觉与体验基线
 
-模型编辑增加 API 协议选择（Chat Completions / Responses）和“工具读图”能力；仅在 Responses、视觉、工具调用均启用时允许工具读图。提供方未知或未验证时不默认开启。读图结果仍从平台附件接口预览，不向浏览器暴露供应商 file_id。
+模型编辑增加 API 协议选择（Chat Completions / Responses）和“工具读图”能力；仅在 Responses、视觉、工具调用均启用时允许工具读图。提供方未知或未验证时不默认开启。读图结果仍从系统附件接口预览，不向浏览器暴露供应商 file_id。
 
 - 侧栏、主内容区及思考／工具等原生滚动区域：细灰色滚动条，滚动时出现，停滚 500ms 后以 150ms 淡出；悬停滚动条边缘或拖动时持续可见，预留稳定 gutter，显隐不造成内容横向跳动。减少动态效果模式停用扫光与淡出过渡。
 

@@ -113,7 +113,7 @@ export default function SkillsPage() {
 
   return (
     <div>
-      <PageHeader title="技能" description="本机构技能包（agentskills.io 规范 zip）">
+      <PageHeader title="技能" description="本组织技能包（agentskills.io 规范 zip）">
         <Button size="sm" disabled={uploading !== null} onClick={() => fileInputRef.current?.click()}>
           <Upload className="size-4" />
           上传技能

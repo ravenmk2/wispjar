@@ -118,7 +118,7 @@ export default function ModelsPage() {
 
   return (
     <div>
-      <PageHeader title="模型" description="平台上架模型全局共享，所有机构可用">
+      <PageHeader title="模型" description="系统上架的模型由所有组织共享">
         <Button size="sm" onClick={() => setEditTarget("new")}>
           上架模型
         </Button>
@@ -127,7 +127,7 @@ export default function ModelsPage() {
       {models === null ? (
         <TableSkeleton />
       ) : models.length === 0 ? (
-        <EmptyState title="暂无模型" description="上架模型后机构智能体即可选用" />
+        <EmptyState title="暂无模型" description="上架模型后组织智能体即可选用" />
       ) : (
         <div className="space-y-6">
           {groups.map((g) => (
