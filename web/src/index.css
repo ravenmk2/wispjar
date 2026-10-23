@@ -30,7 +30,6 @@
     --chat-line-height: 26px;
     --radius: 0.75rem;
     --shadow-input: 0 4px 12px rgba(0, 0, 0, 0.03), 0 5px 16px -4px rgba(0, 0, 0, 0.07);
-    --shadow-input-focus: 0 5px 18px -4px rgba(0, 0, 0, 0.13);
     --scrollbar-color: #a3a3a3;
     --shimmer-base: #666666;
     --shimmer-highlight: #404040;
@@ -40,6 +39,7 @@
     --sidebar: #fbfaf9;
     --composer: #ffffff;
     --composer-border: rgba(0, 0, 0, 0.09);
+    --composer-border-focus: rgba(0, 0, 0, 0.24);
     --composer-placeholder: rgba(0, 0, 0, 0.45);
     --context-track: #c9c9c9;
     --text-secondary: rgba(0, 0, 0, 0.6);
@@ -83,8 +83,9 @@
     --ring: 216.86275 63.48548% 47.25490%;
     --ring-focus: rgba(44, 103, 197, 0.2);
     --sidebar: #181817;
-    --composer: #1f1f1f;
+    --composer: #242424;
     --composer-border: rgba(255, 255, 255, 0.06);
+    --composer-border-focus: rgba(255, 255, 255, 0.2);
     --composer-placeholder: rgba(255, 255, 255, 0.42);
     --context-track: #858585;
     --text-secondary: rgba(255, 255, 255, 0.56);
@@ -102,7 +103,6 @@
     --tooltip-bg: #292929;
     --toast-bg: #404040;
     --shadow-input: 0 5px 16px -4px rgba(0, 0, 0, 0.07);
-    --shadow-input-focus: 0 5px 18px -4px rgba(0, 0, 0, 0.13);
     --scrollbar-color: #737373;
     --shimmer-base: rgba(255, 255, 255, 0.56);
     --shimmer-highlight: #b0b0b0;
@@ -119,6 +119,9 @@
   }
   *:focus-visible {
     outline: none;
+  }
+  /* 菜单已有焦点底色；容器和内嵌输入由外层边框提示，避免覆盖菜单投影。 */
+  :focus-visible:not(:where(textarea, [role="menu"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="listbox"], [role="option"], [role="group"], [data-focus-ring="none"])) {
     box-shadow: 0 0 0 3px var(--ring-focus) !important;
   }
   /* 文本域自带光标焦点，ring 会与容器卡片边框打架（如 composer 胶囊卡内圈矩形） */
@@ -234,14 +237,11 @@
 @layer components {
   .chat-composer {
     border-color: var(--composer-border);
-    box-shadow: var(--shadow-input);
-    transition: box-shadow 150ms ease-out, border-color 150ms ease-out;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+    transition: border-color 150ms ease-out;
   }
   .chat-composer:focus-within {
-    box-shadow: var(--shadow-input-focus);
-  }
-  .dark .chat-composer:focus-within {
-    border-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--composer-border-focus);
   }
   .assistant-body {
     color: var(--text-body);

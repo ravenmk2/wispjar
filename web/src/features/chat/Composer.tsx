@@ -1,4 +1,4 @@
-import { ArrowUp, Check, ChevronDown, ImageOff, Loader2, Paperclip, RotateCw, Shield, ShieldCheck, ShieldOff, Square, X } from "lucide-react"
+import { ArrowUp, Check, ChevronDown, ImageOff, Loader2, Paperclip, RotateCw, Square, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useNavigate } from "react-router"
 import { toast } from "sonner"
@@ -9,7 +9,6 @@ import { workspaceApi } from "@/api/workspace"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -20,21 +19,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ContextRing } from "@/features/chat/ContextRing"
 import { cn, uuid } from "@/lib/utils"
 import { REASONING_EFFORT_OPTIONS } from "@/lib/types"
-import type { AgentSummary, ApprovalMode, AttachmentRef, OrgModel } from "@/lib/types"
+import type { AgentSummary, AttachmentRef, OrgModel } from "@/lib/types"
 import { useComposerStore } from "@/stores/composer"
 import { useCurrentOrg } from "@/stores/identity"
 import { useSessionStore } from "@/stores/session"
-
-const APPROVAL_MODES: Array<{
-  value: ApprovalMode
-  label: string
-  hint: string
-  icon: typeof Shield
-}> = [
-  { value: "strict", label: "严格", hint: "全部确认", icon: ShieldCheck },
-  { value: "default", label: "默认", hint: "仅命令确认", icon: Shield },
-  { value: "auto", label: "自动", hint: "全部放行", icon: ShieldOff },
-]
 
 // 内容自适应长高，约 14 行（26px 行高）封顶后内部滚动
 const MAX_TEXTAREA_HEIGHT = 14 * 26
@@ -62,10 +50,8 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   const liveAttempt = useSessionStore((s) => s.liveAttempt)
   const draft = useComposerStore((s) => s.draft)
   const sending = useComposerStore((s) => s.sending)
-  const approvalMode = useComposerStore((s) => s.approvalMode)
   const setDraft = useComposerStore((s) => s.setDraft)
   const setSending = useComposerStore((s) => s.setSending)
-  const setApprovalMode = useComposerStore((s) => s.setApprovalMode)
   const setOptimistic = useComposerStore((s) => s.setOptimistic)
   const clearOptimistic = useComposerStore((s) => s.clearOptimistic)
 
@@ -87,10 +73,6 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   const busy = running || liveAttempt !== null
   const modelId = modelOverride ?? header?.modelId ?? draftAgent?.model_id ?? ""
   const effortLocked = !draftAgent && (promptAccepted || (header?.modelSettingsLocked ?? detailLocked ?? true))
-
-  useEffect(() => {
-    if (header?.approvalMode) setApprovalMode(header.approvalMode)
-  }, [header?.approvalMode, setApprovalMode])
 
   useEffect(() => {
     setModelOverride(null)
@@ -307,17 +289,6 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
     }
   }
 
-  async function changeApprovalMode(mode: ApprovalMode) {
-    if (draftAgent || !sessionId || mode === approvalMode) return
-    setApprovalMode(mode)
-    try {
-      await sessionsApi.update(sessionId, { approval_mode: mode })
-    } catch (e) {
-      toast.error(errorMessage(e))
-      if (header?.approvalMode) setApprovalMode(header.approvalMode)
-    }
-  }
-
   async function changeModel(next: string) {
     if (sending || effortLocked || (!draftAgent && !sessionId) || !next || next === modelId) return
     const prevEffort = effort
@@ -361,7 +332,6 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
   }
 
   const modelName = currentModel?.display_name
-  const currentMode = APPROVAL_MODES.find((m) => m.value === approvalMode) ?? APPROVAL_MODES[2]
 
   return (
     <div className="shrink-0">
@@ -472,37 +442,6 @@ export function Composer({ sessionId, draftAgent }: { sessionId: string; draftAg
               </TooltipTrigger>
               <TooltipContent>{visionSupported ? "添加图片" : "当前模型不支持图片"}</TooltipContent>
             </Tooltip>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  disabled={!!draftAgent}
-                  title={draftAgent ? "发送首条消息后可调整审批模式" : undefined}
-                  className="group flex h-7 items-center gap-1 rounded-md px-2 text-sm font-medium text-fg-secondary outline-none hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-secondary"
-                >
-                  {currentMode.label}
-                  <ChevronDown className="size-3 text-fg-tertiary transition-transform group-data-[state=open]:rotate-180" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-52">
-                {APPROVAL_MODES.map((m) => (
-                  <DropdownMenuItem
-                    key={m.value}
-                    onSelect={() => void changeApprovalMode(m.value)}
-                    className="items-start gap-2.5 px-2.5 py-2"
-                  >
-                    <m.icon className="mt-0.5 size-4 text-fg-tertiary" />
-                    <span className="flex flex-col">
-                      <span className={cn("text-sm", approvalMode === m.value && "font-semibold")}>
-                        {m.label}
-                      </span>
-                      <span className="text-xs text-fg-caption">{m.hint}</span>
-                    </span>
-                    {approvalMode === m.value && <Check className="ml-auto mt-1 size-3.5" />}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
             <div className="ml-auto flex min-w-0 items-center gap-1.5">
               <ContextRing contextSize={currentModel?.context_size} />
               {effortLocked ? (

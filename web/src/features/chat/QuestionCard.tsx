@@ -1,5 +1,5 @@
 import { Check, ChevronLeft, ChevronRight } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { toast } from "sonner"
 import { ApiError, errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
@@ -45,22 +45,29 @@ export function QuestionAnswerList({
   answers?: QuestionAnswer[]
 }) {
   return (
-    <dl className="space-y-2.5">
+    <dl className="divide-y divide-divider">
       {questions.map((q) => {
         const a = answers?.find((x) => x.id === q.id)
         const { text, tone } = answerText(a)
         return (
-          <div key={q.id}>
-            <dt className="text-chat text-fg-secondary">{q.question}</dt>
+          <div key={q.id} className="space-y-2 py-3 first:pt-0 last:pb-0">
+            <dt className="flex items-start gap-2 text-chat text-fg-secondary">
+              <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-accent text-meta">问</span>
+              <span className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{q.question}</span>
+            </dt>
             <dd
-              className={cn(
-                "mt-0.5 text-chat",
-                tone === "answer" && "font-medium",
+              className="flex items-start gap-2 text-chat"
+            >
+              <span className={cn(
+                "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md text-meta",
+                tone === "answer" ? "bg-primary-soft text-link" : "bg-accent text-fg-caption",
+              )}>答</span>
+              <span className={cn(
+                "min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]",
+                tone === "answer" && "font-medium text-foreground",
                 tone === "skip" && "text-fg-caption",
                 tone === "pending" && "text-amber-600 dark:text-amber-400",
-              )}
-            >
-              {text}
+              )}>{text}</span>
             </dd>
           </div>
         )
@@ -69,7 +76,7 @@ export function QuestionAnswerList({
   )
 }
 
-/** composer 区域整体接管的提问卡（与 ApprovalTakeover 同座位同卡片语言，主色交互） */
+/** composer 区域整体接管的提问卡，中性卡片配合主色勾选和提交操作。 */
 export function QuestionTakeover({
   question,
   sessionId,
@@ -104,6 +111,10 @@ export function QuestionTakeover({
 
   function goNext() {
     if (!isLast) setIndex(key, index + 1)
+  }
+
+  function goPrevious() {
+    if (index > 0) setIndex(key, index - 1)
   }
 
   function choose(label: string) {
@@ -176,6 +187,22 @@ export function QuestionTakeover({
     }
   }
 
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.defaultPrevented || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return
+    const previous = e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === "ArrowLeft"
+    const plain = !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey
+    if (!previous && !(plain && (e.key === "Enter" || e.key === "Escape"))) return
+    // Enter 保留按钮的原生激活行为；输入框和详情空白处执行下一题／提交。
+    if (e.key === "Enter" && (e.target as HTMLElement).closest("button, a[href], [role=button]")) return
+    e.preventDefault()
+    e.stopPropagation()
+    if (submitting || e.repeat) return
+    if (previous) goPrevious()
+    else if (e.key === "Escape") skip()
+    else if (isLast) void submit()
+    else goNext()
+  }
+
   const hasOptions = !!current.options && current.options.length > 0
   const multi = !!current.multi_select
   const customActive = currentAnswer.custom.trim() !== ""
@@ -185,19 +212,23 @@ export function QuestionTakeover({
       <div className="mx-auto max-w-chat px-4 pb-4 pt-2">
         <div
           aria-busy={submitting}
-          className="overflow-hidden rounded-[24px] border border-primary/50 bg-composer shadow-input"
+          aria-keyshortcuts="Enter Escape Alt+ArrowLeft"
+          onKeyDown={onKeyDown}
+          className="chat-composer overflow-hidden rounded-[24px] border bg-composer"
         >
-          <div className="flex items-center gap-2 bg-primary/10 px-4 py-2.5 text-[13px] font-medium text-link">
-            <span className="size-2 rounded-full bg-primary" />
+          <div className="flex items-center gap-2 bg-accent px-4 py-2.5 text-[13px] font-medium text-fg-secondary">
+            <span className="size-2 rounded-full bg-fg-tertiary" />
             等待回答
             {total > 1 && (
               <span className="ml-auto flex items-center gap-1 text-xs font-normal tabular-nums">
                 <button
                   type="button"
                   aria-label="上一题"
+                  title="上一题（Alt+←）"
+                  aria-keyshortcuts="Alt+ArrowLeft"
                   disabled={index === 0}
-                  onClick={() => setIndex(key, index - 1)}
-                  className="flex size-5 items-center justify-center rounded hover:bg-primary/10 disabled:opacity-40"
+                  onClick={goPrevious}
+                  className="flex size-5 items-center justify-center rounded hover:bg-selected disabled:opacity-40"
                 >
                   <ChevronLeft className="size-3.5" />
                 </button>
@@ -207,7 +238,7 @@ export function QuestionTakeover({
                   aria-label="下一题"
                   disabled={isLast}
                   onClick={goNext}
-                  className="flex size-5 items-center justify-center rounded hover:bg-primary/10 disabled:opacity-40"
+                  className="flex size-5 items-center justify-center rounded hover:bg-selected disabled:opacity-40"
                 >
                   <ChevronRight className="size-3.5" />
                 </button>
@@ -235,12 +266,13 @@ export function QuestionTakeover({
                         type="button"
                         role={multi ? "checkbox" : "radio"}
                         aria-checked={checked}
+                        data-focus-ring="none"
                         onClick={() => (multi ? toggle(opt.label) : choose(opt.label))}
                         className={cn(
-                          "flex w-full items-start gap-2.5 rounded-xl border px-3 py-2 text-left text-chat transition-colors",
+                          "flex w-full items-start gap-2.5 rounded-xl border px-3 py-2 text-left text-chat transition-colors focus-visible:border-[color:var(--composer-border-focus)] focus-visible:bg-accent",
                           checked
-                            ? "border-primary bg-primary/5"
-                            : "border-black/10 hover:border-primary/50 hover:bg-accent dark:border-white/10",
+                            ? "border-[color:var(--composer-border-focus)] bg-selected"
+                            : "border-divider hover:border-[color:var(--composer-border-focus)] hover:bg-accent",
                         )}
                       >
                         <span
@@ -272,8 +304,8 @@ export function QuestionTakeover({
                   })}
                   <div
                     className={cn(
-                      "flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors",
-                      customActive ? "border-primary bg-primary/5" : "border-black/10 dark:border-white/10",
+                      "flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors focus-within:border-[color:var(--composer-border-focus)]",
+                      customActive ? "border-[color:var(--composer-border-focus)] bg-selected" : "border-divider",
                     )}
                   >
                     <span
@@ -288,6 +320,8 @@ export function QuestionTakeover({
                       {customActive && <Check className="size-3" />}
                     </span>
                     <input
+                      aria-label="其他回答"
+                      data-focus-ring="none"
                       value={currentAnswer.custom}
                       onChange={(e) => setCustom(e.target.value)}
                       placeholder="其他（填写自定义回答）"
@@ -299,22 +333,19 @@ export function QuestionTakeover({
                 <textarea
                   value={currentAnswer.custom}
                   onChange={(e) => setCustom(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                      e.preventDefault()
-                      if (isLast) void submit()
-                      else goNext()
-                    }
-                  }}
                   rows={3}
-                  placeholder="输入回答，Enter 提交，Shift+Enter 换行"
-                  className="block w-full resize-none rounded-xl border border-black/10 bg-transparent px-3 py-2 text-chat outline-none placeholder:text-fg-placeholder focus:border-primary/50 dark:border-white/10"
+                  placeholder={`输入回答，Enter ${isLast ? "提交" : "下一题"}，Shift+Enter 换行`}
+                  aria-label="回答"
+                  className="block w-full resize-none rounded-xl border border-divider bg-transparent px-3 py-2 text-chat outline-none placeholder:text-fg-placeholder focus:border-[color:var(--composer-border-focus)]"
                 />
               )}
             </div>
           </div>
-          <div className="flex items-center justify-end gap-2 px-4 py-3.5">
-            <Button size="sm" variant="outline" onClick={skip} disabled={submitting}>
+          <div className="flex flex-wrap items-center justify-end gap-2 px-4 py-3.5">
+            <span className="mr-auto text-meta text-fg-caption">
+              Enter {isLast ? "提交" : "下一题"} · Esc 跳过{total > 1 && " · Alt+← 上一题"}
+            </span>
+            <Button size="sm" variant="outline" onClick={skip} disabled={submitting} aria-keyshortcuts="Escape">
               跳过
             </Button>
             <Button size="sm" onClick={() => (isLast ? void submit() : goNext())} disabled={submitting}>
