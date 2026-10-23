@@ -11,7 +11,8 @@ import {
   DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent,
   DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { mainSection, orgSwitchPath, platformOrganization, safeWorkspaceLocation, workspaceLocationKey } from "@/lib/navigation"
+import { useReturnToWorkspace } from "@/hooks/useReturnToWorkspace"
+import { mainSection, orgSwitchPath, platformOrganization, sectionNavigation } from "@/lib/navigation"
 import { setThemeMode, useThemeMode, type ThemeMode } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 import type { UserOrg } from "@/lib/types"
@@ -40,19 +41,12 @@ export function UserMenu({ variant = "sidebar" }: { variant?: "sidebar" | "icon"
   const clear = useIdentityStore((s) => s.clear)
   const currentOrg = useCurrentOrg()
   const navigate = useNavigate()
+  const returnToWorkspace = useReturnToWorkspace()
   const location = useLocation()
   const section = mainSection(location.pathname)
   const [switching, setSwitching] = useState(false)
   const platformOrg = platformOrganization(orgs)
   if (!user) return null
-
-  function returnToWorkspace() {
-    const previousOrg = orgs.find((org) => org.id === sessionStorage.getItem(`wispjar-workspace-org:${user!.id}`) && !org.is_platform)
-    const target = currentOrg?.is_platform && previousOrg ? previousOrg : currentOrg
-    if (!target) { navigate("/"); return }
-    if (target.id !== currentOrg?.id) setOrg(target.id)
-    navigate(safeWorkspaceLocation(sessionStorage.getItem(workspaceLocationKey(user!.id, target.id))))
-  }
 
   function openPlatform() {
     if (!platformOrg) return
@@ -113,10 +107,10 @@ export function UserMenu({ variant = "sidebar" }: { variant?: "sidebar" | "icon"
 function SecondaryLayout({ title }: { title: string }) {
   const org = useCurrentOrg()
   const { pathname } = useLocation()
-  const accountScope = pathname === "/personal/account" || pathname === "/personal/appearance"
+  const personalPage = title === "个人中心" ? sectionNavigation.personal.groups.flatMap((group) => group.items).find((item) => item.to === pathname)?.label : undefined
   return <div className="flex h-full min-h-0 flex-col">
     <header className="flex h-14 shrink-0 items-center gap-2 border-b px-6 text-sm">
-      <span className="font-medium">{title}</span><span className="text-muted-foreground">/</span><span className="truncate text-muted-foreground">{title === "系统管理" ? "平台范围" : accountScope ? "账号设置 · 所有组织通用" : org?.name}</span>
+      <span className="font-medium">{title}</span><span className="text-muted-foreground">/</span><span className="truncate text-muted-foreground">{personalPage ?? (title === "系统管理" ? "平台范围" : org?.name)}</span>
     </header>
     <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"><Outlet /></div>
   </div>

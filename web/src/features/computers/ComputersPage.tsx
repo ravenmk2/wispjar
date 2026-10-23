@@ -230,7 +230,7 @@ export default function ComputersPage() {
       })}</div>
       <p className="text-xs text-muted-foreground">暂停、重建或删除电脑均保留这三类存储。会话和智能体目录按各自的数据保留策略管理。</p>
     </section>
-    <p className="text-sm text-muted-foreground">为智能体配置默认云电脑，请前往 <Link className="text-link hover:underline" to="/personal/agents">个人中心 / 智能体</Link>。</p>
+    <p className="text-sm text-muted-foreground">为智能体绑定云电脑，请前往 <Link className="text-link hover:underline" to="/personal/agents">个人中心 / 智能体</Link>。</p>
     {editor && org && <ComputerEditor key={editor === "create" ? "create" : editor.id} orgId={org.id} computer={editor === "create" ? undefined : editor} onClose={() => setEditor(null)} onSaved={track} onRenamed={() => void load()} />}
     <ConfirmDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)} title={`删除「${deleting?.name ?? ""}」`} description="将停止并删除这台电脑，三类持久存储继续保留。有会话或默认设置引用时，需要先切换绑定。" destructive confirmText="删除电脑" loading={busy} onConfirm={() => deleting && void act(deleting, "delete")} />
     <ConfirmDialog open={!!recovering} onOpenChange={(open) => !open && !busy && setRecovering(null)} title={`强制停止「${recovering?.name ?? ""}」`} description="将强制终止这台电脑所有会话、子任务和维护进程（包括正常运行的任务），停止并移除当前实例，清理遗留占用。完成后电脑处于未启动状态，下次启动会创建新实例，中断的任务不会自动续跑；系统临时文件会丢失，storage、agents、sessions 三类持久文件及会话和智能体绑定保留。此操作无法撤销。" destructive confirmText="强制停止" loading={busy} onConfirm={() => recovering && void recover(recovering)} />

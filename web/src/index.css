@@ -124,6 +124,19 @@
   :focus-visible:not(:where(textarea, [role="menu"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="listbox"], [role="option"], [role="group"], [data-focus-ring="none"])) {
     box-shadow: 0 0 0 3px var(--ring-focus) !important;
   }
+  /* 浏览器自动填充底色可能为 UA !important；用内阴影覆盖，并保留焦点 ring。
+     登录、强制改密和个人中心改密均位于 Card 内，沿用同一主题背景。 */
+  .auth-form input:is(:autofill, :-webkit-autofill) {
+    background-color: hsl(var(--card));
+    background-clip: padding-box !important;
+    color: var(--foreground);
+    -webkit-text-fill-color: var(--foreground);
+    caret-color: var(--foreground);
+    box-shadow: inset 0 0 0 1000px hsl(var(--card)), var(--tw-shadow, 0 0 #0000) !important;
+  }
+  .auth-form input:is(:autofill, :-webkit-autofill):focus-visible {
+    box-shadow: inset 0 0 0 1000px hsl(var(--card)), 0 0 0 3px var(--ring-focus) !important;
+  }
   /* 文本域自带光标焦点，ring 会与容器卡片边框打架（如 composer 胶囊卡内圈矩形） */
   textarea:focus-visible {
     box-shadow: none !important;

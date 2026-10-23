@@ -40,17 +40,17 @@ export default function PersonalAgentsPage() {
     <PageHeader title="智能体" description="管理你在当前组织中使用智能体的个人配置。"><RefreshButton variant="outline" size="sm" onClick={refresh} refreshing={loading} /></PageHeader>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {loading ? <TableSkeleton /> : !error && agents.length === 0 ? <EmptyState icon={<Bot className="size-8" />} title="暂无可用智能体" description="组织发布智能体后，可在这里配置个人使用偏好。" /> : !error && <div className="overflow-x-auto rounded-xl border">
-      <table className="w-full text-left text-sm"><thead className="bg-muted/40 text-muted-foreground"><tr><th className="p-4 font-normal">智能体</th><th className="p-4 font-normal">默认云电脑</th><th className="p-4 font-normal">电脑绑定状态</th><th className="p-4"><span className="sr-only">操作</span></th></tr></thead>
+      <table className="w-full text-left text-sm"><thead className="bg-muted/40 text-muted-foreground"><tr><th className="p-4 font-normal">智能体</th><th className="p-4 font-normal">云电脑</th><th className="p-4"><span className="sr-only">操作</span></th></tr></thead>
         <tbody className="divide-y">{agents.map((agent) => {
           const binding = bindings.find((item) => item.agent_id === agent.id)
           const computer = computers.find((item) => item.id === binding?.computer_id)
           return <tr key={agent.id}><td className="p-4"><div className="flex items-center gap-3"><Bot className="size-4 shrink-0 text-muted-foreground" /><div><p className="font-medium">{agent.name}</p><p className="mt-1 text-xs text-muted-foreground">{agent.description}</p></div></div></td>
-            <td className="whitespace-nowrap p-4">{computer?.name ?? (binding ? "原云电脑不可用" : "未绑定")}</td><td className="whitespace-nowrap p-4"><Badge variant="secondary">{computer ? "已绑定" : binding ? "需重新配置" : "待配置"}</Badge></td>
+            <td className="p-4">{computer ? computer.name : binding ? <div className="flex flex-wrap items-center gap-2"><span>原云电脑不可用</span><Badge variant="secondary">需重新配置</Badge></div> : <span className="text-muted-foreground">未绑定</span>}</td>
             <td className="p-4 text-right"><Button size="sm" variant="outline" onClick={() => setEditing(agent)}>配置</Button></td></tr>
         })}</tbody>
       </table>
     </div>}
-    <p className="text-xs text-muted-foreground">这些配置仅对你本人在当前组织中生效。默认云电脑只影响新建会话，已有会话继续使用原电脑。</p>
+    <p className="text-xs text-muted-foreground">这些配置仅对你本人在当前组织中生效。新聊天使用绑定的云电脑，已有聊天继续使用原电脑。</p>
     {editing && <AgentComputerSettings key={`${org?.id}-${editing.id}`} agent={editing} onClose={() => setEditing(null)} onSaved={refresh} />}
   </div>
 }

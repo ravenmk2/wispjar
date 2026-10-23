@@ -53,14 +53,14 @@ export function AgentComputerSettings({ agent, onClose, onSaved }: { agent: Pick
     try {
       await computersApi.unbind(orgId, agent.id)
       if (useIdentityStore.getState().currentOrgId !== orgId || useIdentityStore.getState().token !== token) return
-      toast.success("已清除默认云电脑，已有会话不受影响")
+      toast.success("已清除云电脑绑定，已有聊天不受影响")
       onSaved?.(); onClose()
     } catch (e) { setError(errorMessage(e)) } finally { setSaving(false) }
   }
 
   return <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose() }}>
     <DialogContent>
-      <DialogHeader><DialogTitle>{agent.name} · 个人配置</DialogTitle><DialogDescription>配置你使用这个智能体时的默认云电脑，新聊天自动使用。已有聊天继续使用原电脑。</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>{agent.name} · 个人配置</DialogTitle><DialogDescription>新聊天使用绑定的云电脑，已有聊天继续使用原电脑。</DialogDescription></DialogHeader>
       <div className="space-y-2">
         <Label htmlFor="agent-computer">绑定云电脑</Label>
         <select id="agent-computer" className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={selected} disabled={!computers || saving} onChange={(event) => setSelected(event.target.value)}>

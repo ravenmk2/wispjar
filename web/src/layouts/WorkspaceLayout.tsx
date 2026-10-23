@@ -1,14 +1,16 @@
 import { Bot, MessagesSquare, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { useEffect, useState } from "react"
-import { Outlet, useLocation } from "react-router"
+import { Outlet, useLocation, useNavigate } from "react-router"
 import { UserMenu } from "@/layouts/AdminLayout"
 import { SectionNavigation } from "@/layouts/SectionNavigation"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { WispjarWordmark } from "@/components/WispjarWordmark"
 import { AgentPicker } from "@/features/agents/AgentPicker"
 import { SessionList } from "@/features/sessions/SessionList"
 import { followControl } from "@/mux/control"
+import { useReturnToWorkspace } from "@/hooks/useReturnToWorkspace"
 import { isDark, useThemeMode } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 import { mainSection, workspaceLocationKey } from "@/lib/navigation"
@@ -16,11 +18,25 @@ import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 
 const COLLAPSED_KEY = "wispjar-sidebar-collapsed"
 
+function SidebarHomeButton({ logoSrc, collapsed = false, onClick }: { logoSrc: string; collapsed?: boolean; onClick: () => void }) {
+  return <Tooltip>
+    <TooltipTrigger asChild>
+      <button type="button" aria-label="返回主页" onClick={onClick} className={cn("flex shrink-0 items-center justify-center gap-2 rounded-md transition-colors hover:bg-accent", collapsed ? "size-8" : "-ml-1 h-8 px-1")}>
+        <img src={logoSrc} alt="" className="size-6" />
+        {!collapsed && <WispjarWordmark />}
+      </button>
+    </TooltipTrigger>
+    <TooltipContent side="bottom">返回主页</TooltipContent>
+  </Tooltip>
+}
+
 export default function WorkspaceLayout() {
   const currentOrg = useCurrentOrg()
   const token = useIdentityStore((s) => s.token)
   const userId = useIdentityStore((s) => s.user?.id)
   const location = useLocation()
+  const navigate = useNavigate()
+  const returnToWorkspace = useReturnToWorkspace()
   const section = mainSection(location.pathname)
   const logoSrc = isDark(useThemeMode()) ? "/logo-dark.svg" : "/logo.svg"
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === "1")
@@ -44,6 +60,11 @@ export default function WorkspaceLayout() {
     })
   }
 
+  function goHome() {
+    if (section === "workspace") navigate("/")
+    else returnToWorkspace()
+  }
+
   return (
     <div className="flex h-screen bg-sidebar">
       <aside
@@ -55,6 +76,9 @@ export default function WorkspaceLayout() {
         {collapsed ? (
           <>
             <div className="flex h-14 shrink-0 items-center justify-center">
+              <SidebarHomeButton logoSrc={logoSrc} collapsed onClick={goHome} />
+            </div>
+            <div className="flex h-10 shrink-0 items-center justify-center">
               <Button variant="ghost" size="icon" className="size-8" title="展开侧边栏" onClick={toggleSidebar}>
                 <PanelLeftOpen className="size-4" />
               </Button>
@@ -69,8 +93,7 @@ export default function WorkspaceLayout() {
         ) : (
           <>
             <div className="flex h-14 shrink-0 items-center gap-2 px-4 text-base font-semibold">
-              <img src={logoSrc} alt="" className="size-6" />
-              <WispjarWordmark />
+              <SidebarHomeButton logoSrc={logoSrc} onClick={goHome} />
               <Button
                 variant="ghost"
                 size="icon"

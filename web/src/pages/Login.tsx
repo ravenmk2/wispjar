@@ -63,7 +63,7 @@ export default function LoginPage() {
           <CardTitle className="text-lg">登录 Wispjar</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form onSubmit={onSubmit} className="auth-form space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="username">用户名</Label>
               <Input
