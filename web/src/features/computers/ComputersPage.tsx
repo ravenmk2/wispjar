@@ -1,4 +1,4 @@
-import { Plus, RefreshCw } from "lucide-react"
+import { MoreHorizontal, Pause, Pencil, Play, Plus, Square, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Link } from "react-router"
 import { toast } from "sonner"
@@ -7,24 +7,68 @@ import { errorMessage } from "@/api/client"
 import { ConfirmDialog, EmptyState, PageHeader, TableSkeleton } from "@/components/common"
 import { Button } from "@/components/ui/button"
 import { CloudComputerIcon } from "@/components/CloudComputerIcon"
+import { RefreshButton } from "@/components/RefreshButton"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useOrgAgents } from "@/features/agents/AgentPicker"
 import { canMutateComputer, computerOperationError, computerStatus, computerTransitioning, type Computer, type ComputerConfig, type ComputerRun, type OperationAccepted, type UserVolume } from "@/lib/computers"
 import { ComputerFailure } from "./ComputerFailure"
 import { EnvEditor } from "@/components/EnvEditor"
 import { envPatch, envRowsError, type EnvRow } from "@/lib/env"
-import { uuid } from "@/lib/utils"
+import { cn, uuid } from "@/lib/utils"
 import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 import { useComputerStore } from "@/stores/computers"
 
 const selectClass = "h-9 w-full rounded-md border bg-background px-3 text-sm"
 
+function ComputerStatusIndicator({ status, pending }: { status: string; pending: boolean }) {
+  const transitioning = computerTransitioning(status)
+  const processing = transitioning || pending
+  const label = pending && !transitioning ? `${computerStatus(status)} · 操作处理中` : computerStatus(status)
+  const color = processing ? "text-primary"
+    : status === "running" ? "text-success"
+    : status === "paused" ? "text-warning"
+    : ["failed", "error"].includes(status) ? "text-destructive"
+    : "text-muted-foreground"
+
+  return <Tooltip>
+    <TooltipTrigger asChild>
+      <span tabIndex={0} role="img" aria-label={`电脑状态：${label}`} className={cn("inline-flex size-7 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring", color)}>
+        <span aria-hidden="true" className="relative flex size-2">
+          {processing && <span className="absolute inset-0 rounded-full bg-current opacity-40 animate-ping" />}
+          <span className="relative size-2 rounded-full bg-current transition-colors motion-reduce:transition-none" />
+        </span>
+      </span>
+    </TooltipTrigger>
+    <TooltipContent>{label}</TooltipContent>
+  </Tooltip>
+}
+
+function VolumeStatusIndicator({ status }: { status?: string }) {
+  const preparing = status === "pending" || status === "provisioning"
+  const failed = status === "missing" || status === "error" || status === "failed"
+  const label = status ? computerStatus(status) : "首次创建电脑时准备"
+  return <Tooltip>
+    <TooltipTrigger asChild>
+      <span tabIndex={0} role="img" aria-label={`存储状态：${label}`} className={cn("inline-flex size-6 shrink-0 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring", status === "ready" ? "text-success" : preparing ? "text-primary" : failed ? "text-destructive" : "text-muted-foreground")}>
+        <span aria-hidden="true" className="relative flex size-2">
+          {preparing && <span className="absolute inset-0 animate-ping rounded-full bg-current opacity-40" />}
+          <span className="relative size-2 rounded-full bg-current" />
+        </span>
+      </span>
+    </TooltipTrigger>
+    <TooltipContent>{label}</TooltipContent>
+  </Tooltip>
+}
+
 export default function ComputersPage() {
   const org = useCurrentOrg()
   const computers = useComputerStore((s) => s.items)
   const [loaded, setLoaded] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState("")
   const [volumes, setVolumes] = useState<UserVolume[]>([])
   const [runs, setRuns] = useState<Record<string, ComputerRun[]>>({})
@@ -50,6 +94,10 @@ export default function ComputersPage() {
       if (useIdentityStore.getState().currentOrgId === orgId && useIdentityStore.getState().token === token) { setError(errorMessage(e)); setLoaded(true) }
     }
   }, [org?.id])
+  async function refresh() {
+    setRefreshing(true)
+    try { await load() } finally { setRefreshing(false) }
+  }
   useEffect(() => {
     setLoaded(false); setOperations([]); setRuns({}); setVolumes([]); setEditor(null); setDeleting(null); setRecovering(null)
     if (org) useComputerStore.getState().reset(org.id)
@@ -100,27 +148,71 @@ export default function ComputersPage() {
   }
   return <div className="mx-auto max-w-5xl space-y-6">
     <PageHeader title="云电脑" description="多台电脑共享你的长期文件、智能体文件和会话工作空间。">
-      <Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw className="size-4" />刷新</Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="relative inline-flex">
+            <RefreshButton variant="outline" size="sm" refreshing={refreshing} onClick={() => void refresh()} />
+            {operations.length > 0 && <span aria-hidden="true" className="pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium leading-none text-primary-foreground">{operations.length}</span>}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{operations.length > 0 ? `${operations.length} 个操作正在处理，页面会自动更新。` : "刷新云电脑"}</TooltipContent>
+      </Tooltip>
       <Button size="sm" onClick={() => setEditor("create")} disabled={!org}><Plus className="size-4" />创建电脑</Button>
     </PageHeader>
     {error && <div role="alert" className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}</div>}
-    {operations.length > 0 && <p role="status" className="text-sm text-muted-foreground">{operations.length} 个操作正在处理，页面会自动更新。</p>}
+    <span role="status" className="sr-only">{operations.length > 0 ? `${operations.length} 个操作正在处理，页面会自动更新。` : ""}</span>
     {!loaded ? <TableSkeleton /> : computers.length === 0 ? <EmptyState icon={<CloudComputerIcon className="size-10" />} title="还没有云电脑" description="创建第一台电脑后，即可为智能体选择运行环境。" /> :
-      <div className="grid gap-4 md:grid-cols-2">{computers.map((c) => {
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{computers.map((c) => {
         const activeRuns = runs[c.id]
         const pending = operations.some((op) => op.resource_id === c.id)
         const mutable = activeRuns !== undefined && canMutateComputer(c, activeRuns) && !pending
-        return <section key={c.id} className="space-y-3 rounded-xl border bg-card p-4">
-          <div className="flex items-center gap-2"><CloudComputerIcon className="size-4" /><h2 className="min-w-0 flex-1 truncate font-medium">{c.name}</h2><span className="text-xs text-muted-foreground">{computerStatus(c.status)}</span></div>
-          <p className="truncate text-xs text-muted-foreground" title={c.config.image}>{c.config.image} · {c.config.resources?.cpu ?? "默认"} CPU · {c.config.resources?.memory ?? "默认内存"}</p>
-          <ComputerFailure computer={c} />
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" disabled={busy || pending || computerTransitioning(c.status) || c.status === "running"} onClick={() => void act(c, "start")}>启动</Button>
-            <Button size="sm" variant="outline" disabled={busy || !mutable || c.status !== "running"} onClick={() => void act(c, "pause")}>暂停</Button>
-            <Button size="sm" variant="outline" disabled={busy || pending || computerTransitioning(c.status)} onClick={() => setEditor(c)}>编辑 / 重建</Button>
-            <Button size="sm" variant="ghost" className="text-destructive" disabled={busy || !mutable} onClick={() => { deleteKey.current = uuid(); setDeleting(c) }}>删除</Button>
-            <Button size="sm" variant="ghost" className="text-destructive" disabled={busy || pending || computerTransitioning(c.status)} onClick={() => { recoverKey.current = uuid(); setRecovering(c) }}>终止任务并恢复</Button>
+        const running = c.status === "running"
+        const powerAction = running ? "暂停" : "启动"
+        const powerDisabled = busy || pending || computerTransitioning(c.status) || c.status === "deleted" || (running && !mutable)
+        const powerHint = busy || pending ? "电脑操作处理中"
+          : computerTransitioning(c.status) || c.status === "deleted" ? computerStatus(c.status)
+          : running && activeRuns === undefined ? "正在检查活动任务，暂不可暂停"
+          : running && (activeRuns?.length ?? 0) > 0 ? "有活动任务，暂不可暂停"
+          : `${powerAction}电脑`
+        const imageName = c.config.image.split("/").pop() || c.config.image
+        return <section key={c.id} className="min-w-0 space-y-3 rounded-xl border bg-card p-4">
+          <div className="flex items-center gap-2">
+            <CloudComputerIcon className="size-4 shrink-0" />
+            <h2 className="min-w-0 flex-1 truncate font-medium" title={c.name}>{c.name}</h2>
+            <ComputerStatusIndicator status={c.status} pending={pending} />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span tabIndex={powerDisabled ? 0 : undefined} className="inline-flex shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  <Button variant="ghost" size="icon" className="size-8 text-muted-foreground" aria-label={`${powerAction}电脑：${c.name}`} disabled={powerDisabled} onClick={() => void act(c, running ? "pause" : "start")}>
+                    {running ? <Pause aria-hidden="true" className="size-4" /> : <Play aria-hidden="true" className="size-4" />}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{powerHint}</TooltipContent>
+            </Tooltip>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-8 shrink-0 text-muted-foreground" aria-label={`${c.name}的更多操作`}><MoreHorizontal className="size-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={busy || pending || computerTransitioning(c.status)} onSelect={() => setEditor(c)}><Pencil />编辑 / 重建</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive" disabled={busy || pending || computerTransitioning(c.status)} onSelect={() => { recoverKey.current = uuid(); setRecovering(c) }}><Square />强制停止</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" disabled={busy || !mutable} onSelect={() => { deleteKey.current = uuid(); setDeleting(c) }}><Trash2 />删除电脑</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
+          <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+            <span className="shrink-0 whitespace-nowrap">{c.config.resources?.cpu ?? "默认"} CPU · {c.config.resources?.memory ?? "默认内存"}</span>
+            <span aria-hidden="true" className="shrink-0">·</span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span tabIndex={0} aria-label={`镜像：${c.config.image}`} className="min-w-0 truncate rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">{imageName}</span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-sm break-all">{c.config.image}</TooltipContent>
+            </Tooltip>
+          </div>
+          <ComputerFailure computer={c} />
           <div className="border-t pt-2 text-xs text-muted-foreground">
             {activeRuns === undefined ? "正在检查活动任务…" : activeRuns.length === 0 ? "没有活动任务" : <ul className="space-y-1">{activeRuns.map((run) => <li key={run.id}>
               {run.session_id ? <Link className="underline" to={`/c/${run.session_id}`}>查看{run.parent_run_id ? "子任务" : "会话任务"}</Link> : "环境维护"} · {computerStatus(run.status)}
@@ -132,7 +224,7 @@ export default function ComputersPage() {
     <section className="space-y-3"><h2 className="font-medium">持久存储</h2>
       <div className="grid gap-3 sm:grid-cols-3">{["storage", "agents", "sessions"].map((kind) => {
         const v = volumes.find((v) => v.kind === kind)
-        return <div key={kind} className="rounded-lg border p-3 text-sm"><code>/{kind}</code><p className="mt-1 text-muted-foreground">{v ? computerStatus(v.status) : "首次创建电脑时准备"}</p>
+        return <div key={kind} className="rounded-lg border p-3 text-sm"><div className="flex items-center justify-between gap-2"><code>/{kind}</code><VolumeStatusIndicator status={v?.status} /></div>
           <p className="mt-1 text-xs text-muted-foreground">{kind === "storage" ? "长期资产，最高保留优先级" : kind === "agents" ? "智能体长期文件与技能" : "各会话的输入、工作文件与成果"}</p>
           {v?.last_error && <p className="mt-2 text-destructive">{v.last_error}</p>}</div>
       })}</div>
@@ -141,7 +233,7 @@ export default function ComputersPage() {
     <p className="text-sm text-muted-foreground">为智能体配置默认云电脑，请前往 <Link className="text-link hover:underline" to="/personal/agents">个人中心 / 智能体</Link>。</p>
     {editor && org && <ComputerEditor key={editor === "create" ? "create" : editor.id} orgId={org.id} computer={editor === "create" ? undefined : editor} onClose={() => setEditor(null)} onSaved={track} onRenamed={() => void load()} />}
     <ConfirmDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)} title={`删除「${deleting?.name ?? ""}」`} description="将停止并删除这台电脑，三类持久存储继续保留。有会话或默认设置引用时，需要先切换绑定。" destructive confirmText="删除电脑" loading={busy} onConfirm={() => deleting && void act(deleting, "delete")} />
-    <ConfirmDialog open={!!recovering} onOpenChange={(open) => !open && !busy && setRecovering(null)} title={`终止「${recovering?.name ?? ""}」的全部任务并恢复`} description="将强制终止这台电脑所有会话、子任务和维护进程（包括正常运行的任务），停止并移除当前实例，清理遗留占用。确认停止后可重新启动；系统临时文件会丢失，storage、agents、sessions 三类持久文件及会话绑定保留。此操作无法撤销。" destructive confirmText="终止全部任务并恢复" loading={busy} onConfirm={() => recovering && void recover(recovering)} />
+    <ConfirmDialog open={!!recovering} onOpenChange={(open) => !open && !busy && setRecovering(null)} title={`强制停止「${recovering?.name ?? ""}」`} description="将强制终止这台电脑所有会话、子任务和维护进程（包括正常运行的任务），停止并移除当前实例，清理遗留占用。完成后电脑处于未启动状态，下次启动会创建新实例，中断的任务不会自动续跑；系统临时文件会丢失，storage、agents、sessions 三类持久文件及会话和智能体绑定保留。此操作无法撤销。" destructive confirmText="强制停止" loading={busy} onConfirm={() => recovering && void recover(recovering)} />
   </div>
 }
 

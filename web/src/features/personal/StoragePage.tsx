@@ -1,10 +1,11 @@
-import { Folder, RefreshCw } from "lucide-react"
+import { Folder } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { Link } from "react-router"
 import { errorMessage } from "@/api/client"
 import { sessionsApi } from "@/api/sessions"
 import { EmptyState, PageHeader } from "@/components/common"
 import { Button } from "@/components/ui/button"
+import { RefreshButton } from "@/components/RefreshButton"
 import { Label } from "@/components/ui/label"
 import { WorkspaceFiles } from "@/features/computers/WorkspaceFiles"
 import type { SessionSummary } from "@/lib/types"
@@ -61,7 +62,7 @@ export default function StoragePage() {
   }
 
   return <div className="mx-auto max-w-5xl space-y-5">
-    <PageHeader title="存储" description="浏览和管理当前组织下可在不同会话中共用的个人文件。"><Button variant="outline" size="sm" onClick={() => setRevision((value) => value + 1)} disabled={loading}><RefreshCw className="size-4" />刷新</Button></PageHeader>
+    <PageHeader title="存储" description="浏览和管理当前组织下可在不同会话中共用的个人文件。"><RefreshButton variant="outline" size="sm" onClick={() => setRevision((value) => value + 1)} refreshing={loading} /></PageHeader>
     <div className="flex flex-wrap items-end gap-3 rounded-xl border p-4">
       <div className="min-w-0 flex-1 space-y-2"><Label htmlFor="storage-session">访问会话</Label><select id="storage-session" className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={selected} disabled={loading || opening} onChange={(event) => { request.current++; setSelected(event.target.value); setOpened(""); setError("") }}><option value="">选择已绑定云电脑的会话</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.title || "新聊天"} · {session.agent_name}</option>)}</select></div>
       <select aria-label="会话状态" className="h-9 rounded-md border bg-background px-2 text-sm" value={status} onChange={(event) => setStatus(event.target.value as "active" | "archived")}><option value="active">未归档会话</option><option value="archived">已归档会话</option></select>

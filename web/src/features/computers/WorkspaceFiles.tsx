@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowUp, FolderDown, HardDriveDownload, RefreshCw, Upload, X } from "lucide-react"
+import { ArrowLeft, ArrowUp, FolderDown, HardDriveDownload, Upload, X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { errorMessage } from "@/api/client"
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { FilePreview } from "@/features/sandbox/FilePreview"
 import { FileIcon } from "@/components/FileIcon"
+import { RefreshButton } from "@/components/RefreshButton"
 import { downloadWorkspaceFile } from "@/features/sandbox/previewUtils"
 import { FilePanel } from "./FilePanel"
 import { formatBytes } from "@/lib/format"
@@ -95,7 +96,7 @@ export function WorkspaceFiles({ sessionId, running, onClose, fixedScope, embedd
       </select></>}
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
         <Button variant="ghost" size="icon" className="size-7" title={uploading ? "正在上传…" : `上传文件到当前目录：${scopeLabel(scope)}${path === "." ? "" : `/${path}`}`} aria-label="上传文件到当前目录" disabled={uploading} onClick={() => uploadRef.current?.click()}><Upload className="size-3.5" /></Button>
-        <Button variant="ghost" size="icon" className="size-7" title="刷新文件" aria-label="刷新文件" onClick={() => void refresh()} disabled={loading}><RefreshCw className="size-3.5" /></Button>
+        <RefreshButton variant="ghost" size="icon" className="size-7" iconClassName="size-3.5" title="刷新文件" aria-label="刷新文件" onClick={() => void refresh()} refreshing={loading}>{null}</RefreshButton>
         {!embedded && <Button variant="ghost" size="icon" className="size-7" title="关闭文件面板" aria-label="关闭文件面板" onClick={onClose}><X className="size-3.5" /></Button>}
       </div>
       <input type="file" ref={uploadRef} className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />

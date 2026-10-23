@@ -26,7 +26,7 @@ export interface UserVolume { id: string; kind: string; status: string; last_err
 
 const names: Record<string, string> = {
   stopped: "未启动", starting: "正在启动", running: "运行中", pausing: "正在暂停",
-  paused: "已暂停", rebuilding: "正在重建", recovering: "正在终止任务并恢复", deleting: "正在删除", deleted: "已删除", failed: "失败",
+  paused: "已暂停", rebuilding: "正在重建", recovering: "正在强制停止", deleting: "正在删除", deleted: "已删除", failed: "失败",
   pending: "等待处理", completed: "已完成", ready: "可用", provisioning: "正在准备", missing: "卷缺失", error: "异常",
 }
 export function computerStatus(status: string): string { return names[status] ?? status }

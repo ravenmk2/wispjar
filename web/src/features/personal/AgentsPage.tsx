@@ -1,10 +1,11 @@
-import { Bot, RefreshCw } from "lucide-react"
+import { Bot } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { computersApi } from "@/api/computers"
 import { workspaceApi } from "@/api/workspace"
 import { errorMessage } from "@/api/client"
 import { EmptyState, PageHeader, TableSkeleton } from "@/components/common"
 import { Button } from "@/components/ui/button"
+import { RefreshButton } from "@/components/RefreshButton"
 import { Badge } from "@/components/ui/badge"
 import { AgentComputerSettings } from "@/features/computers/AgentComputerSettings"
 import type { AgentBinding, Computer } from "@/lib/computers"
@@ -36,7 +37,7 @@ export default function PersonalAgentsPage() {
   }, [org?.id, token, revision])
 
   return <div className="mx-auto max-w-5xl space-y-5">
-    <PageHeader title="智能体" description="管理你在当前组织中使用智能体的个人配置。"><Button variant="outline" size="sm" onClick={refresh} disabled={loading}><RefreshCw className="size-4" />刷新</Button></PageHeader>
+    <PageHeader title="智能体" description="管理你在当前组织中使用智能体的个人配置。"><RefreshButton variant="outline" size="sm" onClick={refresh} refreshing={loading} /></PageHeader>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {loading ? <TableSkeleton /> : !error && agents.length === 0 ? <EmptyState icon={<Bot className="size-8" />} title="暂无可用智能体" description="组织发布智能体后，可在这里配置个人使用偏好。" /> : !error && <div className="overflow-x-auto rounded-xl border">
       <table className="w-full text-left text-sm"><thead className="bg-muted/40 text-muted-foreground"><tr><th className="p-4 font-normal">智能体</th><th className="p-4 font-normal">默认云电脑</th><th className="p-4 font-normal">电脑绑定状态</th><th className="p-4"><span className="sr-only">操作</span></th></tr></thead>
