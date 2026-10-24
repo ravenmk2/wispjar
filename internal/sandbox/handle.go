@@ -42,33 +42,25 @@ var errCommandComplete = errors.New("sandbox command stream complete")
 
 func (h *Handle) RunCommand(ctx context.Context, cmd, cwd string, env map[string]string, timeoutMs int64, onEvent func(stream, chunk string)) (*CommandResult, error) {
 	var stdout, stderr, merged strings.Builder
-	// SDK 的 OutputMessage 是按行切分且不含换行符（见 Execution.Text 的 join 语义），重组时需补回。
-	var outLines, errLines, mergedLines int
-	writeLine := func(b *strings.Builder, n *int, text string) {
-		if *n > 0 {
-			b.WriteByte('\n')
-		}
-		b.WriteString(text)
-		*n++
-	}
+	// Execd release-1.1.1 preserves output bytes, including line endings.
 	handlers := &opensandbox.ExecutionHandlers{
 		// Execd can keep the HTTP stream open for a heartbeat interval after
 		// execution_complete. The SDK has already recorded output and exit
 		// status before this callback; stop reading at that terminal event.
 		OnComplete: func(opensandbox.ExecutionComplete) error { return errCommandComplete },
 		OnStdout: func(m opensandbox.OutputMessage) error {
-			writeLine(&stdout, &outLines, m.Text)
-			writeLine(&merged, &mergedLines, m.Text)
+			stdout.WriteString(m.Text)
+			merged.WriteString(m.Text)
 			if onEvent != nil {
-				onEvent("stdout", m.Text+"\n")
+				onEvent("stdout", m.Text)
 			}
 			return nil
 		},
 		OnStderr: func(m opensandbox.OutputMessage) error {
-			writeLine(&stderr, &errLines, m.Text)
-			writeLine(&merged, &mergedLines, m.Text)
+			stderr.WriteString(m.Text)
+			merged.WriteString(m.Text)
 			if onEvent != nil {
-				onEvent("stderr", m.Text+"\n")
+				onEvent("stderr", m.Text)
 			}
 			return nil
 		},

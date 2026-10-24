@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
-	github.com/alibaba/OpenSandbox/sdks/sandbox/go v1.1.0
+	github.com/alibaba/OpenSandbox/sdks/sandbox/go v1.1.1
 	github.com/cloudwego/eino v0.9.21
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 	github.com/gin-gonic/gin v1.12.0

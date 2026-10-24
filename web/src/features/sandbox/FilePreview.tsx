@@ -57,6 +57,7 @@ export function FilePreview({
   useEffect(() => {
     if (kind !== "html" && kind !== "markdown") return
     let canceled = false
+    const controller = new AbortController()
     let grant: FilePreviewGrant | undefined
     let timer: ReturnType<typeof setTimeout> | undefined
     const revoke = (value: FilePreviewGrant) => { void sessionsApi.revokePreview(sessionId, value.id).catch(() => { /* TTL covers offline/unload cleanup. */ }) }
@@ -66,7 +67,7 @@ export function FilePreview({
       grant = value
       let content: string | undefined
       if (kind === "markdown") {
-        const response = await fetch(value.entry_url, { credentials: "omit", referrerPolicy: "no-referrer" })
+        const response = await fetch(value.entry_url, { credentials: "omit", referrerPolicy: "no-referrer", signal: controller.signal })
         if (!response.ok) throw new Error(`Markdown 预览读取失败（HTTP ${response.status}）`)
         content = await response.text()
       }
@@ -76,13 +77,13 @@ export function FilePreview({
     }).catch((error) => {
       if (!canceled) setGrantState({ key: previewKey, error: error instanceof Error ? error.message : "预览创建失败" })
     })
-    return () => { canceled = true; clearTimeout(timer); if (grant) revoke(grant) }
+    return () => { canceled = true; controller.abort(); clearTimeout(timer); if (grant) revoke(grant) }
   }, [sessionId, scope, item.path, kind, previewKey])
 
   const resolveReference = (url: string) => preview?.grant ? resolvePreviewReference(url, preview.grant.entry_url, preview.grant.files_url, window.location.origin) : undefined
   async function download() {
     try {
-      if (scope) await downloadWorkspaceFile(sessionId, item.path, scope)
+      if (scope || kind === "html" || kind === "markdown") await downloadWorkspaceFile(sessionId, item.path, scope ?? "workspace")
       else if (state.status === "ready") downloadBlob(state.blob, fileName(item.path))
     } catch (e) { toast.error(e instanceof Error ? e.message : "下载失败") }
   }
@@ -93,13 +94,20 @@ export function FilePreview({
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     let objectUrl: string | undefined
     setState({ status: "loading" })
     setSourceHtml(null)
+    // Document preview already has a dedicated resource request. Fetch source
+    // only when the user opens the source tab.
+    if ((kind === "html" || kind === "markdown") && mode === "preview") {
+      setState({ status: "ready", blob: new Blob() })
+      return
+    }
     const isReload = loadedPathRef.current === item.path
 
     const maxBytes = kind === "image" ? IMAGE_MAX_BYTES : undefined
-    fetchSandboxFileData(sessionId, item.path, maxBytes, scope)
+    fetchSandboxFileData(sessionId, item.path, maxBytes, scope, controller.signal)
       .then(async (data) => {
         if (cancelled) return
         if (data.type === "text") {
@@ -147,9 +155,10 @@ export function FilePreview({
 
     return () => {
       cancelled = true
+      controller.abort()
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [sessionId, item.path, item.size, item.name, kind, reloadToken, scope])
+  }, [sessionId, item.path, item.size, item.name, kind, reloadToken, scope, mode])
 
   useEffect(() => {
     setSourceHtml(null)

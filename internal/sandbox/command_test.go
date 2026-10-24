@@ -35,7 +35,7 @@ func TestRunCommandReturnsAtCompletionBeforeHTTPStreamCloses(t *testing.T) {
 					return
 				}
 				w.Header().Set("Content-Type", "text/event-stream")
-				_, _ = fmt.Fprint(w, "{\"type\":\"stdout\",\"text\":\"first\"}\n\n{\"type\":\"stdout\",\"text\":\"last\"}\n\n{\"type\":\"stderr\",\"text\":\"WISPJAR_STOPPED_test\"}\n\n")
+				_, _ = fmt.Fprint(w, "{\"type\":\"stdout\",\"text\":\"first\\n\\n\"}\n\n{\"type\":\"stdout\",\"text\":\"last\"}\n\n{\"type\":\"stderr\",\"text\":\"WISPJAR_STOPPED_test\"}\n\n")
 				if tc.failure != "" {
 					_, _ = fmt.Fprint(w, tc.failure+"\n\n")
 				}
@@ -69,7 +69,7 @@ func TestRunCommandReturnsAtCompletionBeforeHTTPStreamCloses(t *testing.T) {
 				if (got.err != nil) != tc.wantError || got.result.ExitCode != tc.code {
 					t.Fatalf("exit status changed: %+v err=%v", got.result, got.err)
 				}
-				if got.result.Stdout != "first\nlast" || got.result.Stderr != "WISPJAR_STOPPED_test" || len(got.chunks) != 3 {
+				if got.result.Stdout != "first\n\nlast" || got.result.Stderr != "WISPJAR_STOPPED_test" || len(got.chunks) != 3 {
 					t.Fatalf("terminal output lost: %+v chunks=%v", got.result, got.chunks)
 				}
 			case <-time.After(2 * time.Second):

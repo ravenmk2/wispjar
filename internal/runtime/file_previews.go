@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base32"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -92,14 +91,17 @@ func (h *Handler) CreatePreview(c *gin.Context) {
 		return
 	}
 	defer access.close()
-	// Validate existence and regular-file status with the same pinned NOFOLLOW
-	// operations used for resource reads. Do not publish a truncated document.
-	result, err := access.operate(c.Request.Context(), access.root, path.Join(root, entry), "read", map[string]any{"max_bytes": previewFileLimit})
+	// Creating a grant needs metadata only; the browser reads the entry once.
+	result, err := access.operate(c.Request.Context(), access.root, path.Join(root, entry), "stat", nil)
 	if err != nil {
 		fail(c, err)
 		return
 	}
-	if result.Truncated {
+	if result.Kind != "file" {
+		respond.Error(c, 400, "file/invalid", "预览入口必须是普通文件", nil)
+		return
+	}
+	if result.Bytes > previewFileLimit {
 		respond.Error(c, 413, "file/too_large", "预览入口超过 8 MiB", nil)
 		return
 	}
@@ -212,16 +214,24 @@ func (h *Handler) PreviewContent(c *gin.Context) {
 		previewError(c, ErrPreviewNotFound)
 		return
 	}
-	result, err := access.operate(ctx, access.root, path.Join(grant.Root, relative), "read", map[string]any{"max_bytes": previewFileLimit})
+	op := "read"
+	if c.Request.Method == http.MethodHead {
+		op = "stat"
+	}
+	result, err := access.operate(ctx, access.root, path.Join(grant.Root, relative), op, map[string]any{"max_bytes": previewFileLimit})
 	if err != nil {
 		fail(c, err)
 		return
 	}
-	if result.Truncated {
+	if result.Kind != "file" {
+		respond.Error(c, 400, "file/invalid", "只能预览普通文件", nil)
+		return
+	}
+	if result.Truncated || result.Bytes > previewFileLimit {
 		respond.Error(c, 413, "file/too_large", "预览资源超过 8 MiB，请下载查看", nil)
 		return
 	}
-	data, err := base64.StdEncoding.DecodeString(result.Data)
+	data, err := fileContent(result)
 	if err != nil {
 		fail(c, err)
 		return
@@ -236,22 +246,31 @@ func (h *Handler) PreviewContent(c *gin.Context) {
 		previewError(c, err)
 		return
 	}
-	writePreviewContent(c, relative, data)
-}
-
-func writePreviewContent(c *gin.Context, relative string, data []byte) {
-	previewSecurityHeaders(c)
-	c.Header("Content-Length", fmt.Sprint(len(data)))
-	contentType := previewMIME(relative)
-	if contentType == "application/octet-stream" {
-		c.Header("Content-Disposition", "attachment")
-	}
 	if c.Request.Method == http.MethodHead {
-		c.Header("Content-Type", contentType)
+		writePreviewHeaders(c, relative, result.Bytes)
 		c.Status(200)
 		return
 	}
-	c.Data(200, contentType, data)
+	writePreviewContent(c, relative, data)
+}
+
+func writePreviewHeaders(c *gin.Context, relative string, size int64) {
+	previewSecurityHeaders(c)
+	c.Header("Content-Length", fmt.Sprint(size))
+	contentType := previewMIME(relative)
+	c.Header("Content-Type", contentType)
+	if contentType == "application/octet-stream" {
+		c.Header("Content-Disposition", "attachment")
+	}
+}
+
+func writePreviewContent(c *gin.Context, relative string, data []byte) {
+	writePreviewHeaders(c, relative, int64(len(data)))
+	if c.Request.Method == http.MethodHead {
+		c.Status(200)
+		return
+	}
+	c.Data(200, previewMIME(relative), data)
 }
 
 func previewMIME(name string) string {

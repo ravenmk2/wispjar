@@ -28,7 +28,7 @@ export const IMAGE_MAX_BYTES = 4194304
 
 export type FileData = { type: "text"; content: string; truncated: boolean } | { type: "blob"; blob: Blob }
 
-export async function fetchSandboxFileData(sessionId: string, path: string, maxBytes?: number, scope: FileScope = "workspace"): Promise<FileData> {
+export async function fetchSandboxFileData(sessionId: string, path: string, maxBytes?: number, scope: FileScope = "workspace", signal?: AbortSignal): Promise<FileData> {
   const { token, currentOrgId } = useIdentityStore.getState()
   const url = new URL(`/api/v1/sessions/${sessionId}/file`, window.location.origin)
   if (scope) url.searchParams.set("scope", scope)
@@ -37,7 +37,7 @@ export async function fetchSandboxFileData(sessionId: string, path: string, maxB
   const headers: Record<string, string> = {}
   if (token) headers["Authorization"] = `Bearer ${token}`
   if (currentOrgId) headers["X-Org-Id"] = currentOrgId
-  const res = await fetch(url.toString(), { headers })
+	const res = await fetch(url.toString(), { headers, signal })
   if (!res.ok) {
     let message = `请求失败（HTTP ${res.status}）`
     try {

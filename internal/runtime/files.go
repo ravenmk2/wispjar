@@ -119,7 +119,7 @@ func (a *fileAccess) close() {
 }
 
 func (a *fileAccess) operate(ctx context.Context, root, relative, op string, extra map[string]any) (fileResponse, error) {
-	result, err := remoteFileOperation(ctx, a.execution, root, relative, op, extra)
+	result, err := a.fileOperation(ctx, root, relative, op, extra)
 	var fileErr *session.Error
 	if !errors.As(err, &fileErr) || fileErr.Code != "file/root_not_found" {
 		return result, err
@@ -132,7 +132,7 @@ func (a *fileAccess) operate(ctx context.Context, root, relative, op string, ext
 		a.controlUncertain = true
 		return fileResponse{}, err
 	}
-	return remoteFileOperation(ctx, a.execution, root, relative, op, extra)
+	return a.fileOperation(ctx, root, relative, op, extra)
 }
 
 func (h *Handler) initializeFileWorkspace(ctx context.Context, handle tools.Handle, sess *session.Detail, runID string) error {
@@ -149,6 +149,8 @@ func (h *Handler) initializeFileWorkspace(ctx context.Context, handle tools.Hand
 }
 
 type fileResponse struct {
+	Content   []byte           `json:"-"`
+	Kind      string           `json:"-"`
 	Root      string           `json:"root"`
 	Path      string           `json:"path"`
 	Items     []map[string]any `json:"items,omitempty"`
@@ -235,7 +237,7 @@ func (h *Handler) File(c *gin.Context) {
 			fail(c, err)
 			return
 		}
-		data, err := base64.StdEncoding.DecodeString(result.Data)
+		data, err := fileContent(result)
 		if err != nil {
 			fail(c, err)
 			return

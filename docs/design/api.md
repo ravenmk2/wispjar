@@ -453,9 +453,9 @@ HTML 和 Markdown 通过独立的只读预览通道引用目录内静态资源�
 | HEAD | `/previews/{token}/files/{path...}` | 与 GET 同鉴权及读取限制，仅返回类型、长度等响应头 |
 | DELETE | `/sessions/{id}/previews/{previewId}` | 登录 Bearer；撤销本人该会话的预览；返回 `{ok:true}`，已失效重复撤销也成功 |
 
-创建 body 为 `{scope:"workspace",root:"outputs/site",entry:"docs/index.html"}`。scope 默认 workspace，也支持 storage、agent；root 是相对于 scope 根目录的路径，默认 `.`；entry 必填，相对于 root，只支持 html/htm/md/markdown 普通文件。root/entry 均拒绝绝对路径、父目录段、反斜杠和 NUL，逐级 NOFOLLOW 打开，不跟随符号链接或读取特殊文件。
+创建 body 为 `{scope:"workspace",root:"outputs/site",entry:"docs/index.html"}`。scope 默认 workspace，也支持 storage、agent；root 是相对于 scope 根目录的路径，默认 `.`；entry 必填，相对于 root，只支持 html/htm/md/markdown 普通文件。root/entry 均拒绝绝对路径、父目录段、反斜杠和 NUL，读取使用原生文件 API 和非 root 工作负载身份，不读取已识别的特殊文件；scope/root 是导航范围，不承诺符号链接变化下的严格目录隔离。
 
-内置文件面板固定传 `root:"."`，entry 使用相对于 scope 根目录的完整路径，例如 `{scope:"workspace",root:".",entry:"outputs/site/docs/index.html"}`。因此入口可引用 scope 内同级及上级目录的静态资源，无需选择资源目录；令牌只授予本人当前 scope 的只读权限，不能跨会话工作区、跨 scope 或越过符号链接。API 保留自定义 root 能力，供需要更窄授权范围的调用方使用。
+内置文件面板固定传 `root:"."`，entry 使用相对于 scope 根目录的完整路径，例如 `{scope:"workspace",root:".",entry:"outputs/site/docs/index.html"}`。因此入口可引用 scope 内同级及上级目录的静态资源，无需选择资源目录；令牌绑定本人当前云电脑、会话、scope/root 与 generation；URL 不允许越过导航根，但整个沙箱属于同一用户，不将 scope 或符号链接视为内部隔离边界。API 保留自定义 root 能力，用于选择资源导航根。
 
 成功返回 201，例如：
 
