@@ -27,6 +27,8 @@ body 基准 14px；聊天正文使用 `--chat-font-size: 16px`、`--chat-line-he
 
 ## 2. 语义颜色
 
+个人头像在侧栏展开／折叠／资料卡片中分别为 36／32／48px，使用圆形裁切容器与 `UserRound` 默认图标（20／20／24px）。保留 1px 中性边框，浅色为黑色 15% 不透明度，深色为白色 20%；底色沿用 `muted`。侧栏显示名称为 14px 中等字重，下一行 `@用户名` 为 `text-meta`（12px / 18px）辅助色；用户行不放上下箭头。
+
 下表展示最终颜色；`background/card/primary/ring/secondary/muted/input/destructive` 在 CSS 中存 HSL 分量，其他变量存完整颜色。Tailwind 按相应格式消费，不能混用。
 
 | CSS 变量 | 浅色 | 深色 | 用途 |

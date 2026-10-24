@@ -2,6 +2,8 @@ package auth
 
 import (
 	"net/http"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
@@ -97,7 +99,8 @@ func (s *Service) ChangePassword(c *gin.Context) {
 		return
 	}
 	if !CheckPassword(user.PasswordHash, req.OldPassword) {
-		respond.Error(c, http.StatusUnauthorized, respond.CodeCredentials, "原密码错误", nil)
+		respond.Error(c, http.StatusBadRequest, respond.CodeInvalid, "当前密码不正确",
+			gin.H{"old_password": "当前密码不正确，请重新输入"})
 		return
 	}
 	if !ValidateNewPassword(req.NewPassword) {
@@ -123,6 +126,35 @@ func (s *Service) ChangePassword(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true, "token": token})
+}
+
+// UpdateMe only edits the authenticated account's public display name.
+func (s *Service) UpdateMe(c *gin.Context) {
+	var req struct {
+		DisplayName string `json:"display_name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respond.Error(c, http.StatusBadRequest, respond.CodeInvalid, "请求参数无效", nil)
+		return
+	}
+	name := strings.TrimSpace(req.DisplayName)
+	if name == "" || utf8.RuneCountInString(name) > 128 {
+		respond.Error(c, http.StatusBadRequest, respond.CodeInvalid, "显示名称需为 1～128 个字符",
+			gin.H{"display_name": "请输入 1～128 个字符的显示名称"})
+		return
+	}
+	var user store.User
+	db := s.db.WithContext(c.Request.Context())
+	if err := db.First(&user, "id = ?", UID(c)).Error; err != nil {
+		respond.Error(c, http.StatusUnauthorized, respond.CodeUnauthorized, "登录状态已失效，请重新登录", nil)
+		return
+	}
+	if err := db.Model(&user).Update("display_name", name).Error; err != nil {
+		respond.Error(c, http.StatusInternalServerError, respond.CodeInternal, "更新个人资料失败", nil)
+		return
+	}
+	user.DisplayName = name
+	c.JSON(http.StatusOK, gin.H{"user": toUserEntry(user)})
 }
 
 func (s *Service) Me(c *gin.Context) {

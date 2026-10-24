@@ -9,6 +9,7 @@ interface IdentityState {
   currentOrgId: string | null
   setAuth: (res: LoginResponse) => void
   setIdentity: (user: User, orgs: UserOrg[]) => void
+  updateUser: (user: User) => void
   setToken: (token: string) => void
   setOrg: (orgId: string) => void
   clear: () => void
@@ -30,6 +31,9 @@ export const useIdentityStore = create<IdentityState>()(
         }),
       setIdentity: (user, orgs) =>
         set({ user, orgs, currentOrgId: pickOrgId(get().currentOrgId, orgs) }),
+      updateUser: (user) => {
+        if (get().user?.id === user.id) set({ user })
+      },
       setToken: (token) => set({ token }),
       setOrg: (orgId) => set({ currentOrgId: orgId }),
       clear: () => set({ token: null, user: null, orgs: [], currentOrgId: null }),

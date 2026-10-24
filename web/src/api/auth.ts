@@ -1,5 +1,5 @@
 import { api } from "./client"
-import type { ChangePasswordResponse, List, LoginResponse, MeResponse, UsageGroupBy, UsageResponse } from "@/lib/types"
+import type { ChangePasswordResponse, List, LoginResponse, MeResponse, UsageGroupBy, UsageResponse, User } from "@/lib/types"
 
 export const authApi = {
   login(username: string, password: string) {
@@ -13,6 +13,9 @@ export const authApi = {
   },
   me() {
     return api<MeResponse>("/auth/me")
+  },
+  updateMe(displayName: string) {
+    return api<{ user: User }>("/auth/me", { method: "PATCH", body: { display_name: displayName } })
   },
 }
 

@@ -76,11 +76,19 @@
 
 ### POST /api/v1/auth/change-password
 
-请求：`{ "old_password", "new_password" }`（新密码 ≥8 位，含字母+数字）→ `{ "ok": true }`，同时使旧 token 失效（签发新 token 返回）。
+请求：`{ "old_password", "new_password" }`（新密码 ≥8 位，含字母+数字）→ `{ "ok": true, "token": "<新 JWT>" }`，同时清除首次改密标记。前端替换当前 token；现有 JWT 校验不主动撤销其他未过期 token。
+
+当前密码不正确返回 400 `request/invalid`，`details.old_password` 提供字段级提示；新密码不符合要求同样返回 400，字段为 `details.new_password`。这些输入错误不清除登录状态，可在原表单重试。401 仍用于登录失效或首次改密限制。
 
 ### GET /api/v1/auth/me
 
 响应同 login 的 `user + orgs`（每次组织变更后前端刷新）。
+
+### PATCH /api/v1/auth/me
+
+登录用户修改自己的显示名称，无需组织管理员权限。请求：`{ "display_name": "..." }`；去除首尾空白后必填，长度为 1～128 个 Unicode 字符。非法值返回 400 `request/invalid`，`details.display_name` 提供字段级提示。
+
+响应 200：`{ "user": { "id", "username", "display_name", "must_change_password" } }`。只更新登录身份对应用户的 `display_name`，不接受目标用户 ID、用户名、密码、状态或权限变更。首次登录需先改密。前端更新缓存用户资料，保留当前组织与登录状态；名称对所有组织生效。复用既有字段，无数据库迁移。
 
 ### POST /api/v1/auth/ws-ticket
 

@@ -51,6 +51,7 @@ func NewRouter(deps Deps) *gin.Engine {
 	}
 	authed.POST("/auth/change-password", deps.Auth.ChangePassword)
 	authed.GET("/auth/me", deps.Auth.Me)
+	authed.PATCH("/auth/me", deps.Auth.UpdateMe)
 
 	tenantH := tenant.NewHandler(tenant.NewService(deps.DB))
 	providerH := provider.NewHandler(provider.NewService(deps.DB, deps.Config.MasterKey()))

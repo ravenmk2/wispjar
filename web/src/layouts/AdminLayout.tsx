@@ -4,7 +4,7 @@ import { Outlet, useLocation, useNavigate } from "react-router"
 import { toast } from "sonner"
 import { authApi } from "@/api/auth"
 import { errorMessage } from "@/api/client"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { UserAvatar } from "@/components/UserAvatar"
 import { Badge } from "@/components/ui/badge"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -74,13 +74,13 @@ export function UserMenu({ variant = "sidebar" }: { variant?: "sidebar" | "icon"
 
   return <DropdownMenu>
     <DropdownMenuTrigger asChild>
-      <button type="button" title="用户菜单" aria-label={`用户菜单 · ${user.display_name || user.username}`} className={variant === "icon" ? "flex size-8 items-center justify-center rounded-full hover:bg-accent" : "flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm hover:bg-accent"}>
-        <Avatar className="size-6 shrink-0"><AvatarFallback><CircleUserRound className="size-4" /></AvatarFallback></Avatar>
-        {variant === "sidebar" && <span className="min-w-0 flex-1 truncate text-left">{user.display_name || user.username}</span>}
+      <button type="button" title={`用户菜单 · ${user.display_name || user.username} · @${user.username}`} aria-label={`用户菜单 · ${user.display_name || user.username}`} className={variant === "icon" ? "flex size-8 items-center justify-center rounded-full hover:bg-accent" : "flex h-14 w-full items-center gap-3 rounded-lg px-2 text-sm hover:bg-accent"}>
+        <UserAvatar size={variant === "icon" ? "compact" : "sidebar"} />
+        {variant === "sidebar" && <span className="min-w-0 flex-1 text-left"><span className="block truncate font-medium">{user.display_name || user.username}</span><span className="block truncate text-meta text-muted-foreground">@{user.username}</span></span>}
       </button>
     </DropdownMenuTrigger>
     <DropdownMenuContent side="top" align="start" className="w-60">
-      <DropdownMenuLabel><div className="flex flex-col"><span>{user.display_name || user.username}</span><span className="text-xs font-normal text-muted-foreground">@{user.username}</span>
+      <DropdownMenuLabel><div className="flex min-w-0 flex-col"><span className="truncate" title={user.display_name || user.username}>{user.display_name || user.username}</span><span className="truncate text-xs font-normal text-muted-foreground" title={`@${user.username}`}>@{user.username}</span>
         {currentOrg && <span className="mt-1 flex items-center gap-1.5 text-xs font-normal text-muted-foreground"><span className="truncate">{currentOrg.name}</span>{currentOrg.is_platform && <Badge variant="secondary">系统</Badge>}</span>}
       </div></DropdownMenuLabel>
       <DropdownMenuSeparator />
