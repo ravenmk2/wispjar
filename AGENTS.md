@@ -1,46 +1,48 @@
 # AI Agents 工作规范
 
-Wispjar：多租户智能体平台（服务端应用，Go 实现）。
+Wispjar：Go 实现的多租户智能体平台。
 
 ## 目录结构
 
 ```txt
 wispjar/
-├── cmd/wispjar/      # 程序入口，只做组装与启动，不含业务逻辑
-├── internal/        # 应用私有代码（按业务域分层：config/id/store/auth/tenant/provider/
-│                    #   skill/agent/runtime/sandbox/session/gateway/attachment/usage/audit，见设计文档 §4.2）
-├── web/             # 前端源码与构建产物（embed 进二进制，dist/ 不入库）
-├── docs/            # 设计文档
-├── scripts/         # 辅助脚本（build.sh 本地多平台构建；sandbox-image/ 沙箱基础镜像 Dockerfile）
-└── .github/workflows/  # CI（test.yml）与发布（release.yml，tag v*.*.* 触发 goreleaser）
+|-- cmd/wispjar/       # 组装与启动，不含业务逻辑
+|-- internal/          # 按业务域组织的后端代码
+|-- web/               # 前端，构建产物嵌入二进制
+|-- docs/              # 设计与工程文档
+|-- scripts/           # 构建脚本与沙箱镜像
+`-- .github/workflows/ # CI 与发布
 ```
 
 ## 文档索引
 
-文档变化时同步更新
+文档增删或改名时，同步更新本索引与 `docs/system-design.md` 总览索引。
 
-- docs/system-design.md：系统设计总览（需求决策、总体架构、里程碑，设计文档入口）
-- docs/design/data-model.md：MySQL 完整表结构 DDL 与种子数据
-- docs/design/api.md：REST API 完整规格（/api/v1）
-- docs/design/protocol.md：WebSocket 实时协议（/api/ws、30 秒一次性连接票据、mux/follow/StreamChunk/事件词表）
-- docs/design/runtime.md：Agent 运行时（eino 集成、工具规格、task 委派、审批、沙箱管理）
-- docs/design/media.md：图片工具、供应商文件引用、历史持久化与能力限制
-- docs/design/search.md：网络搜索与网页读取、多供应商共享实例、独立默认与智能体选择、工具、UI 和验收
-- docs/design/computers.md：用户云电脑、三类持久卷、目录与命名配置、并行运行、技能同步、退役升级及实施验收任务
-- docs/design/sandbox-backends.md：单后端配置选择、中立接口、适配器与维护权限分离及实施范围
-- docs/design/theme.md：界面主题设计 token 规范（深浅双主题色板、字体、圆角阴影与 CSS 变量映射）
-- docs/design/frontend.md：前端工程与界面详细规格
+```txt
+docs/
+|-- system-design.md        # 系统设计入口
+|-- build-release.md        # 构建与发布
+`-- design/
+    |-- data-model.md       # 表结构与种子数据
+    |-- api.md              # REST API
+    |-- protocol.md         # WebSocket 协议
+    |-- runtime.md          # Agent 运行时
+    |-- media.md            # 图片与媒体
+    |-- search.md           # 网络搜索与网页读取
+    |-- computers.md        # 云电脑与持久卷
+    |-- sandbox-backends.md # 沙箱后端接口
+    |-- theme.md            # 主题设计规范
+    `-- frontend.md         # 前端工程与界面
+```
 
 ## 工程约定
 
-- CGO_ENABLED=0 纯 Go 构建；版本经 `-ldflags "-s -w -X main.version=<ver>"` 注入，`main.version` 默认 `dev`
-- 本地构建统一入口 `scripts/build.sh`（Windows 下经 Git Bash 执行）；正式发布走 goreleaser
-- Docker 镜像为**多阶段构建**（node+pnpm 构建 web/dist → go 构建二进制 → alpine 运行时），构建上下文为仓库根：`docker build --build-arg version=<ver> -t wispjar:<ver> .`；模块下载走 `GOPROXY=goproxy.cn`
-- goreleaser release images use **`dockers_v2` + `Dockerfile.release`** at the repo root (runtime-only: alpine + prebuilt binary). The minimal build context contains the Dockerfile and binaries under `linux/<arch>/`; copy via `ARG TARGETPLATFORM` and `COPY ${TARGETPLATFORM}/wispjar ...`, not the multi-stage source Dockerfile. Keep the version and `latest` multi-arch tags plus the existing `<version>-amd64` / `<version>-arm64` compatibility tags. release.yml builds the real web/dist before goreleaser (embedded via go:embed), do not revert to the placeholder
-- `web/dist/` 整体忽略，本地编译前需 `mkdir -p web/dist && touch web/dist/index.html`（`scripts/build.sh` 已内置该逻辑）
-- changelog 由 goreleaser 从 Conventional Commits 生成，不维护 CHANGELOG.md
+- 使用 `CGO_ENABLED=0` 纯 Go 构建；本地入口为 `scripts/build.sh`，Windows 下经 Git Bash 执行。
+- 正式发布使用 GoReleaser；发布镜像使用 `dockers_v2` + `Dockerfile.release`，二进制必须嵌入真实前端产物。构建发布改动须遵循 [构建与发布](docs/build-release.md)。
+- 提交遵循 Conventional Commits；changelog 由 GoReleaser 生成，不维护 `CHANGELOG.md`。
+- Go 改动（含测试）完成后，在仓库根目录执行全量 `golangci-lint run` 和 `CGO_ENABLED=0 go test ./...`，覆盖最终代码并确认退出码为 0。交付时报告命令及结果；未执行的检查须注明。
 
 ## 环境信息边界
 
-- 入库的代码、文档、示例配置和发布文件保持环境无关，不包含实际部署主机名、IP、SSH 别名、部署路径或凭据；示例使用 localhost、回环地址或占位值。
-- 实际环境资料、部署技能和操作记录集中在被 Git 与 Docker 构建上下文排除的 `.agents/` 中。运行配置使用被忽略的 `config.yaml`、本地 `.env` 文件或环境变量，不强制加入版本控制或发布产物。
+- 入库内容保持环境无关：不含实际部署主机名、IP、SSH 别名、路径或凭据；示例使用 localhost、回环地址或占位值。
+- 环境资料、部署技能和操作记录放在 `.agents/`，由 Git 与 Docker 构建上下文排除；运行配置使用被忽略的 `config.yaml`、`.env` 文件或环境变量，不纳入发布产物。

@@ -4,6 +4,7 @@
 > 读者约定：本文档是系统设计的唯一入口；**未参与需求讨论的开发者/Agent 应能从 docs/ 全部文档自主完成开发**。细节分散在 `docs/design/` 子文档，本文只保留全局决策与架构。
 > 文档集：
 > - `docs/system-design.md`（本文）：目标、决策、术语、总体架构、里程碑、风险
+> - [构建与发布](build-release.md)：本地构建、Docker 镜像与 GoReleaser 发布约定
 > - `docs/design/data-model.md`：MySQL 完整表结构（可直接执行的 DDL）、种子数据、迁移约定
 > - `docs/design/api.md`：REST API 完整规格（全部端点请求/响应/权限/错误码）
 > - `docs/design/protocol.md`：WebSocket 实时协议（30 秒一次性连接票据、mux 帧、follow 订阅、StreamChunk、会话事件词表、重连对账）
@@ -13,6 +14,7 @@
 > - `docs/design/computers.md`：用户云电脑与持久卷（目录、命名配置、并行执行、技能同步、退役升级及实施验收）
 > - `docs/design/sandbox-backends.md`：单后端配置选择、中立接口、适配器与维护权限分离及实施范围
 > - `docs/design/frontend.md`：前端工程、界面详细规格与品牌图形资源
+> - `docs/design/theme.md`：深浅主题与设计 token 规范
 
 ---
 
