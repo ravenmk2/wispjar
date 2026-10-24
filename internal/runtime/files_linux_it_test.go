@@ -192,3 +192,60 @@ func TestScopedFilesIntegration(t *testing.T) {
 		t.Fatal("platform skills permissions changed")
 	}
 }
+
+func TestPreviewResourcesReadFullFilesAndRejectLinks(t *testing.T) {
+	if os.Getenv("WISPJAR_EXECUTION_TEST") != "1" {
+		t.Skip("requires disposable root Linux container with Python")
+	}
+	root, err := os.MkdirTemp("", "wispjar-preview-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	if err := os.Chmod(root, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(path.Join(root, "site/assets"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	full := bytes.Repeat([]byte("/* complete stylesheet */\n"), 14000)
+	if err := os.WriteFile(path.Join(root, "site/assets/style.css"), full, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/etc/passwd", path.Join(root, "site/assets/leak.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/etc", path.Join(root, "site/escape")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path.Join(root, "site/huge.bin"), make([]byte, previewFileLimit+1), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		file              string
+		reject, truncated bool
+	}{
+		{"site/assets/style.css", false, false}, {"site/assets/leak.txt", true, false}, {"site/escape/passwd", true, false}, {"site/huge.bin", false, true},
+	} {
+		handle := tools.NewExecutionHandle(localFileHandle{})
+		result, err := remoteFileOperation(context.Background(), handle, root, test.file, "read", map[string]any{"max_bytes": previewFileLimit})
+		if test.reject {
+			if err == nil {
+				t.Fatalf("followed %s", test.file)
+			}
+			continue
+		}
+		if err != nil || result.Truncated != test.truncated {
+			t.Fatalf("%s: %+v %v", test.file, result, err)
+		}
+		if !test.truncated {
+			data, err := base64.StdEncoding.DecodeString(result.Data)
+			if err != nil || !bytes.Equal(data, full) {
+				t.Fatal("resource was truncated or wrapped")
+			}
+		}
+		if !handle.CommandsStopped() {
+			t.Fatal("reader did not stop")
+		}
+	}
+}

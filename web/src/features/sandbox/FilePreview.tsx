@@ -1,7 +1,7 @@
 import { Download, Eye, FileCode2, FileText, Image as ImageIcon, Loader2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import type { FileScope } from "@/api/sessions"
+import { sessionsApi, type FilePreviewGrant, type FileScope } from "@/api/sessions"
 import { Markdown } from "@/components/Markdown"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import { PixelImage } from "@/components/PixelImage"
 import type { ReactNode } from "react"
 import { highlightCode } from "@/lib/highlight"
 import type { SandboxFileItem } from "@/lib/types"
+import { previewDirectory, previewEntry, previewRoots, resolvePreviewReference } from "@/lib/file-preview"
 import {
   downloadBlob,
   downloadWorkspaceFile,
@@ -33,6 +34,7 @@ export function FilePreview({
   scope,
   actions,
   navigation,
+  onNavigate,
 }: {
   sessionId: string
   item: SandboxFileItem
@@ -40,12 +42,46 @@ export function FilePreview({
   scope?: FileScope
   actions?: ReactNode
   navigation?: ReactNode
+  onNavigate?: (path: string) => void
 }) {
   const kind = previewKind(item.name)
   const [state, setState] = useState<LoadState>({ status: "loading" })
   const [mode, setMode] = useState<"preview" | "source">("preview")
   const [sourceHtml, setSourceHtml] = useState<string | null>(null)
   const loadedPathRef = useRef<string | null>(null)
+  const [rootSelection, setRootSelection] = useState<{ path: string; root: string }>()
+  const root = rootSelection?.path === item.path ? rootSelection.root : previewDirectory(item.path)
+  const [previewRevision, setPreviewRevision] = useState(0)
+  const previewKey = JSON.stringify([sessionId, scope, root, item.path, reloadToken, previewRevision])
+  const [grantState, setGrantState] = useState<{ key: string; grant?: FilePreviewGrant; content?: string; error?: string }>()
+  const preview = grantState?.key === previewKey ? grantState : undefined
+
+  useEffect(() => {
+    if (kind !== "html" && kind !== "markdown") return
+    let canceled = false
+    let grant: FilePreviewGrant | undefined
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const revoke = (value: FilePreviewGrant) => { void sessionsApi.revokePreview(sessionId, value.id).catch(() => { /* TTL covers offline/unload cleanup. */ }) }
+    setGrantState({ key: previewKey })
+    void sessionsApi.createPreview(sessionId, scope ?? "workspace", root, previewEntry(item.path, root)).then(async (value) => {
+      if (canceled) { revoke(value); return }
+      grant = value
+      let content: string | undefined
+      if (kind === "markdown") {
+        const response = await fetch(value.entry_url, { credentials: "omit", referrerPolicy: "no-referrer" })
+        if (!response.ok) throw new Error(`Markdown 预览读取失败（HTTP ${response.status}）`)
+        content = await response.text()
+      }
+      if (canceled) return
+      setGrantState({ key: previewKey, grant: value, content })
+      timer = setTimeout(() => setPreviewRevision((n) => n + 1), Math.max(1000, Date.parse(value.expires_at) - Date.now()))
+    }).catch((error) => {
+      if (!canceled) setGrantState({ key: previewKey, error: error instanceof Error ? error.message : "预览创建失败" })
+    })
+    return () => { canceled = true; clearTimeout(timer); if (grant) revoke(grant) }
+  }, [sessionId, scope, root, item.path, kind, previewKey])
+
+  const resolveReference = (url: string) => preview?.grant ? resolvePreviewReference(url, preview.grant.entry_url, preview.grant.files_url, window.location.origin) : undefined
   async function download() {
     try {
       if (scope) await downloadWorkspaceFile(sessionId, item.path, scope)
@@ -146,7 +182,7 @@ export function FilePreview({
         </Badge>
         {truncated && (
           <Badge variant="secondary" className="shrink-0 text-[10px] font-normal text-amber-700 dark:text-amber-400">
-            已截断
+            源码已截断
           </Badge>
         )}
         {(kind === "html" || kind === "markdown") && (
@@ -187,6 +223,15 @@ export function FilePreview({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
+        {(kind === "html" || kind === "markdown") && mode === "preview" && (
+          <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1 text-[11px] text-muted-foreground">
+            <label htmlFor="preview-root">资源目录</label>
+            <select id="preview-root" aria-label="预览资源根目录" title="仅允许读取所选目录及其子目录；跨目录引用请选择共同上级目录" value={root} onChange={(event) => setRootSelection({ path: item.path, root: event.target.value })} className="min-w-0 flex-1 truncate rounded border bg-background px-1 py-0.5">
+              {previewRoots(item.path).map((value) => <option key={value} value={value}>{value === "." ? "当前文件范围根目录" : value}</option>)}
+            </select>
+            <button type="button" className="shrink-0 hover:text-foreground" onClick={() => setPreviewRevision((n) => n + 1)}>刷新预览</button>
+          </div>
+        )}
         {state.status === "loading" && (
           <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
@@ -222,12 +267,22 @@ export function FilePreview({
             <PixelImage key={state.objectUrl} src={state.objectUrl!} alt={item.name} />
           )
         )}
-        {state.status === "ready" && !state.binary && kind === "html" && mode === "preview" && (
-          <iframe sandbox="allow-scripts" srcDoc={state.text ?? ""} title={item.path} className="h-full w-full flex-1 bg-white" />
+        {state.status === "ready" && !state.binary && (kind === "html" || kind === "markdown") && mode === "preview" && !preview?.grant && (
+          <div role={preview?.error ? "alert" : "status"} className="flex flex-1 items-center justify-center px-4 text-xs text-muted-foreground">{preview?.error ?? "正在准备预览…"}</div>
         )}
-        {state.status === "ready" && !state.binary && kind === "markdown" && mode === "preview" && (
+        {state.status === "ready" && !state.binary && kind === "html" && mode === "preview" && preview?.grant && (
+          <iframe sandbox="allow-scripts" referrerPolicy="no-referrer" src={preview.grant.entry_url} title={item.path} className="h-full w-full flex-1 bg-white" />
+        )}
+        {state.status === "ready" && !state.binary && kind === "markdown" && mode === "preview" && preview?.grant && (
           <div className="min-h-0 flex-1 overflow-auto">
-            <Markdown content={state.text ?? ""} className="px-4 py-3" />
+            <Markdown content={preview.content ?? state.text ?? ""} className="px-4 py-3" resolveUrl={(url) => resolveReference(url)?.url} onLink={(url) => {
+              const files = new URL(preview.grant!.files_url, window.location.origin)
+              const target = new URL(url, window.location.origin)
+              if (target.origin !== files.origin || !target.pathname.startsWith(files.pathname) || !onNavigate) return false
+              const local = target.pathname.slice(files.pathname.length).split("/").map(decodeURIComponent).join("/")
+              onNavigate(root === "." ? local : `${root}/${local}`)
+              return true
+            }} />
           </div>
         )}
         {state.status === "ready" && !state.binary && (kind === "other" || mode === "source") && (

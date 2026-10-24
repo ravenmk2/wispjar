@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -74,6 +75,22 @@ func (s *Service) DownloadRequired(owner func(string) string) gin.HandlerFunc {
 		var user store.User
 		if uid == "" || s.db.WithContext(c.Request.Context()).First(&user, "id = ?", uid).Error != nil || user.Status != "active" || user.MustChangePassword {
 			respond.Error(c, http.StatusNotFound, "file/download_not_found", "下载不存在或已失效", nil)
+			return
+		}
+		c.Set(ctxUID, uid)
+		c.Next()
+	}
+}
+
+// PreviewRequired checks the current account on every token-authenticated
+// resource request. Normal API authentication continues to require Bearer JWT.
+func (s *Service) PreviewRequired(owner func(context.Context, string) string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		uid := owner(c.Request.Context(), c.Param("token"))
+		var user store.User
+		if uid == "" || s.db.WithContext(c.Request.Context()).First(&user, "id = ?", uid).Error != nil || user.Status != "active" || user.MustChangePassword {
+			c.Header("Cache-Control", "private, no-store")
+			respond.Error(c, 404, "file/preview_not_found", "预览不存在或已失效，请刷新预览", nil)
 			return
 		}
 		c.Set(ctxUID, uid)

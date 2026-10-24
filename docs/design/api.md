@@ -441,3 +441,30 @@
 目录包采用 ZIP64，包含顶层目录、隐藏文件及空目录。符号链接、特殊文件、不可读项和导出期间源文件变化导致整次失败。不得使用预览的截断内容作为完整文件；兼容 `GET /sessions/{id}/file?download=1` 保留原有小文件接口，大文件使用上述下载任务。
 
 网页读取扩展 `fetch_provider_id`、`tools_enabled.web_fetch`，并增加读取默认及测试接口；搜索/读取共享 DeepSeek 实例，选项按能力过滤。完整增量 API 见 [search.md §7.3](search.md#73-api数据及-ui)。
+
+### 8.2 目录资源预览
+
+HTML 和 Markdown 通过独立的只读预览通道引用目录内静态资源；原 `/file` 的 JSON 文本、源码截断和下载行为保持兼容。
+
+| 方法 | 路径 | 说明 / 鉴权 |
+|---|---|---|
+| POST | `/sessions/{id}/previews` | 登录 Bearer；创建指定目录的预览访问令牌，校验会话归属和入口文件 |
+| GET | `/previews/{token}/files/{path...}` | URL 令牌；返回授权目录内文件的完整原始内容及正确 MIME |
+| HEAD | `/previews/{token}/files/{path...}` | 与 GET 同鉴权及读取限制，仅返回类型、长度等响应头 |
+| DELETE | `/sessions/{id}/previews/{previewId}` | 登录 Bearer；撤销本人该会话的预览；返回 `{ok:true}`，已失效重复撤销也成功 |
+
+创建 body 为 `{scope:"workspace",root:"outputs/site",entry:"docs/index.html"}`。scope 默认 workspace，也支持 storage、agent；root 是相对于 scope 根目录的路径，默认 `.`；entry 必填，相对于 root，只支持 html/htm/md/markdown 普通文件。root/entry 均拒绝绝对路径、父目录段、反斜杠和 NUL，逐级 NOFOLLOW 打开，不跟随符号链接或读取特殊文件。
+
+成功返回 201，例如：
+
+```json
+{"id":"<previewId>","entry_url":"/api/v1/previews/<token>/files/docs/index.html","files_url":"/api/v1/previews/<token>/files/","expires_at":"2026-10-24T10:15:00Z"}
+```
+
+token 使用加密安全随机生成的 16 字节（128 位），按 RFC 4648 Base32 字母表的小写形式编码，并显式关闭填充；固定 26 个字符，字符集为 `a–z、2–7`，不含 `=`。默认带填充的 Base32 对 16 字节会产生 32 字符（末尾 6 个 `=`），实现不得使用默认填充。读取只接受规范的小写无填充形式，不接受大写、非规范尾位或旧格式。它不是登录 JWT；previewId 是不授予读取权限的管理标识。服务端只保存 token 的 SHA-256，固定绑定 user/org/session/computer/generation/agent、scope、root 和过期时间。有效期 15 分钟，可撤销；每次读取复核账号状态、会话归属、组织成员关系、电脑绑定及 generation，换绑或重建后旧令牌不能读取新实例。只在实际读取时获取会话维护占用，闲置令牌不阻止电脑暂停。创建及读取可能启动已暂停电脑。
+
+首版使用 `PreviewStore` 接口及有界内存实现，可在启动组装时替换为共享存储；接口涵盖创建、哈希查询、归属撤销及原子的读取配额记账。过期记录在查询和创建时惰性清理；服务重启令牌失效，多实例部署需共享实现。最多 128 个有效预览、每用户 8 个；全进程最多 16 个资源读取、每预览最多 8 个；每预览累计最多 512 次资源请求、64 MiB 成功响应内容，单文件上限 8 MiB。HEAD 计请求次数但不计响应内容字节。资源超限返回 413 `file/too_large`，不发送截断的 HTML/CSS/JS；配额超限 429 `file/preview_busy`；未知、过期、撤销及绑定失效令牌返回 404 `file/preview_not_found`。正在发送的响应不追溯中断。
+
+资源返回 `Cache-Control: private, no-store`、`Referrer-Policy: no-referrer`、`X-Content-Type-Options: nosniff`。此通道单独允许无凭据 CORS，以支持 opaque-origin iframe 的字体、模块及 fetch；普通 API 不开放 CORS。资源响应附带 CSP `sandbox allow-scripts`，不开放 allow-same-origin；子资源及 connect 仅允许当前令牌资源前缀（图片等允许相应 data/blob），禁止 frame/object、表单及自定义 base。直接打开 HTML/SVG 也受响应头沙箱约束。代理访问日志应隐藏 token 路径段。
+
+首版支持目录内相对 URL，包括浏览器归一化后仍在授权根内的 `../`，以及查询参数和片段；`/assets/...` 站点根路径、外部 HTML 资源和 SPA 回退不支持。资源缺失明确失败，不返回应用 SPA。Markdown 的外部 HTTP(S) 图片/链接沿用原有行为；不会启用原始 HTML 执行。

@@ -1,5 +1,5 @@
 import { createContext, memo, useContext, useEffect, useState, type ComponentProps } from "react"
-import ReactMarkdown from "react-markdown"
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { CopyIconButton } from "@/components/CopyIconButton"
 import { MarkdownImage } from "@/components/MarkdownImage"
@@ -66,11 +66,19 @@ export function CodeBlock({ lang, code, className }: { lang?: string; code: stri
   )
 }
 
-export const Markdown = memo(function Markdown({ content, className, externalContent = false }: { content: string; className?: string; externalContent?: boolean }) {
+export const Markdown = memo(function Markdown({ content, className, externalContent = false, resolveUrl, onLink }: {
+  content: string; className?: string; externalContent?: boolean
+  resolveUrl?: (url: string) => string | undefined
+  onLink?: (url: string) => boolean
+}) {
   return (
     <div className={cn("markdown-body min-w-0 break-words text-chat", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={(url) => {
+          const safe = defaultUrlTransform(url)
+          return safe && resolveUrl ? resolveUrl(safe) : safe
+        }}
         components={{
           img: externalContent ? ({ alt }) => <span className="text-muted-foreground">[图片：{alt || "外部图片"}]</span> : MarkdownImageRenderer,
           pre: ({ children }) => <>{children}</>,
@@ -85,7 +93,9 @@ export const Markdown = memo(function Markdown({ content, className, externalCon
             )
           },
           a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noreferrer" className="text-link underline underline-offset-2">
+            <a href={href} target="_blank" rel="noreferrer" className="text-link underline underline-offset-2" onClick={(event) => {
+              if (href && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && onLink?.(href)) event.preventDefault()
+            }}>
               {children}
             </a>
           ),

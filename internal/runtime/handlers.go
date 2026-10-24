@@ -47,6 +47,8 @@ type Handler struct {
 	downloadMu      sync.Mutex
 	downloads       map[string]*fileDownload
 	downloadOptions DownloadOptions
+	previews        PreviewStore
+	previewSlots    chan struct{}
 }
 
 func NewHandler(orch Orchestrator, sessions SessionService, events EventStore, repo SessionRepo,
@@ -56,7 +58,8 @@ func NewHandler(orch Orchestrator, sessions SessionService, events EventStore, r
 	return &Handler{
 		orch: orch, sessions: sessions, events: events, repo: repo,
 		bus: bus, model: modelLookup, attachments: attachments,
-		dataDir: dataDir,
+		dataDir:  dataDir,
+		previews: NewMemoryPreviewStore(), previewSlots: make(chan struct{}, 16),
 	}
 }
 

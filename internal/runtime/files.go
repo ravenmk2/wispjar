@@ -59,6 +59,7 @@ type fileAccess struct {
 	handle           tools.Handle
 	execution        *tools.ExecutionHandle
 	root, runID      string
+	generation       uint64
 	controlUncertain bool
 }
 
@@ -106,7 +107,7 @@ func (h *Handler) openFileAccess(ctx context.Context, uid, sessionID, scope stri
 		_ = h.computers.FinishRun(context.Background(), runID, sess.UserID, "failed")
 		return nil, err
 	}
-	return &fileAccess{handler: h, session: sess, handle: handle, execution: tools.NewExecutionHandle(handle), root: root, runID: runID}, nil
+	return &fileAccess{handler: h, session: sess, handle: handle, execution: tools.NewExecutionHandle(handle), root: root, runID: runID, generation: computer.Generation}, nil
 }
 
 func (a *fileAccess) close() {

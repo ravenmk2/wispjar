@@ -16,6 +16,12 @@ import type {
 } from "@/lib/types"
 
 export const sessionsApi = {
+  createPreview(id: string, scope: FileScope, root: string, entry: string) {
+    return api<FilePreviewGrant>(`/sessions/${id}/previews`, { method: "POST", body: { scope, root, entry } })
+  },
+  revokePreview(id: string, previewId: string) {
+    return api(`/sessions/${id}/previews/${previewId}`, { method: "DELETE" })
+  },
   files(id: string, path = ".", scope: FileScope = "workspace") {
     return api<SandboxFilesResponse & { root: string }>(`/sessions/${id}/files`, { params: { path, scope } })
   },
@@ -78,3 +84,4 @@ export const sessionsApi = {
 
 }
 export type FileScope = "workspace" | "storage" | "agent"
+export interface FilePreviewGrant { id: string; entry_url: string; files_url: string; expires_at: string }

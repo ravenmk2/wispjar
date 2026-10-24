@@ -207,7 +207,8 @@ useChatPresentationStore // 当前会话的手动展开状态：整轮 / 过程�
   - 自动刷新：`header.running` 由 true→false（agent 工作完成）时按同逻辑自动刷新一次，并静默重载预览 tab 当前打开的文件（保持预览/源码视图状态，二进制文件不重复触发下载）；沙箱状态变为 running 时做初始加载。
 - 预览 tab：所有文件类型的查看统一在此（FilePreview 组件，原模态 FilePreviewDialog 已移除）。头部条为文件路径（等宽截断）+ 格式徽标 + 下载按钮 +（HTML/MD）预览/源码切换 + truncated「已截断」徽标；未选中文件时显示空态。点击文件树的文件自动切到预览 tab 并加载：
   - 图片（png/jpg/jpeg/webp/gif/svg）经 `file?scope=workspace&max_bytes=4194304` 取 blob 渲染 `<img object-contain>` 大图滚动区，blob 大小小于树节点 size 视为截断，提示"图片过大仅支持下载"。
-  - HTML（html/htm）经 `<iframe sandbox="allow-scripts">` srcdoc 白底渲染；Markdown（md/markdown）用 `Markdown` 组件渲染；两者支持预览/源码切换，源码视图为高亮代码。
+  - HTML（html/htm）先创建目录预览，再以真实入口 URL 经 `<iframe sandbox="allow-scripts" referrerPolicy="no-referrer">` 白底渲染，相对图片、CSS、字体、脚本沿真实目录加载；Markdown（md/markdown）从预览通道读取完整文本，用 `Markdown` 的可选 URL 解析器按文件目录解析本地图片及链接，本地文档链接在面板中打开，外部链接沿用原行为。聊天 Markdown 不传文件解析器。两者支持预览/源码切换，源码视图仍使用原文本接口及高亮。
+  - 预览增加“资源目录”选择（默认文件所在目录，可选 scope 内的上级目录）及“刷新预览”。目录外引用被拒绝，跨目录项目选择共同上级；根相对 `/assets/...`、外部 HTML 子资源和 SPA 回退暂不支持。令牌 15 分钟有效，页面持续打开时到期重新创建；换文件、切 scope、刷新、变更资源目录或卸载时撤销旧预览，异步过期结果不能覆盖新文件。服务重启或凭证失效可点击刷新恢复。HTML 和 Markdown 完整预览最多 8 MiB，源码仍可显示“源码已截断”，不能将截断源码作为完整预览。完整契约见 [API §8.2](api.md#82-目录资源预览)。
   - 其余文本/代码文件直接以 highlightCode 高亮展示；非 UTF-8 二进制文件直接触发下载并提示。
 - 云电脑回收后提示"云电脑已回收，文件已清空"。
 

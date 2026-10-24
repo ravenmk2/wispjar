@@ -14,6 +14,7 @@ import { downloadWorkspaceFile } from "@/features/sandbox/previewUtils"
 import { FilePanel } from "./FilePanel"
 import { formatBytes } from "@/lib/format"
 import { workspaceRoot } from "@/lib/computers"
+import { previewDirectory } from "@/lib/file-preview"
 import type { SandboxFileItem } from "@/lib/types"
 
 export function WorkspaceFiles({ sessionId, running, onClose, fixedScope, embedded = false }: { sessionId: string; running: boolean; onClose?: () => void; fixedScope?: FileScope; embedded?: boolean }) {
@@ -30,8 +31,9 @@ export function WorkspaceFiles({ sessionId, running, onClose, fixedScope, embedd
   const [uploading, setUploading] = useState(false)
   const uploadRef = useRef<HTMLInputElement>(null)
   const request = useRef(0)
-  const location = useRef({ sessionId, scope, path })
-  location.current = { sessionId, scope, path }
+  const location = useRef({ sessionId, scope, path, selectedPath: selected?.path })
+  location.current = { sessionId, scope, path, selectedPath: selected?.path }
+  const linkRequest = useRef(0)
   const refresh = useCallback(async () => {
     const token = ++request.current
     setLoading(true); setError("")
@@ -49,7 +51,8 @@ export function WorkspaceFiles({ sessionId, running, onClose, fixedScope, embedd
     } catch (e) { if (token === request.current) setError(errorMessage(e)) }
     finally { if (token === request.current) setLoading(false) }
   }, [sessionId, path, scope])
-  useEffect(() => { setSelected(null); void refresh(); return () => { request.current++ } }, [refresh])
+  useEffect(() => { void refresh(); return () => { request.current++ } }, [refresh])
+  useEffect(() => { setSelected(null) }, [sessionId, scope])
   const wasRunning = useRef(running)
   useEffect(() => { if (wasRunning.current && !running) void refresh(); wasRunning.current = running }, [running, refresh])
   function relative(item: SandboxFileItem): string { return item.path.startsWith(`${root}/`) ? item.path.slice(root.length + 1) : item.path }
@@ -72,6 +75,19 @@ export function WorkspaceFiles({ sessionId, running, onClose, fixedScope, embedd
   }
   function scopeLabel(value: FileScope) { return { workspace: "当前会话", storage: "存储", agent: "智能体文件" }[value] }
   function navigate(next: string) { setSelected(null); setPath(next) }
+  async function openLinkedFile(next: string) {
+    const target = { ...location.current }
+    const sequence = ++linkRequest.current
+    const directory = previewDirectory(next)
+    try {
+      const result = await sessionsApi.files(target.sessionId, directory, target.scope)
+      if (sequence !== linkRequest.current || location.current.sessionId !== target.sessionId || location.current.scope !== target.scope || location.current.path !== target.path || location.current.selectedPath !== target.selectedPath) return
+      const item = result.items.find((item) => item.name === next.split("/").pop())
+      if (!item || item.type === "dir") { toast.error("链接目标不是可预览文件"); return }
+      setPath(directory)
+      setSelected({ ...item, path: next })
+    } catch (error) { toast.error(errorMessage(error)) }
+  }
   function back() { if (selected) setSelected(null); else navigate(path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".") }
   async function downloadDirectory(target: string) {
     try { await downloadWorkspaceFile(sessionId, target, scope, true) }
@@ -102,7 +118,7 @@ export function WorkspaceFiles({ sessionId, running, onClose, fixedScope, embedd
       <input type="file" ref={uploadRef} className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
     </div>
     {!selected && <div className="flex h-9 shrink-0 items-center border-b px-2">{navigation}</div>}
-    {selected ? <FilePreview navigation={navigation} sessionId={sessionId} item={selected} scope={scope} reloadToken={revision} actions={scope === "workspace" && <Button variant="ghost" size="icon" className="size-7 shrink-0" title="保存到存储" aria-label="保存到存储" disabled={saving} onClick={() => setDestination(selected.name)}><HardDriveDownload className="size-3.5" /></Button>} /> :
+    {selected ? <FilePreview navigation={navigation} sessionId={sessionId} item={selected} scope={scope} reloadToken={revision} onNavigate={(path) => void openLinkedFile(path)} actions={scope === "workspace" && <Button variant="ghost" size="icon" className="size-7 shrink-0" title="保存到存储" aria-label="保存到存储" disabled={saving} onClick={() => setDestination(selected.name)}><HardDriveDownload className="size-3.5" /></Button>} /> :
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
         {error ? <p role="alert" className="p-2 text-sm text-destructive">{error}</p> : loading ? <p role="status" className="p-2 text-sm text-muted-foreground">正在读取文件…</p> : items.length === 0 ? <p className="p-2 text-sm text-muted-foreground">目录为空</p> : items.map((item) => <div key={item.path} className="group flex items-center gap-2 rounded-md px-2 hover:bg-accent">
           <button type="button" className="flex min-w-0 flex-1 items-center gap-2 py-2 text-left text-sm" onClick={() => item.type === "dir" ? navigate(relative(item)) : setSelected({ ...item, path: relative(item) })}>

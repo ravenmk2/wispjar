@@ -26,6 +26,7 @@ Wispjar 是一个多租户智能体平台：
 - **子智能体委派**：主 Agent 通过一个统一的 `task` 工具把自包含任务委派给组织内其他智能体（supervisor 模式）。
 - **Agent Skills**：遵循 agentskills.io 规范，上传 zip 配置，渐进式披露。
 - **云电脑与存储**：用户在组织内拥有多台云电脑，三类持久卷挂载到 `/storage`、`/agents`、`/sessions`；多会话共享电脑并行执行，subagent 跟随主任务。OpenSandbox 提供底层实例。实施与升级见 [云电脑设计](design/computers.md)。
+- **目录资源预览**：HTML/Markdown 可通过限定目录的短期只读访问令牌引用相对静态资源；路径变量统一使用 `:token`，令牌先存内存，通过 `PreviewStore` 留出共享存储扩展口。详情见 [API §8.2](design/api.md#82-目录资源预览)。
 - **会话与事件**：事件溯源（event sourcing）会话日志（MySQL append-only 事件表）+ 单条 WebSocket 多路复用实时协议；协议骨架、事件词表、增量块协议借鉴 DeepSeek Harness 开源项目并做多租户适配。
 
 界面分为工作区、个人中心、组织管理和系统管理，统一通过左下角用户菜单切换；侧栏外框及工作区列表布局保留。个人中心资源为当前组织下本人所有，账号安全和外观为账号级设置。此次导航重组复用既有 API、权限及数据模型，具体路由与交互见 [前端设计 §3](design/frontend.md#3-路由)。

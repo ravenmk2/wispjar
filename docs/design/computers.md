@@ -185,6 +185,9 @@ T3 实现约定：
 | GET /operations/:id | 操作状态与资源摘要 |
 | GET /sessions/:id/files | 相对 path，默认 "."；返回 root/path/items |
 | GET /sessions/:id/file | 相对 path；沿用预览限制与下载行为 |
+| POST /sessions/:id/previews | Bearer 创建目录只读预览；scope/root/entry，返回管理 ID、入口 URL、资源前缀及过期时间 |
+| GET、HEAD /previews/:token/files/*path | 15 分钟随机令牌读取目录资源，原始内容与正确 MIME；每次复核归属、绑定和 generation |
+| DELETE /sessions/:id/previews/:previewId | Bearer 撤销预览，重复清理幂等 |
 | POST /sessions/:id/files | multipart file + 相对目录 path，默认 "."；scope 显式选择当前会话、storage 或 agent 文件，文件名冲突不静默覆盖 |
 | POST /sessions/:id/files/save-to-storage | source 相对会话路径，destination 相对 storage 路径；复制校验 |
 | POST /sessions/:id/downloads | body path/scope/archive；202 返回后台下载任务 |
@@ -195,9 +198,11 @@ T3 实现约定：
 
 新增电脑/重建等耗时操作返回 202 `{operation_id,status,resource_id}`；创建与重建接受 Idempotency-Key。操作轮询只读，不隐式启动实例。
 
-创建会话增加 computer_id；PATCH 仅空闲时可换电脑；会话详情增加 computer 摘要/workspace。文件服务只提供带 scope 和相对 path 的 `/files`、`/file` 端点。
+创建会话增加 computer_id；PATCH 仅空闲时可换电脑；会话详情增加 computer 摘要/workspace。文件浏览、源码及上传使用带 scope 和相对 path 的 `/files`、`/file`；多文件预览通过独立限时资源通道，不把登录 JWT 放入 URL。
 
 文件端点默认限制在对应资源根，校验绝对/相对路径、`..`、符号链接及实际打开对象；不能把字符串前缀检查当成完整保护。通用文件上传与现有图片 attachment 准入分开。
+
+目录预览默认授权入口所在目录，前端可选择 scope 内的共同上级目录以支持 `../assets`。令牌为 16 字节安全随机数，以小写、无填充 Base32 编码成固定 26 字符，仅以哈希保存在 `PreviewStore` 的有界内存实现中，后续可注入 Redis 等共享存储；重启失效，闲置不持有维护占用，逐次读取仍走受监督的 NOFOLLOW 文件通道。单资源最多 8 MiB，超限明确拒绝；HTTP 沙箱、按令牌前缀限制的 CSP 和专用无凭据 CORS 共同隔离预览。接口、过期、撤销、并发及累计配额详见 [API §8.2](api.md#82-目录资源预览)。
 
 文件浏览只枚举当前目录及直接子项的元数据，文件内容按预览请求读取。已有工作区不因浏览重复创建目录或修改权限；仅资源根缺失时补做初始化后重试，普通子项不存在仍返回 404。小参数通过 stdin 交给受监督的非 root 进程，单次列目录不创建或上传临时参数文件；大文件传输保留受保护暂存机制。鉴权、会话维护占用、远端停止确认与符号链接限制保持生效。
 
