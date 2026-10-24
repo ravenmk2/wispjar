@@ -23,7 +23,8 @@ import (
 type ComputerService interface {
 	GetOwned(context.Context, string, string, string) (store.Computer, error)
 	EnsureRunning(context.Context, string, string, string) (store.Computer, error)
-	Handle(context.Context, string, string, string) (*sandbox.Handle, error)
+	Handle(context.Context, string, string, string) (sandbox.Instance, error)
+	Maintainer(sandbox.Instance) (sandbox.Maintainer, error)
 	RegisterRun(context.Context, store.ComputerRun, uint64) error
 	FinishRun(context.Context, string, string, string) error
 	AcquireUse(context.Context, string, string, string, string, uint64) (string, error)
@@ -93,7 +94,11 @@ func (o *orchestrator) prepareComputer(ctx context.Context, sess *store.Session,
 		return err
 	}
 	rs.registered = true
-	h, err := o.deps.Computers.Handle(ctx, sess.OrgID, sess.UserID, c.ID)
+	instance, err := o.deps.Computers.Handle(ctx, sess.OrgID, sess.UserID, c.ID)
+	if err != nil {
+		return err
+	}
+	h, err := o.deps.Computers.Maintainer(instance)
 	if err != nil {
 		return err
 	}
@@ -107,7 +112,7 @@ func (o *orchestrator) prepareComputer(ctx context.Context, sess *store.Session,
 	tracker := tools.NewExecutionHandle(h)
 	tracker.OnSettled = func() { o.finishResources(rs, "") }
 	rs.execution = tracker
-	tc.BoundHandle, tc.BoundSandboxID = tracker, h.SandboxID
+	tc.BoundHandle, tc.BoundSandboxID = tracker, instance.Ref().InstanceID
 	installer := skill.NewSandboxInstaller(h.UploadFile, func(ctx context.Context, cmd, cwd string) (int, string, error) {
 		installCtx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
 		defer cancel()

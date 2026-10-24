@@ -13,7 +13,7 @@ func TestVolumeConfigDefaultsAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Storage.Volumes.BackendID != "local" || cfg.Storage.Volumes.Namespace != "main" || cfg.Storage.Volumes.DockerEndpoint != "" {
+	if cfg.Storage.Volumes.Namespace != "main" || cfg.Storage.Volumes.DockerEndpoint != "" {
 		t.Fatalf("bad defaults: %+v", cfg.Storage.Volumes)
 	}
 	if cfg.Runtime.MaxParallelTasks != 4 {
@@ -27,7 +27,6 @@ func TestVolumeConfigDefaultsAndValidation(t *testing.T) {
 		`storage: {volumes: {name_pattern: "wj-{unknown}-{volume_id}"}}`,
 		`storage: {volumes: {namespace: "Main"}}`,
 		`storage: {volumes: {backend: "unknown"}}`,
-		`storage: {volumes: {backend_id: ""}}`,
 		`storage: {volumes: {docker_endpoint: "ftp://localhost"}}`,
 		`storage: {volumes: {docker_endpoint: "http://user:pass@localhost"}}`,
 		`storage: {volumes: {name_pattern: "{org_id}-{user_id}-{volume_id}"}}`,
@@ -49,5 +48,39 @@ func TestVolumeConfigDefaultsAndValidation(t *testing.T) {
 	}
 	if _, err = Load(path); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSingleSandboxBackendConfiguration(t *testing.T) {
+	t.Setenv("WISPJAR_MASTER_KEY", "")
+	t.Setenv("WISPJAR_SANDBOX_KEY", "test-env-key")
+	for _, tc := range []struct {
+		name, body string
+		invalid    bool
+	}{
+		{"legacy", "opensandbox: {lifecycle_url: 'http://localhost:8081', use_server_proxy: true}", false},
+		{"explicit", "sandbox: {backend: opensandbox}\nopensandbox: {lifecycle_url: 'http://localhost:8081', use_server_proxy: true}", false},
+		{"unknown", "sandbox: {backend: unknown}", true},
+		{"empty", "sandbox: {backend: ''}", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(path, []byte(tc.body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := Load(path)
+			if tc.invalid {
+				if err == nil {
+					t.Fatal("accepted unsupported backend")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Sandbox.Backend != "opensandbox" || cfg.OpenSandbox.LifecycleURL != "http://localhost:8081" || !cfg.OpenSandbox.UseServerProxy || cfg.OpenSandbox.APIKey != "test-env-key" {
+				t.Fatal("legacy provider configuration or environment override changed")
+			}
+		})
 	}
 }

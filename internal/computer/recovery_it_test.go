@@ -46,8 +46,8 @@ func TestRecoveryRepositoryIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	c := store.Computer{ID: id.New(), OrgID: org, UserID: user, Generation: 4, Name: "recover", BackendID: "test", Status: "running"}
-	other := store.Computer{ID: id.New(), OrgID: org, UserID: user, Generation: 2, Name: "other", BackendID: "test", Status: "running"}
+	c := store.Computer{ID: id.New(), OrgID: org, UserID: user, Generation: 4, Name: "recover", Status: "running"}
+	other := store.Computer{ID: id.New(), OrgID: org, UserID: user, Generation: 2, Name: "other", Status: "running"}
 	for _, row := range []*store.Computer{&c, &other} {
 		if err := db.Create(row).Error; err != nil {
 			t.Fatal(err)

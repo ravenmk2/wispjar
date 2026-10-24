@@ -34,7 +34,6 @@ type Mount struct {
 	Name      string
 	ClaimName string
 	MountPath string
-	BackendID string
 }
 
 func checkIdentity(info Info, spec Spec) error {

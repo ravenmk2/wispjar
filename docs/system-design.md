@@ -11,7 +11,7 @@
 > - `docs/design/media.md`：图片工具、供应商文件引用、历史持久化与能力限制
 > - `docs/design/search.md`：网络搜索与网页读取供应商实例、独立全局默认与智能体选择、工具及界面
 > - `docs/design/computers.md`：用户云电脑与持久卷（目录、命名配置、并行执行、技能同步、退役升级及实施验收）
-> - `docs/design/sandbox-backends.md`：沙箱后端接口预览、原生文件读取与版本要求
+> - `docs/design/sandbox-backends.md`：单后端配置选择、中立接口、适配器与维护权限分离及实施范围
 > - `docs/design/frontend.md`：前端工程、界面详细规格与品牌图形资源
 
 ---

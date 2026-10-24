@@ -113,13 +113,7 @@ type Volumes interface {
 
 // Backend must validate the entire identity before connecting or mutating.
 // Ensure may adopt an existing generation after a lost create response.
-type Backend interface {
-	Ensure(context.Context, sandbox.ComputerSpec, bool) (*sandbox.Handle, error)
-	Inspect(context.Context, sandbox.ComputerSpec) (string, error)
-	Pause(context.Context, sandbox.ComputerSpec) error
-	Delete(context.Context, sandbox.ComputerSpec) error
-	Renew(context.Context, sandbox.ComputerSpec) error
-}
+type Backend = sandbox.Backend
 
 // TerminalRun is deliberately conservative: lease expiration does not prove
 // the associated remote commands have stopped.

@@ -73,6 +73,7 @@ func TestMigrationsMySQLIntegration(t *testing.T) {
 	}
 	testSystemDisplayNames(t, db, admin)
 	testRetireSessionSandboxes(t, db, admin)
+	testRemoveBackendIdentities(t, db, admin)
 }
 
 func testSystemDisplayNames(t *testing.T, db *gorm.DB, admin User) {

@@ -122,7 +122,7 @@ func (p *memoryProvider) Ensure(ctx context.Context, spec Spec) (Info, error) {
 }
 func service(t *testing.T, r Repository, p Provider) *Service {
 	t.Helper()
-	s, err := NewService(r, p, Options{BackendID: "local", Namespace: "main", NamePattern: naming.DefaultPattern})
+	s, err := NewService(r, p, Options{Namespace: "main", NamePattern: naming.DefaultPattern})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,25 +171,25 @@ func TestReadyMissingNeverRecreated(t *testing.T) {
 		t.Fatal("missing volume was recreated")
 	}
 }
-func TestRejectForeignLabelsAndStorageDomain(t *testing.T) {
-	r, p := newRepo(), newProvider()
-	s := service(t, r, p)
-	mounts, err := s.Ensure(context.Background(), testOrg, testUser)
-	if err != nil {
-		t.Fatal(err)
-	}
-	v := p.rows[mounts[0].ClaimName]
-	v.Labels = map[string]string{"wispjar.managed": "true"}
-	p.rows[v.Name] = v
-	if _, err = s.Ensure(context.Background(), testOrg, testUser); !errors.Is(err, ErrConflict) {
-		t.Fatalf("foreign volume accepted: %v", err)
-	}
-	s.options.BackendID = "elsewhere"
-	if _, err = s.Ensure(context.Background(), testOrg, testUser); !errors.Is(err, ErrUnavailable) {
-		t.Fatalf("wrong domain accepted: %v", err)
-	}
-	if p.creates != 3 {
-		t.Fatal("created outside registered domain")
+func TestRejectForeignLabels(t *testing.T) {
+	for _, key := range []string{"wispjar.managed", "wispjar.installation", "wispjar.volume-id", "wispjar.org-id", "wispjar.user-id", "wispjar.kind"} {
+		t.Run(key, func(t *testing.T) {
+			r, p := newRepo(), newProvider()
+			s := service(t, r, p)
+			mounts, err := s.Ensure(context.Background(), testOrg, testUser)
+			if err != nil {
+				t.Fatal(err)
+			}
+			v := p.rows[mounts[0].ClaimName]
+			v.Labels[key] = "foreign"
+			p.rows[v.Name] = v
+			if _, err = s.Ensure(context.Background(), testOrg, testUser); !errors.Is(err, ErrConflict) {
+				t.Fatalf("foreign volume accepted: %v", err)
+			}
+			if p.creates != 3 {
+				t.Fatal("created replacement for foreign volume")
+			}
+		})
 	}
 }
 func TestConcurrentEnsureAndCanceledWaiter(t *testing.T) {

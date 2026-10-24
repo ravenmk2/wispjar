@@ -18,17 +18,17 @@ import (
 )
 
 type Service struct {
-	repo                    Repository
-	volumes                 Volumes
-	backend                 Backend
-	installation, backendID string
-	settings                sandbox.SettingsSource
-	cancel                  context.CancelFunc
-	wg                      sync.WaitGroup
-	wake                    chan struct{}
-	hookMu                  sync.RWMutex
-	onChange                func(store.Computer)
-	onRecovery              func(context.Context, store.Computer) error
+	repo         Repository
+	volumes      Volumes
+	backend      Backend
+	installation string
+	settings     sandbox.SettingsSource
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
+	wake         chan struct{}
+	hookMu       sync.RWMutex
+	onChange     func(store.Computer)
+	onRecovery   func(context.Context, store.Computer) error
 }
 
 // SetRecoveryHandler reconciles runtime and skill state after the old instance
@@ -81,8 +81,8 @@ func (s *Service) changed(ctx context.Context, computerID string) {
 	}
 }
 
-func NewService(repo Repository, volumes Volumes, backend Backend, installation, backendID string, settings sandbox.SettingsSource) *Service {
-	return &Service{repo: repo, volumes: volumes, backend: backend, installation: installation, backendID: backendID, settings: settings, wake: make(chan struct{}, 1)}
+func NewService(repo Repository, volumes Volumes, backend Backend, installation string, settings sandbox.SettingsSource) *Service {
+	return &Service{repo: repo, volumes: volumes, backend: backend, installation: installation, settings: settings, wake: make(chan struct{}, 1)}
 }
 func (s *Service) available() error {
 	if s.backend == nil || s.volumes == nil || s.installation == "" {
@@ -220,7 +220,7 @@ func (s *Service) Create(ctx context.Context, org, user, key string, input Creat
 		return store.ResourceOperation{}, err
 	}
 	raw, _ := json.Marshal(c)
-	row := store.Computer{ID: id.New(), OrgID: org, UserID: user, Name: input.Name, BackendID: s.backendID, Generation: 1, Status: "stopped", Config: raw}
+	row := store.Computer{ID: id.New(), OrgID: org, UserID: user, Name: input.Name, Generation: 1, Status: "stopped", Config: raw}
 	op, err := newOperation(org, user, row.ID, "create", key, input)
 	if err != nil {
 		return op, err
@@ -242,6 +242,9 @@ func (s *Service) Action(ctx context.Context, org, user, computer, action, key s
 	}
 	if action != "start" && action != "pause" && action != "rebuild" && action != "delete" {
 		return store.ResourceOperation{}, ErrInvalid
+	}
+	if action == "pause" && !s.supportsPause() {
+		return store.ResourceOperation{}, sandbox.ErrUnsupported
 	}
 	op, err := newOperation(c.OrgID, user, c.ID, action, key, struct {
 		Computer string       `json:"computer_id"`
@@ -356,10 +359,7 @@ func (s *Service) spec(c store.Computer) (sandbox.ComputerSpec, error) {
 	if err := json.Unmarshal(c.Config, &cfg); err != nil {
 		return sandbox.ComputerSpec{}, err
 	}
-	if c.BackendID != s.backendID {
-		return sandbox.ComputerSpec{}, ErrUnavailable
-	}
-	return sandbox.ComputerSpec{Installation: s.installation, ComputerID: c.ID, OrgID: c.OrgID, UserID: c.UserID, BackendID: c.BackendID, Generation: c.Generation, SandboxID: c.SandboxID, Options: cfg.Options()}, nil
+	return sandbox.ComputerSpec{Installation: s.installation, ComputerID: c.ID, OrgID: c.OrgID, UserID: c.UserID, Generation: c.Generation, SandboxID: c.SandboxID, Options: cfg.Options()}, nil
 }
 
 // EnsureRunning waits for the durable operation. Call RegisterRun afterwards:
@@ -432,7 +432,7 @@ func (s *Service) EnsureRunning(ctx context.Context, org, user, id string) (stor
 		}
 	}
 }
-func (s *Service) Handle(ctx context.Context, org, user, id string) (*sandbox.Handle, error) {
+func (s *Service) Handle(ctx context.Context, org, user, id string) (sandbox.Instance, error) {
 	if err := s.available(); err != nil {
 		return nil, err
 	}
@@ -447,7 +447,17 @@ func (s *Service) Handle(ctx context.Context, org, user, id string) (*sandbox.Ha
 	if err != nil {
 		return nil, err
 	}
-	return s.backend.Ensure(ctx, spec, false)
+	return s.ensure(ctx, spec, sandbox.EnsurePolicy{})
+}
+
+// Maintainer is a trusted runtime dependency, never exposed through model tools
+// or public routes. The adapter verifies ownership of the connection handle.
+func (s *Service) Maintainer(instance sandbox.Instance) (sandbox.Maintainer, error) {
+	provider, ok := s.backend.(sandbox.MaintenanceProvider)
+	if !ok {
+		return nil, sandbox.ErrUnsupported
+	}
+	return provider.Maintainer(instance)
 }
 func (s *Service) RegisterRun(ctx context.Context, run store.ComputerRun, generation uint64) error {
 	if _, err := s.GetOwned(ctx, run.OrgID, run.UserID, run.ComputerID); err != nil {

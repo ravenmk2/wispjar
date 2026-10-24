@@ -62,3 +62,18 @@ func TestNativeListRelativePaths(t *testing.T) {
 		t.Fatalf("list=%+v err=%v", result, err)
 	}
 }
+
+type readOnlyInstance struct{ files sandbox.FileReader }
+
+func (readOnlyInstance) Ref() sandbox.InstanceRef             { return sandbox.InstanceRef{InstanceID: "readonly"} }
+func (i readOnlyInstance) Files() (sandbox.FileReader, error) { return i.files, nil }
+
+func TestFileReadNeedsNoMaintenanceOrCommandHandle(t *testing.T) {
+	f := &nativeReaderFixture{kind: "file", data: "hello", size: 5}
+	// No Handler, maintenance provider or execution tracker is available.
+	access := &fileAccess{instance: readOnlyInstance{files: f}}
+	got, err := access.operate(context.Background(), "/storage", "x", "read", map[string]any{"max_bytes": 10})
+	if err != nil || string(got.Content) != "hello" || access.handle != nil || access.execution != nil {
+		t.Fatalf("unexpected privileged access: %+v %v", got, err)
+	}
+}

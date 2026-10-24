@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	opensandbox "github.com/alibaba/OpenSandbox/sdks/sandbox/go"
 	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/store"
 	"github.com/ravenmk2/wispjar/internal/volume"
@@ -22,10 +21,10 @@ func TestOperationFailureClassifiesActionableCauses(t *testing.T) {
 	}{
 		{fmt.Errorf("adopt: %w", sandbox.ErrComputerMissing), "computer/instance_missing"},
 		{&net.DNSError{Err: "no such host", Name: "private.invalid"}, "computer/backend_dns"},
-		{&opensandbox.APIError{StatusCode: 500, Response: opensandbox.ErrorResponse{Code: "DOCKER::SANDBOX_START_FAILED", Message: "Egress sidecar did not become ready: Name or service not known"}}, "computer/backend_dns"},
+		{errors.New("Name or service not known"), "computer/backend_dns"},
 		{errors.New("Egress sidecar did not become ready within 30s"), "computer/network_not_ready"},
-		{&opensandbox.APIError{StatusCode: 403}, "computer/backend_auth"},
-		{&opensandbox.APIError{StatusCode: 500, Response: opensandbox.ErrorResponse{Code: "DOCKER::IMAGE_PULL_FAILED"}}, "computer/image_unavailable"},
+		{fmt.Errorf("backend response: %w", sandbox.ErrBackendAuth), "computer/backend_auth"},
+		{fmt.Errorf("backend response: %w", sandbox.ErrImageUnavailable), "computer/image_unavailable"},
 		{fmt.Errorf("request: %w", context.DeadlineExceeded), "computer/backend_timeout"},
 		{volume.ErrMissing, "volume/missing"},
 		{volume.ErrConflict, "volume/conflict"},

@@ -70,7 +70,6 @@ storage:
   data_dir: "./data"
   volumes:
     backend: "docker"
-    backend_id: "local"
     namespace: "main"
     name_pattern: "wj-{namespace}-{kind}-{volume_id}"
     docker_endpoint: "unix:///var/run/docker.sock"
@@ -92,7 +91,7 @@ runtime:
 
 Docker 模式使用 execd 自身的 `EXECD_ACCESS_TOKEN` / `X-EXECD-ACCESS-TOKEN` 鉴权；OpenSandbox 的 `secureAccess` 为另一层入口鉴权，当前 Docker runtime 不支持，不能用它代替实例内部的访问保护。适配器以 lifecycle API key 为密钥，按 installation、computer ID、generation 通过带域分离的 HMAC-SHA256 派生执行令牌，仅注入系统 daemon；不写入 API、metadata 或电脑配置。服务重启可重建同一令牌，空密钥拒绝创建；更换 lifecycle 密钥后须显式重建已有电脑。SDK 代理模式的默认 header 回退在限定的 execd 代理路由上覆写为该令牌。任务环境不继承 daemon 令牌，非 root 任务不得读取 root 进程环境。
 
-一个用户的三卷与其电脑必须位于同一个 backend/storage domain。`backend_id` 是该存储域的稳定身份，切换到其他后端时不得重新解释已有卷名。第一版不支持普通本地卷跨宿主机调度。未来共享存储 provider 可扩展，不改变数据库身份或容器路径。配额能力由 provider 声明，不把用量估算称为硬配额。
+一个部署使用一套沙箱后端与存储配置。三类卷由存储服务解析后挂载到该后端；安装标识、机构、用户、卷 ID 和种类标签共同验证资源归属。卷名在数据库中全局唯一。切换配置不会搬迁实例或卷，更换环境需要显式迁移资源。普通本地卷不支持跨宿主机调度。配额能力由 provider 声明，不把用量估算称为硬配额。
 
 ## 5. 数据模型
 
@@ -100,8 +99,8 @@ Docker 模式使用 execd 自身的 `EXECD_ACCESS_TOKEN` / `X-EXECD-ACCESS-TOKEN
 
 | 表 | 字段（除通用 created_at/updated_at） | 约束 |
 |---|---|---|
-| computer | id, org_id, user_id, name, backend_id, sandbox_id(nullable), generation, status, config(JSON), last_active_at, last_error | index(org_id,user_id,status), index(sandbox_id) |
-| user_volume | id, org_id, user_id, kind, backend_id, backend_name, status, policy(JSON), usage(JSON), last_error | unique(org_id,user_id,kind), unique(backend_id,backend_name) |
+| computer | id, org_id, user_id, name, sandbox_id(nullable), generation, status, config(JSON), last_active_at, last_error | index(org_id,user_id,status), index(sandbox_id) |
+| user_volume | id, org_id, user_id, kind, backend_name, status, policy(JSON), usage(JSON), last_error | unique(org_id,user_id,kind), unique(backend_name) |
 | user_agent_binding | org_id, user_id, agent_id, computer_id | primary(org_id,user_id,agent_id), index(computer_id) |
 | user_skill_state | org_id, user_id, skill_id, desired_revision, applied_revision, status, lock_owner, lock_until, fence, last_error | primary(org_id,user_id,skill_id) |
 | computer_run | id, org_id, user_id, computer_id, session_id, parent_run_id(nullable), agent_id, status, owner, lease_until, execution(JSON), manifest(JSON) | index(computer_id,status), index(session_id,status), index(parent_run_id), index(status,lease_until) |

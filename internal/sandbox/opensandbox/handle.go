@@ -1,9 +1,8 @@
-package sandbox
+package opensandbox
 
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,25 +11,12 @@ import (
 	"strings"
 
 	opensandbox "github.com/alibaba/OpenSandbox/sdks/sandbox/go"
+	"github.com/ravenmk2/wispjar/internal/sandbox"
 )
 
-type Options struct {
-	Image          string
-	TTLSeconds     int
-	ResourceLimits map[string]string
-	NetworkPolicy  json.RawMessage
-	// Env 注入沙箱的环境变量（创建时生效）。
-	Env map[string]string
-}
-
-type CommandResult struct {
-	ExitCode int
-	Stdout   string
-	Stderr   string
-	Output   string
-}
-
 type Handle struct {
+	ref       sandbox.InstanceRef
+	owner     *ComputerBackend
 	SandboxID string
 	ExecdURL  string
 
@@ -134,14 +120,23 @@ func (h *Handle) ReplaceInFile(ctx context.Context, remotePath, old, new string,
 	return r.ReplacedCount, nil
 }
 
-type FileInfo = opensandbox.FileInfo
+func fileInfo(info opensandbox.FileInfo) FileInfo { return FileInfo(info) }
+func fileInfos(items []opensandbox.FileInfo) []FileInfo {
+	result := make([]FileInfo, len(items))
+	for i, item := range items {
+		result[i] = fileInfo(item)
+	}
+	return result
+}
 
 func (h *Handle) SearchFiles(ctx context.Context, dir, pattern string) ([]FileInfo, error) {
-	return h.sandbox.SearchFiles(ctx, dir, pattern)
+	items, err := h.sandbox.SearchFiles(ctx, dir, pattern)
+	return fileInfos(items), backendError(err)
 }
 
 func (h *Handle) ListDir(ctx context.Context, remotePath string) ([]FileInfo, error) {
-	return h.sandbox.ListDirectory(ctx, remotePath)
+	items, err := h.sandbox.ListDirectory(ctx, remotePath)
+	return fileInfos(items), backendError(err)
 }
 
 func (h *Handle) FileInfo(ctx context.Context, remotePath string) (FileInfo, error) {
@@ -154,10 +149,10 @@ func (h *Handle) FileInfo(ctx context.Context, remotePath string) (FileInfo, err
 		return FileInfo{}, err
 	}
 	if fi, ok := m[remotePath]; ok {
-		return fi, nil
+		return fileInfo(fi), nil
 	}
 	for _, fi := range m {
-		return fi, nil
+		return fileInfo(fi), nil
 	}
 	return FileInfo{}, fmt.Errorf("%w: %s", os.ErrNotExist, remotePath)
 }

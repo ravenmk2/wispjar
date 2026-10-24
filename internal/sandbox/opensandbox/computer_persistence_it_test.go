@@ -1,4 +1,4 @@
-package sandbox
+package opensandbox
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/ravenmk2/wispjar/internal/config"
 	"github.com/ravenmk2/wispjar/internal/id"
+	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/store"
 	"github.com/ravenmk2/wispjar/internal/volume"
 )
@@ -41,7 +42,6 @@ func TestComputerPersistenceIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	volumes, err := volume.NewService(repo, provider, volume.Options{
-		BackendID: cfg.Storage.Volumes.BackendID,
 		Namespace: cfg.Storage.Volumes.Namespace, NamePattern: cfg.Storage.Volumes.NamePattern,
 	})
 	if err != nil {
@@ -59,10 +59,21 @@ func TestComputerPersistenceIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	backend := NewComputerBackend(NewClient(cfg.OpenSandbox.LifecycleURL, cfg.OpenSandbox.APIKey, true))
+	ensureHandle := func(ctx context.Context, spec ComputerSpec, create bool) (*Handle, error) {
+		instance, err := backend.Ensure(ctx, spec, sandbox.EnsurePolicy{AllowCreate: create, AllowResume: true})
+		if err != nil {
+			return nil, err
+		}
+		maintenance, err := backend.Maintainer(instance)
+		if err != nil {
+			return nil, err
+		}
+		return maintenance.(*Handle), nil
+	}
 	newSpec := func() ComputerSpec {
 		return ComputerSpec{
 			Installation: installation, ComputerID: id.New(), OrgID: orgID, UserID: userID,
-			BackendID: cfg.Storage.Volumes.BackendID, Generation: 1, Mounts: mounts,
+			Generation: 1, Mounts: mounts,
 			Options: Options{Image: "python:3.12-slim", TTLSeconds: 600,
 				ResourceLimits: map[string]string{"cpu": "1", "memory": "256Mi"}},
 		}
@@ -77,12 +88,12 @@ func TestComputerPersistenceIntegration(t *testing.T) {
 			}
 		}
 	})
-	a, err := backend.Ensure(ctx, first, true)
+	a, err := ensureHandle(ctx, first, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	first.SandboxID = &a.SandboxID
-	b, err := backend.Ensure(ctx, second, true)
+	b, err := ensureHandle(ctx, second, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +126,7 @@ print("anonymous execution rejected")'`, "/", nil, 10000, nil)
 	if err := backend.Pause(ctx, first); err != nil {
 		t.Fatal(err)
 	}
-	resumed, err := backend.Ensure(ctx, first, false)
+	resumed, err := ensureHandle(ctx, first, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +138,7 @@ print("anonymous execution rejected")'`, "/", nil, 10000, nil)
 	}
 	first.Generation++
 	first.SandboxID = nil
-	replacement, err := backend.Ensure(ctx, first, true)
+	replacement, err := ensureHandle(ctx, first, true)
 	if err != nil {
 		t.Fatal(err)
 	}

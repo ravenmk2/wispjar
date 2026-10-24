@@ -380,7 +380,6 @@ CREATE TABLE computer (
   org_id CHAR(32) NOT NULL,
   user_id CHAR(32) NOT NULL,
   name VARCHAR(128) NOT NULL,
-  backend_id VARCHAR(64) NOT NULL,
   sandbox_id VARCHAR(128) NULL,
   generation BIGINT UNSIGNED NOT NULL DEFAULT 0,
   status VARCHAR(16) NOT NULL DEFAULT 'stopped',
@@ -398,7 +397,6 @@ CREATE TABLE user_volume (
   org_id CHAR(32) NOT NULL,
   user_id CHAR(32) NOT NULL,
   kind VARCHAR(16) NOT NULL,
-  backend_id VARCHAR(64) NOT NULL,
   backend_name VARCHAR(63) NOT NULL,
   status VARCHAR(16) NOT NULL DEFAULT 'pending',
   policy JSON NOT NULL,
@@ -407,7 +405,7 @@ CREATE TABLE user_volume (
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   UNIQUE KEY uk_user_volume_owner (org_id, user_id, kind),
-  UNIQUE KEY uk_user_volume_backend (backend_id, backend_name)
+  UNIQUE KEY uk_user_volume_backend_name (backend_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE user_agent_binding (
@@ -499,7 +497,7 @@ ALTER TABLE skill
 
 ```
 
-- `backend_id` 是配置中的稳定存储域身份，不等同于后端类型；`backend_name` 首次落库后不再渲染。更换端点不能作为迁移已存在卷的手段。
+- 一个部署只使用一套存储配置；`backend_name` 全局唯一，首次落库后不再渲染。安装标识与资源归属标签验证实际卷身份，更换端点不会迁移已有资源。
 - `platform_setting` 中的 `volume.installation_id` 在首次卷操作时幂等建立，值为 JSON 字符串（32 位小写 UUID）。所有服务副本共享此身份；备份数据库时必须保留它。回滚 schema 不删除该标识或后端卷。
 - 卷服务按 `(org_id,user_id)` 使用 MySQL 命名锁串行化创建与检查，锁使用专用连接；外部请求期间没有 SQL 事务。取消/释放失败时丢弃物理连接，避免持锁连接回到池中。意图先落库，后端 Ensure 成功后才写 ready；网络超时或 DB 写失败可用同一卷名重试。
 - `ready/missing` 只允许 Inspect，不允许 Ensure；发现缺失写 missing。显式恢复的卷只有全部归属标签匹配时才能回到 ready。

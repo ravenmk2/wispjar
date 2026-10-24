@@ -15,6 +15,7 @@ import (
 // 7 and exercises the real startup migration with both old and current data.
 func testRetireSessionSandboxes(t *testing.T, db *gorm.DB, admin User) {
 	t.Helper()
+	restoreBackendIdentityFixture(t, db)
 	// Existing databases can use a different default from the application's
 	// explicit table collation. Exercise that upgrade under the same mismatch.
 	if err := db.Exec("ALTER DATABASE CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci").Error; err != nil {
@@ -28,14 +29,20 @@ func testRetireSessionSandboxes(t *testing.T, db *gorm.DB, admin User) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	down, err := migrationsFS.ReadFile("migrations/000008_remove_session_sandboxes.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for statement := range strings.SplitSeq(string(down), ";") {
-		if strings.TrimSpace(statement) != "" {
-			if _, err := conn.ExecContext(context.Background(), statement); err != nil {
-				t.Fatal(err)
+	// Remove later schema too: replaying from version 7 must not encounter
+	// tables already created by subsequent migrations.
+	for _, name := range []string{
+		"000011_builtin_fetch_label", "000010_web_fetch", "000009_web_search", "000008_remove_session_sandboxes",
+	} {
+		down, err := migrationsFS.ReadFile("migrations/" + name + ".down.sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for statement := range strings.SplitSeq(string(down), ";") {
+			if strings.TrimSpace(statement) != "" {
+				if _, err := conn.ExecContext(context.Background(), statement); err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
 	}
@@ -52,9 +59,9 @@ func testRetireSessionSandboxes(t *testing.T, db *gorm.DB, admin User) {
 		&ModelProvider{ID: provider, Name: "fixture", Type: "openai", BaseURL: "http://localhost", APIKeyEnc: []byte{}, CreatedBy: admin.ID, Status: "active"},
 		&Model{ID: model, ProviderID: provider, ModelCode: "fixture", DisplayName: "fixture", Status: "active", Capabilities: json.RawMessage(`{}`), DefaultParams: json.RawMessage(`{}`)},
 		&Agent{ID: agentID, OrgID: id.PlatformOrgID, Name: "fixture", Description: "", SystemPrompt: "", ModelID: model, CreatedBy: admin.ID, Status: "published", ModelParams: json.RawMessage(`{}`), ToolsEnabled: json.RawMessage(`{}`)},
-		&Computer{ID: computerID, OrgID: id.PlatformOrgID, UserID: admin.ID, Name: "retained", Status: "stopped", BackendID: "test"},
+		&Computer{ID: computerID, OrgID: id.PlatformOrgID, UserID: admin.ID, Name: "retained", Status: "stopped"},
 	} {
-		if err := db.Create(fixture).Error; err != nil {
+		if err := db.Omit("SearchProviderID", "FetchProviderID").Create(fixture).Error; err != nil {
 			t.Fatal(err)
 		}
 	}

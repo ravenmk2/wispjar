@@ -18,6 +18,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/gateway/respond"
 	"github.com/ravenmk2/wispjar/internal/runtime/tools"
+	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/session"
 )
 
@@ -54,6 +55,7 @@ func relativeFilePath(value string) (string, error) {
 type scopedFileOperation func(root, relative, op string, extra map[string]any) (fileResponse, error)
 
 type fileAccess struct {
+	instance         sandbox.Instance
 	handler          *Handler
 	session          *session.Detail
 	handle           tools.Handle
@@ -102,16 +104,29 @@ func (h *Handler) openFileAccess(ctx context.Context, uid, sessionID, scope stri
 	if err != nil {
 		return nil, err
 	}
-	handle, err := h.computers.Handle(ctx, sess.OrgID, sess.UserID, computer.ID)
+	instance, err := h.computers.Handle(ctx, sess.OrgID, sess.UserID, computer.ID)
 	if err != nil {
 		_ = h.computers.FinishRun(context.Background(), runID, sess.UserID, "failed")
 		return nil, err
 	}
-	return &fileAccess{handler: h, session: sess, handle: handle, execution: tools.NewExecutionHandle(handle), root: root, runID: runID, generation: computer.Generation}, nil
+	return &fileAccess{instance: instance, handler: h, session: sess, root: root, runID: runID, generation: computer.Generation}, nil
+}
+
+func (a *fileAccess) ensureMaintenance() error {
+	if a.handle != nil {
+		return nil
+	}
+	handle, err := a.handler.computers.Maintainer(a.instance)
+	if err != nil {
+		return err
+	}
+	a.handle = handle
+	a.execution = tools.NewExecutionHandle(handle)
+	return nil
 }
 
 func (a *fileAccess) close() {
-	if !a.controlUncertain && a.execution.CommandsStopped() {
+	if !a.controlUncertain && (a.execution == nil || a.execution.CommandsStopped()) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = a.handler.computers.FinishRun(ctx, a.runID, a.session.UserID, "completed")
@@ -126,6 +141,9 @@ func (a *fileAccess) operate(ctx context.Context, root, relative, op string, ext
 	}
 	// Existing workspaces are read without root maintenance. A new session
 	// may not have its directories yet; initialize only on that cold path.
+	if err = a.ensureMaintenance(); err != nil {
+		return fileResponse{}, err
+	}
 	if err = a.handler.initializeFileWorkspace(ctx, a.handle, a.session, a.runID); err != nil {
 		// initializeFileWorkspace releases a confirmed failure itself, and
 		// retains occupancy when remote completion is unknown.

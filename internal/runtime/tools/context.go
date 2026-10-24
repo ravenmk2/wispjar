@@ -17,16 +17,8 @@ import (
 
 type ctxKey struct{}
 
-// Handle 是沙箱操作句柄的接口（*sandbox.Handle 实现；测试可 fake）。
-type Handle interface {
-	RunCommand(ctx context.Context, cmd, cwd string, env map[string]string, timeoutMs int64, onEvent func(stream, chunk string)) (*sandbox.CommandResult, error)
-	UploadFile(ctx context.Context, remotePath string, content []byte) error
-	DownloadFile(ctx context.Context, remotePath string) ([]byte, error)
-	ReplaceInFile(ctx context.Context, remotePath, old, new string, replaceAll bool) (int, error)
-	SearchFiles(ctx context.Context, dir, pattern string) ([]sandbox.FileInfo, error)
-	ListDir(ctx context.Context, remotePath string) ([]sandbox.FileInfo, error)
-	FileInfo(ctx context.Context, remotePath string) (sandbox.FileInfo, error)
-}
+// Handle is the synchronous protocol used by supervised workload tools.
+type Handle = sandbox.Operations
 
 // Meta 记录一次工具执行的 tool/result meta（render/截断/diff/耗时/沙箱）。
 type Meta struct {

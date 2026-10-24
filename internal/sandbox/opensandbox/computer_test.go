@@ -1,4 +1,4 @@
-package sandbox
+package opensandbox
 
 import (
 	"net/http"
@@ -10,23 +10,23 @@ import (
 )
 
 func TestComputerIdentityAndPersistentMounts(t *testing.T) {
-	s := ComputerSpec{Installation: "installation", ComputerID: "computer", OrgID: "org", UserID: "user", BackendID: "local", Generation: 3}
-	if s.metadata()["wispjar"] == "1" {
+	s := ComputerSpec{Installation: "installation", ComputerID: "computer", OrgID: "org", UserID: "user", Generation: 3}
+	if metadata(s)["wispjar"] == "1" {
 		t.Fatal("legacy reaper can discover computer")
 	}
-	info := opensandbox.SandboxInfo{Metadata: s.metadata()}
-	if !s.matches(info) {
+	info := opensandbox.SandboxInfo{Metadata: metadata(s)}
+	if !matches(s, info) {
 		t.Fatal("same identity rejected")
 	}
-	for _, key := range []string{"wispjar", "wispjar-installation", "wispjar-generation", "wispjar-computer", "wispjar-user", "wispjar-org", "wispjar-backend"} {
-		info.Metadata = s.metadata()
+	for _, key := range []string{"wispjar", "wispjar-installation", "wispjar-generation", "wispjar-computer", "wispjar-user", "wispjar-org"} {
+		info.Metadata = metadata(s)
 		info.Metadata[key] = "other"
-		if s.matches(info) {
+		if matches(s, info) {
 			t.Fatalf("ignored identity %s", key)
 		}
 	}
 	for _, kind := range []string{"storage", "agents", "sessions"} {
-		s.Mounts = append(s.Mounts, volume.Mount{Name: kind, ClaimName: "volume-" + kind, MountPath: "/" + kind, BackendID: "local"})
+		s.Mounts = append(s.Mounts, volume.Mount{Name: kind, ClaimName: "volume-" + kind, MountPath: "/" + kind})
 	}
 	mounts, err := computerVolumes(s)
 	if err != nil {
@@ -37,9 +37,9 @@ func TestComputerIdentityAndPersistentMounts(t *testing.T) {
 			t.Fatal("unsafe volume lifecycle flags")
 		}
 	}
-	s.Mounts[0].BackendID = "other"
+	s.Mounts[0].MountPath = "/other"
 	if _, err = computerVolumes(s); err == nil {
-		t.Fatal("cross-storage-domain mount accepted")
+		t.Fatal("incorrect mount path accepted")
 	}
 }
 
@@ -72,10 +72,10 @@ func TestComputerProxyTokenOverrideIsScoped(t *testing.T) {
 }
 
 func TestComputerExecutionEndpointAndRootEnvironment(t *testing.T) {
-	s := ComputerSpec{Installation: "installation", ComputerID: "computer", OrgID: "org", UserID: "user", BackendID: "local", Generation: 1,
+	s := ComputerSpec{Installation: "installation", ComputerID: "computer", OrgID: "org", UserID: "user", Generation: 1,
 		Options: Options{Image: "python:3.12", TTLSeconds: 3600, Env: map[string]string{"LD_PRELOAD": "/storage/payload.so", "PATH": "/storage/bin", "USER_SECRET": "secret"}}}
 	for _, kind := range []string{"storage", "agents", "sessions"} {
-		s.Mounts = append(s.Mounts, volume.Mount{Name: kind, ClaimName: "volume-" + kind, MountPath: "/" + kind, BackendID: "local"})
+		s.Mounts = append(s.Mounts, volume.Mount{Name: kind, ClaimName: "volume-" + kind, MountPath: "/" + kind})
 	}
 	opts, err := computerCreateOptions(s)
 	if err != nil {

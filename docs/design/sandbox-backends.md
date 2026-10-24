@@ -1,99 +1,110 @@
-# 沙箱后端接口预览
+# 沙箱后端接口设计与实施
 
-状态：设计草案，供评审；本轮仅落地 `FileReader` 原生读取接口，不进行全系统后端迁移。
+状态：后端中立接口、OpenSandbox 适配器拆包、Instance 接线和维护权限分离已实施。本次只提供 OpenSandbox 一个实际后端。
 
-## 边界
+## 单后端配置与组装
 
-一个云电脑实例属于一个用户。workspace、storage、agent scope 是导航起点，不是同一实例内部的安全隔离域；跨用户、跨电脑、generation 和平台维护权限仍须隔离。工作负载使用非 root 身份，业务调用方不能任意选择 UID 0。
+一个 Wispjar 进程在启动时选择一个沙箱实现，所有云电脑使用同一个后端对象。选择来自配置文件，修改后重启生效；不做按用户/电脑路由、热切换、后端注册表或多后端管理界面。
 
-目前已有 `computer.Backend`，但其 `Ensure` 返回具体的 `*sandbox.Handle`；文件元数据仍有 SDK 类型别名，挂载计划直接映射 PVC。这些依赖使替换后端仍需改业务代码。可将稳定契约放在 `internal/sandbox`，把 OpenSandbox SDK、认证、端点和类型转换移入 `internal/sandbox/opensandbox`。
+```yaml
+sandbox:
+  backend: opensandbox
+
+opensandbox:
+  lifecycle_url: http://localhost:8081
+  api_key: ""
+  use_server_proxy: false
+```
+
+省略 `sandbox.backend` 时默认 `opensandbox`，保留原来的顶层 `opensandbox` 配置以及 `WISPJAR_SANDBOX_KEY` 覆盖行为。当前只接受 `opensandbox`，其他值和显式空值启动时报错；不能将未知实现静默回退到 OpenSandbox。未配置 lifecycle URL 时沿用原行为，沙箱服务不启用。
+
+`cmd/wispjar/sandbox.go` 使用一个简单的 switch 构造实现，主程序只构造一次并注入 computer 服务。将来真正接入另一实现时，再添加适配器、配置校验和构造分支，无需提前建设注册机制。
 
 ```mermaid
 flowchart LR
-  A[computer 生命周期与归属] --> B[sandbox.Backend]
-  C[runtime 命令与文件] --> D[sandbox.Instance]
-  B --> D
-  D --> E[OpenSandbox 适配器]
-  D --> F[其他后端适配器]
-  A --> G[volume.Provider 持久卷管理]
+  A[配置文件 sandbox.backend] --> B[启动时选择一个实现]
+  B --> C[sandbox.Backend 单实例]
+  D[computer 服务] --> C
+  C --> E[sandbox.Instance]
+  F[runtime 文件浏览] --> E
+  D --> G[volume.Provider]
 ```
 
-## 核心契约示意
+## 单后端与资源身份
 
-以下是接口形状预览，所引用的 DTO 应由本项目定义，不能使用供应商 SDK 类型。最终命名在实现阶段统一。
+`sandbox.backend` 在启动时选择唯一实现，当前仅支持 `opensandbox`；`storage.volumes.backend` 选择存储驱动，当前为 `docker`。不设置额外的后端实例 ID，也不在电脑、用户卷、挂载或沙箱引用中持久化它。
+
+数据库属于当前部署环境。实例使用安装标识、ComputerID、用户、机构和 Generation 验证身份；卷使用安装标识、卷 ID、用户、机构和种类标签验证归属，卷名在数据库内全局唯一。更换端点或后端实现不等于迁移资源，已有实例及卷需要显式迁移。
+
+迁移 12 删除电脑和用户卷的旧后端标识列，卷名唯一约束改为全库唯一，不提供旧字段读写兼容层或自动降级。
+
+## 核心接口
+
+契约位于 `internal/sandbox`；SDK、认证、端点、PVC 和元数据转换位于 `internal/sandbox/opensandbox`。computer/runtime 不导入适配器或 SDK。
 
 ```go
 type Backend interface {
-    Capabilities() Capabilities
-    Ensure(context.Context, InstanceSpec, EnsurePolicy) (Instance, error)
-    Inspect(context.Context, InstanceRef) (InstanceInfo, error)
-    Delete(context.Context, InstanceRef) error
+    Ensure(context.Context, ComputerSpec, EnsurePolicy) (Instance, error)
+    Inspect(context.Context, ComputerSpec) (string, error)
+    Delete(context.Context, ComputerSpec) error
 }
+
+type EnsurePolicy struct { AllowCreate, AllowResume bool }
 
 type Instance interface {
     Ref() InstanceRef
-    Commands() Commands
-    Files() FileSystem // 固定工作负载身份，不暴露 root 或任意 UID 参数
+    Files() (FileReader, error)
 }
 
-type Commands interface {
-    Start(context.Context, CommandSpec) (Execution, error)
-}
-
-type Execution interface {
-    ID() string
-    Wait(context.Context, func(OutputEvent)) (CommandResult, error)
-    Stop(context.Context) (StopResult, error)
-}
-
-type FileReader interface { // 本轮已落地的最小切片
+type FileReader interface {
     List(context.Context, string) ([]FileEntry, error)
     Stat(context.Context, string) (FileEntry, error)
     Open(context.Context, string, int64) (io.ReadCloser, error)
 }
+```
 
-type FileSystem interface {
-    FileReader
-    Put(context.Context, string, io.Reader, PutOptions) error
-    Mkdir(context.Context, string, MkdirOptions) error
-    Remove(context.Context, string, RemoveOptions) error
-}
+`Ensure` 区分连接、允许创建和允许恢复。普通连接使用零值策略；已知实例 ID 消失时不自动补建。创建结果未知时按身份发现，避免重复创建。computer 服务核对返回的 ComputerID、Generation 和实例 ID。
 
-// 可选能力：不强迫所有后端假装支持暂停或租约。
+`ComputerSpec` 携带资源归属、代次、实例引用、运行配置和已解析的挂载计划。业务归属、重建、运行占用及技能修订由业务层管理，适配器只负责供应商操作，不再建立另一套持久生命周期状态机。
+
+一个云电脑整体属于一个用户。workspace、storage、agent scope 是导航起点，不作为实例内部隔离域；跨用户和代次检查仍保留。普通文件操作使用工作负载身份，OpenSandbox 实现当前采用 UID/GID 65532。
+
+FileEntry/FileInfo/CommandResult 是项目自己的类型。文件通过流传输，调用方关闭流并有界读取；预览限额属于业务规则。没有后端原生文件 API 时明确失败，不回退到 root 文件接口。
+
+## 可选能力与维护
+
+暂停和续期的差异与是否同时启用多个后端无关，保留两个可选接口即可。不再另外维护 `Capabilities` 布尔声明，避免两套能力信息不一致。
+
+```go
 type Pausable interface {
-    Pause(context.Context, InstanceRef) error
-    Resume(context.Context, InstanceRef) error
+    Pause(context.Context, ComputerSpec) error
 }
+
 type Renewable interface {
-    Renew(context.Context, InstanceRef, time.Duration) error
+    Renew(context.Context, ComputerSpec) error
+}
+
+type MaintenanceProvider interface {
+    Maintainer(Instance) (Maintainer, error)
 }
 ```
 
-`InstanceRef` 包含 BackendID、供应商实例 ID、ComputerID、Generation；`InstanceSpec` 另包含 installation/org/user 身份、镜像、资源、网络规则及中立挂载描述。规格不包含凭据，认证由适配器配置。`EnsurePolicy` 显式区分仅连接和允许创建，未知创建结果必须先按身份发现，避免重复创建。
+实现 Pausable 即可暂停，恢复通过 EnsurePolicy 显式授权。没有暂停接口时拒绝显式暂停并跳过后台空闲暂停；没有 Renewable 时跳过续期。OpenSandbox 实现这两种能力。
 
-`FileEntry` 由项目定义 path/kind/size/modifiedAt；流的关闭由调用者负责，取消请求必须关闭 HTTP 传输。`Open` 的大小限制是传输上限，调用方仍需有界读取；超过业务限额应报错或显式标注截断。scope 不承诺 race-safe 目录 confinement。符号链接和特殊文件支持以能力和适配器实际行为为准，不声称所有后端完全一致。
+Maintainer 保留现有同步 Operations 和平台导出流接口，供受信服务初始化目录、安装技能和生成下载快照。普通 Instance 使用独立包装对象，不能通过类型断言取得维护句柄。MaintenanceProvider 校验连接属于自身；这个检查也防止旧配置或错误连接混用，不要求运行多个后端。
 
-`CommandSpec` 需要 cwd/env/timeout 与 shell 或 argv 的明确选择；`OutputEvent` 带 stdout/stderr 和原始字节，不补换行。`StopResult` 区分已确认停止与状态未知，网络取消不能等同于远端进程终止。当前受监督执行协议应保留在命令实现中，确认停止前不得释放维护占用。
+普通文件浏览不获取维护句柄；初始化、写入或导出时才获取。运行时仍通过 ExecutionHandle 降权、监督命令，并在确认远端停止后释放占用；取消本地请求不等于命令停止。
 
-`PutOptions` 必须明确是否允许覆盖、是否要求原子提交；不支持的后端返回 Unsupported，不能悄悄降级为覆盖写。长时间下载快照、目录打包属于上层作业，复用文件流或后端专用能力，不塞入基础接口。
+SDK 错误在适配器边界转换成项目错误类别，并保留内部 cause。文件不存在和权限错误使用 io/fs 类别；业务层不依赖 SDK 错误类型。
 
-统一错误至少区分 NotFound、PermissionDenied、Conflict、Unsupported、Unavailable、CompletionUnknown，使用 `errors.Is/As`；适配器保留内部原因供日志诊断，业务响应不泄露供应商凭据。
+## 本次范围与验证
 
-## 持久卷与维护能力
+已实现：单后端配置选择、中立类型、适配器拆包、Instance 接线、维护权限分离、可选暂停/续期、后端标识字段删除和数据库迁移。验证覆盖身份、创建/恢复、无维护文件读取、迁移数据保留和全局卷名唯一约束。测试内存桩不注册为产品后端。
 
-保留独立 `volume.Provider`。挂载描述表达 claim、目标路径和只读属性，后端检查存储域与挂载能力。换后端不等于可以自动挂载原 Docker volume；跨存储域迁移需要显式导出/导入流程。
+本次不增加其他实际沙箱、后端路由、多后端界面、跨后端迁移、异步命令对象或完整文件写入新协议。已有同步命令和上传/保存语义继续使用；以后出现具体需求时再扩展，避免提前扩大接口。
 
-技能安装、目录初始化和只读导出快照目前依赖受信维护能力。另设仅注入 computer/skill 管理服务的 `Maintainer`，任务工具仅获得 `Instance`。不将维护命令或 root 文件接口挂在公开的 `Instance` 上，也不把 Wispjar 技能修订协议变成所有沙箱后端的硬编码方法。
+## OpenSandbox 版本
 
-## 迁移顺序
-
-1. 本轮：SDK v1.1.1 + 官方 execd release-1.1.1；文件列表、读取、预览走 `FileReader`，UID/GID 固定为 65532。上传、保存和下载打包保留现有明确的冲突及快照语义。
-2. 评审后：定义中立 DTO/error，移除 SDK 类型别名，把现有适配器迁移到子包；`computer.Backend` 返回 `Instance`，运行时不再依赖具体 Handle 字段。
-3. 收敛命令及受信维护契约，按能力注册后端工厂；持久记录继续用 BackendID + 实例 ID + generation，不另建重复的生命周期状态机。
-4. 接第二种真实后端，跑同一组契约测试：归属与重建隔离、创建结果未知恢复、输出字节、取消停止确认、文件限制和并发、暂停能力、持久卷保留。由真实差异验证抽象，而不是先写空实现。
-
-## 版本与升级
-
-官方 Go SDK：`github.com/alibaba/OpenSandbox/sdks/sandbox/go v1.1.1`；execd 镜像标签为 `release-1.1.1`。身份文件路由是 `/v1/filesystem/{uid}/{gid}`，不支持时明确报错，不回退到默认 root 文件 API。现有实例中 execd 位于各自 runtime 卷，仅修改 server 默认镜像不会更新已有实例；升级须在空闲时执行，并验证实例、用户三卷及命令协议，保留回滚入口。
+Go SDK 为 `github.com/alibaba/OpenSandbox/sdks/sandbox/go v1.1.1`，官方 execd 镜像标签为 `release-1.1.1`。身份文件路由是 `/v1/filesystem/{uid}/{gid}`。已有实例的 execd 位于各自 runtime 卷，修改 server 默认镜像不会升级已有实例；升级应在空闲时执行并保留回滚入口。
 
 参考：[官方 release-1.1.1](https://github.com/opensandbox-group/OpenSandbox/releases/tag/release-1.1.1)、[Go 身份文件接口](https://github.com/opensandbox-group/OpenSandbox/blob/release-1.1.1/sdks/sandbox/go/filesystem_identity.go)。

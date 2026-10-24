@@ -72,9 +72,9 @@ func main() {
 	authSvc := auth.NewService(db, jwtSecret, cfg.TokenTTL())
 
 	settingsSource := sandbox.NewCachedSettingsSource(sandbox.NewDBSettingsSource(db), 30*time.Second)
-	var computerBackend computer.Backend
-	if cfg.OpenSandbox.LifecycleURL != "" {
-		computerBackend = sandbox.NewComputerBackend(sandbox.NewClient(cfg.OpenSandbox.LifecycleURL, cfg.OpenSandbox.APIKey, cfg.OpenSandbox.UseServerProxy))
+	computerBackend, err := newSandboxBackend(cfg)
+	if err != nil {
+		log.Fatalf("sandbox backend: %v", err)
 	}
 	volumeRepo := volume.NewGORMRepository(db)
 	installationID, err := volumeRepo.InstallationID(context.Background())
@@ -88,7 +88,7 @@ func main() {
 			log.Fatalf("volume provider: %v", err)
 		}
 		volumeService, err = volume.NewService(volumeRepo, provider, volume.Options{
-			BackendID: cfg.Storage.Volumes.BackendID, Namespace: cfg.Storage.Volumes.Namespace, NamePattern: cfg.Storage.Volumes.NamePattern,
+			Namespace: cfg.Storage.Volumes.Namespace, NamePattern: cfg.Storage.Volumes.NamePattern,
 		})
 		if err != nil {
 			log.Fatalf("volume service: %v", err)
@@ -98,7 +98,7 @@ func main() {
 	if volumeService != nil {
 		volumes = volumeService
 	}
-	computerSvc := computer.NewService(computer.NewGORMRepository(db), volumes, computerBackend, installationID, cfg.Storage.Volumes.BackendID, settingsSource)
+	computerSvc := computer.NewService(computer.NewGORMRepository(db), volumes, computerBackend, installationID, settingsSource)
 
 	agentSvc := agent.NewService(db)
 	sessionSvc := session.NewService(db, agentSvc)

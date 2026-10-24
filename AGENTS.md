@@ -27,7 +27,7 @@ wispjar/
 - docs/design/media.md：图片工具、供应商文件引用、历史持久化与能力限制
 - docs/design/search.md：网络搜索与网页读取、多供应商共享实例、独立默认与智能体选择、工具、UI 和验收
 - docs/design/computers.md：用户云电脑、三类持久卷、目录与命名配置、并行运行、技能同步、退役升级及实施验收任务
-- docs/design/sandbox-backends.md：沙箱后端中立接口设计预览、原生文件读取与版本要求
+- docs/design/sandbox-backends.md：单后端配置选择、中立接口、适配器与维护权限分离及实施范围
 - docs/design/theme.md：界面主题设计 token 规范（深浅双主题色板、字体、圆角阴影与 CSS 变量映射）
 - docs/design/frontend.md：前端工程与界面详细规格
 

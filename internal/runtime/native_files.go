@@ -23,15 +23,15 @@ func fileContent(result fileResponse) ([]byte, error) {
 
 func (a *fileAccess) fileOperation(ctx context.Context, root, relative, op string, extra map[string]any) (fileResponse, error) {
 	if op != "list" && op != "read" && op != "stat" {
+		if err := a.ensureMaintenance(); err != nil {
+			return fileResponse{}, err
+		}
 		return remoteFileOperation(ctx, a.execution, root, relative, op, extra)
 	}
-	provider, ok := a.handle.(interface {
-		UserFiles() (sandbox.FileReader, error)
-	})
-	if !ok {
+	if a.instance == nil {
 		return fileResponse{}, sandbox.ErrFileAPIUnavailable
 	}
-	files, err := provider.UserFiles()
+	files, err := a.instance.Files()
 	if err != nil {
 		return fileResponse{}, err
 	}
@@ -45,7 +45,7 @@ func (a *fileAccess) fileOperation(ctx context.Context, root, relative, op strin
 		return result, &session.Error{Status: 404, Code: "file/not_found", Message: "文件不存在"}
 	}
 	if errors.Is(err, sandbox.ErrFileAPIUnavailable) {
-		err = &session.Error{Status: 503, Code: "file/api_unavailable", Message: "云电脑需要升级 execd 至 release-1.1.1"}
+		err = &session.Error{Status: 503, Code: "file/api_unavailable", Message: "当前沙箱后端不支持原生文件读取，请检查后端版本和配置"}
 	} else if errors.Is(err, fs.ErrPermission) {
 		err = &session.Error{Status: 403, Code: "file/forbidden", Message: "任务用户无权访问此文件"}
 	}

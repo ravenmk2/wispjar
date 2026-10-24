@@ -255,6 +255,10 @@ func (h *Handler) prepareDownload(ctx context.Context, job *fileDownload) {
 	args := map[string]any{"op": "export", "id": job.ID, "root": access.root, "path": job.source,
 		"archive": job.archive, "name": strings.TrimSuffix(job.Name, ".zip"), "max_bytes": limits.MaxBytes,
 		"max_entries": limits.MaxEntries, "timeout": limits.PrepareTimeout.Seconds()}
+	if err = access.ensureMaintenance(); err != nil {
+		prepareErr = err
+		return
+	}
 	result, stopped, err := exportFile(ctx, access.handle, args, limits.PrepareTimeout)
 	access.controlUncertain = !stopped
 	if stopped {

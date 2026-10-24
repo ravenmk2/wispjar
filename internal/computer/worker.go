@@ -164,13 +164,14 @@ func (s *Service) Process(ctx context.Context, operationID string) (err error) {
 			return err
 		}
 		op.Progress, _ = json.Marshal(plan)
-		h, err := s.backend.Ensure(ctx, spec, allowCreate)
+		h, err := s.ensure(ctx, spec, sandbox.EnsurePolicy{AllowCreate: allowCreate, AllowResume: true})
 		if err != nil {
 			return finish(nil, "failed", err)
 		}
-		return finish(&h.SandboxID, "running", nil)
+		sid := h.Ref().InstanceID
+		return finish(&sid, "running", nil)
 	case "computer/pause":
-		err = s.backend.Pause(ctx, spec)
+		err = s.pause(ctx, spec)
 		return finish(c.SandboxID, "paused", err)
 	case "computer/delete":
 		err = s.backend.Delete(ctx, spec)
@@ -208,14 +209,14 @@ func (s *Service) maintain(ctx context.Context) {
 		if e == nil && current.Generation == c.Generation && current.Status == c.Status {
 			spec, err := s.spec(current)
 			if err == nil {
-				err = s.backend.Renew(ctx, spec)
+				err = s.renew(ctx, spec)
 			}
 			if err != nil {
 				log.Printf("computer: renew %s: %v", c.ID, err)
 			}
 		}
 		_ = unlock()
-		if c.Status == "running" && c.LastActiveAt != nil && time.Since(*c.LastActiveAt) > idle {
+		if s.supportsPause() && c.Status == "running" && c.LastActiveAt != nil && time.Since(*c.LastActiveAt) > idle {
 			// Intent's locked run check closes the idle-check/task-start race.
 			op, _ := newOperation(c.OrgID, c.UserID, c.ID, "pause", "", nil)
 			op.Progress, _ = json.Marshal(map[string]any{"idle_before": time.Now().Add(-idle)})

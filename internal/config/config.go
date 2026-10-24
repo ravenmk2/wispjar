@@ -51,6 +51,9 @@ type Config struct {
 	Runtime struct {
 		MaxParallelTasks int `yaml:"max_parallel_tasks"`
 	} `yaml:"runtime"`
+	Sandbox struct {
+		Backend string `yaml:"backend"`
+	} `yaml:"sandbox"`
 	OpenSandbox struct {
 		LifecycleURL   string `yaml:"lifecycle_url"`
 		APIKey         string `yaml:"api_key"`
@@ -70,6 +73,7 @@ func Load(path string) (*Config, error) {
 	cfg.Storage.Volumes = DefaultVolumesConfig()
 	cfg.Storage.Downloads = DownloadsConfig{MaxBytes: 20 << 30, MaxStagedBytes: 40 << 30, MaxEntries: 100000, TTL: Duration(30 * time.Minute), PrepareTimeout: Duration(30 * time.Minute)}
 	cfg.Runtime.MaxParallelTasks = 4
+	cfg.Sandbox.Backend = "opensandbox"
 
 	data, err := os.ReadFile(path)
 	switch {
@@ -95,6 +99,9 @@ func Load(path string) (*Config, error) {
 		cfg.OpenSandbox.APIKey = v
 	}
 	cfg.AdminPassword = os.Getenv("WISPJAR_ADMIN_PASSWORD")
+	if cfg.Sandbox.Backend != "opensandbox" {
+		return nil, fmt.Errorf("sandbox.backend: unsupported backend %q", cfg.Sandbox.Backend)
+	}
 	if cfg.Runtime.MaxParallelTasks < 1 || cfg.Runtime.MaxParallelTasks > 32 {
 		return nil, errors.New("runtime.max_parallel_tasks must be between 1 and 32")
 	}
@@ -126,20 +133,16 @@ type DownloadsConfig struct {
 
 type VolumesConfig struct {
 	Backend        string `yaml:"backend"`
-	BackendID      string `yaml:"backend_id"`
 	Namespace      string `yaml:"namespace"`
 	NamePattern    string `yaml:"name_pattern"`
 	DockerEndpoint string `yaml:"docker_endpoint"`
 }
 
 func DefaultVolumesConfig() VolumesConfig {
-	return VolumesConfig{Backend: "docker", BackendID: "local", Namespace: "main", NamePattern: naming.DefaultPattern}
+	return VolumesConfig{Backend: "docker", Namespace: "main", NamePattern: naming.DefaultPattern}
 }
 
 func (c VolumesConfig) Validate() error {
-	if c.BackendID == "" || len(c.BackendID) > 64 {
-		return fmt.Errorf("backend_id must contain 1 to 64 characters")
-	}
 	if c.Backend != "docker" {
 		return fmt.Errorf("unsupported backend %q", c.Backend)
 	}

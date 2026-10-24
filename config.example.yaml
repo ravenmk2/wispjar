@@ -35,7 +35,6 @@ storage:
     prepare_timeout: 30m
   volumes:
     backend: "docker"
-    backend_id: "local" # 稳定存储域标识；已有卷不可跨域自动迁移
     namespace: "main"
     # 必须包含 volume_id；可用 namespace/kind/volume_id/org_id/user_id。
     # 首次创建后卷名落库固定，修改此配置只影响新卷。
@@ -48,6 +47,11 @@ storage:
 runtime:
   # 单个主 turn 同时运行的 subagent 上限，范围 1..32。
   max_parallel_tasks: 4
+
+sandbox:
+  # 每次启动只启用一个后端；当前仅实现 opensandbox。修改后重启生效。
+  # 省略此项时默认 opensandbox，兼容旧配置。
+  backend: "opensandbox"
 
 opensandbox:
   lifecycle_url: "http://127.0.0.1:8081"

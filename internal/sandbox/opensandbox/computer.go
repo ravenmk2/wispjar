@@ -1,4 +1,4 @@
-package sandbox
+package opensandbox
 
 import (
 	"context"
@@ -14,33 +14,20 @@ import (
 	"time"
 
 	opensandbox "github.com/alibaba/OpenSandbox/sdks/sandbox/go"
-	"github.com/ravenmk2/wispjar/internal/volume"
+	"github.com/ravenmk2/wispjar/internal/sandbox"
 )
-
-var ErrComputerIdentity = errors.New("sandbox/computer_identity")
-var ErrComputerMissing = errors.New("sandbox/computer_missing")
-var ErrComputerAmbiguous = errors.New("sandbox/computer_ambiguous")
-var ErrComputerInsecure = errors.New("computer/rebuild_required")
 
 const computerExecdAuth = "hmac-v1"
 
-type ComputerSpec struct {
-	Installation, ComputerID, OrgID, UserID, BackendID string
-	Generation                                         uint64
-	SandboxID                                          *string
-	Options                                            Options
-	Mounts                                             []volume.Mount
-}
-
-func (s ComputerSpec) metadata() map[string]string {
+func metadata(s ComputerSpec) map[string]string {
 	return map[string]string{"wispjar": "computer-" + s.Installation,
 		"wispjar-installation": s.Installation, "wispjar-computer": s.ComputerID,
 		"wispjar-generation": strconv.FormatUint(s.Generation, 10),
-		"wispjar-org":        s.OrgID, "wispjar-user": s.UserID, "wispjar-backend": s.BackendID}
+		"wispjar-org":        s.OrgID, "wispjar-user": s.UserID}
 }
 
-func (s ComputerSpec) matches(info opensandbox.SandboxInfo) bool {
-	for k, v := range s.metadata() {
+func matches(s ComputerSpec, info opensandbox.SandboxInfo) bool {
+	for k, v := range metadata(s) {
 		if info.Metadata[k] != v {
 			return false
 		}
@@ -62,19 +49,19 @@ func (b *ComputerBackend) find(ctx context.Context, s ComputerSpec) (*opensandbo
 		if err != nil {
 			return nil, err
 		}
-		if !s.matches(*info) {
+		if !matches(s, *info) {
 			return nil, ErrComputerIdentity
 		}
 		return info, nil
 	}
 	var found *opensandbox.SandboxInfo
 	for page := 1; ; page++ {
-		resp, err := b.client.lifecycle.ListSandboxes(ctx, opensandbox.ListOptions{Metadata: s.metadata(), Page: page, PageSize: 100})
+		resp, err := b.client.lifecycle.ListSandboxes(ctx, opensandbox.ListOptions{Metadata: metadata(s), Page: page, PageSize: 100})
 		if err != nil {
 			return nil, err
 		}
 		for _, info := range resp.Items {
-			if !s.matches(info) {
+			if !matches(s, info) {
 				return nil, ErrComputerIdentity
 			}
 			if found != nil {
@@ -93,7 +80,8 @@ func (b *ComputerBackend) find(ctx context.Context, s ComputerSpec) (*opensandbo
 	return found, nil
 }
 
-func (b *ComputerBackend) Inspect(ctx context.Context, s ComputerSpec) (string, error) {
+func (b *ComputerBackend) Inspect(ctx context.Context, s ComputerSpec) (state string, resultErr error) {
+	defer func() { resultErr = backendError(resultErr) }()
 	info, err := b.find(ctx, s)
 	if err != nil {
 		return "", err
@@ -120,7 +108,7 @@ func computerVolumes(s ComputerSpec) ([]opensandbox.Volume, error) {
 	seen := map[string]bool{}
 	out := make([]opensandbox.Volume, 0, 3)
 	for _, m := range s.Mounts {
-		if (m.Name != "storage" && m.Name != "agents" && m.Name != "sessions") || seen[m.Name] || m.MountPath != "/"+m.Name || m.ClaimName == "" || m.BackendID != s.BackendID {
+		if (m.Name != "storage" && m.Name != "agents" && m.Name != "sessions") || seen[m.Name] || m.MountPath != "/"+m.Name || m.ClaimName == "" {
 			return nil, fmt.Errorf("invalid persistent mount plan")
 		}
 		seen[m.Name] = true
@@ -136,7 +124,7 @@ func computerCreateOptions(s ComputerSpec) (opensandbox.SandboxCreateOptions, er
 		return opensandbox.SandboxCreateOptions{}, err
 	}
 	ttl := s.Options.TTLSeconds
-	metadata := s.metadata()
+	metadata := metadata(s)
 	metadata["wispjar-execd-auth"] = computerExecdAuth
 	metadata["wispjar-task-env"] = "1"
 	opts := opensandbox.SandboxCreateOptions{Image: s.Options.Image, Metadata: metadata, TimeoutSeconds: &ttl,
@@ -212,14 +200,15 @@ func (t computerTokenTransport) RoundTrip(req *http.Request) (*http.Response, er
 	return t.base.RoundTrip(req)
 }
 
-func (b *ComputerBackend) Ensure(ctx context.Context, s ComputerSpec, allowCreate bool) (*Handle, error) {
+func (b *ComputerBackend) Ensure(ctx context.Context, s ComputerSpec, policy sandbox.EnsurePolicy) (value sandbox.Instance, resultErr error) {
+	defer func() { resultErr = backendError(resultErr) }()
 	conn, token, err := b.connection(s)
 	if err != nil {
 		return nil, err
 	}
 	info, err := b.find(ctx, s)
 	var sb *opensandbox.Sandbox
-	if errors.Is(err, ErrComputerMissing) && allowCreate && s.SandboxID == nil {
+	if errors.Is(err, ErrComputerMissing) && policy.AllowCreate && s.SandboxID == nil {
 		opts, e := computerCreateOptions(s)
 		if e != nil {
 			return nil, e
@@ -232,6 +221,9 @@ func (b *ComputerBackend) Ensure(ctx context.Context, s ComputerSpec, allowCreat
 			return nil, ErrComputerInsecure
 		}
 		if info.Status.State == opensandbox.StatePaused {
+			if !policy.AllowResume {
+				return nil, sandbox.ErrConflict
+			}
 			if err = b.client.resumeSandbox(ctx, info.ID); err != nil {
 				return nil, err
 			}
@@ -248,13 +240,14 @@ func (b *ComputerBackend) Ensure(ctx context.Context, s ComputerSpec, allowCreat
 	if err != nil {
 		return nil, err
 	}
-	h := &Handle{SandboxID: sb.ID(), ExecdURL: u, sandbox: sb}
+	h := &Handle{SandboxID: sb.ID(), ExecdURL: u, sandbox: sb, owner: b}
+	h.ref = sandbox.InstanceRef{InstanceID: sb.ID(), ComputerID: s.ComputerID, Generation: s.Generation}
 	endpoint, err := sb.GetEndpoint(ctx, opensandbox.DefaultExecdPort)
 	if err != nil {
 		return nil, err
 	}
 	h.downloadClient = fileStreamClient(conn, u, token, endpoint.Headers)
-	return h, nil
+	return &instance{handle: h}, nil
 }
 
 // Download bodies can exceed the SDK's ordinary request timeout. Use a separate
@@ -279,7 +272,8 @@ func fileStreamClient(conn opensandbox.ConnectionConfig, endpointURL, token stri
 	return opensandbox.NewExecdClient(endpointURL, token, opensandbox.WithHTTPClient(&client), opensandbox.WithHeaders(headers), opensandbox.WithTimeout(0))
 }
 
-func (b *ComputerBackend) Pause(ctx context.Context, s ComputerSpec) error {
+func (b *ComputerBackend) Pause(ctx context.Context, s ComputerSpec) (resultErr error) {
+	defer func() { resultErr = backendError(resultErr) }()
 	info, err := b.find(ctx, s)
 	if err != nil {
 		return err
@@ -289,7 +283,8 @@ func (b *ComputerBackend) Pause(ctx context.Context, s ComputerSpec) error {
 	}
 	return b.client.pauseSandbox(ctx, info.ID)
 }
-func (b *ComputerBackend) Delete(ctx context.Context, s ComputerSpec) error {
+func (b *ComputerBackend) Delete(ctx context.Context, s ComputerSpec) (resultErr error) {
+	defer func() { resultErr = backendError(resultErr) }()
 	info, err := b.find(ctx, s)
 	if errors.Is(err, ErrComputerMissing) {
 		return nil
@@ -303,7 +298,8 @@ func (b *ComputerBackend) Delete(ctx context.Context, s ComputerSpec) error {
 	}
 	return err
 }
-func (b *ComputerBackend) Renew(ctx context.Context, s ComputerSpec) error {
+func (b *ComputerBackend) Renew(ctx context.Context, s ComputerSpec) (resultErr error) {
+	defer func() { resultErr = backendError(resultErr) }()
 	info, err := b.find(ctx, s)
 	if err != nil {
 		return err

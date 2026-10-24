@@ -426,7 +426,7 @@
 
 错误沿用统一信封：`computer/not_found` 404；`computer/invalid` 400；`computer/required`、`computer/busy`、`computer/in_use`、`operation/conflict`、`volume/conflict`、`volume/missing` 为 409；后端未配置或不可用为 `computer/unavailable` 503。异步执行中发生的后端故障记录到 operation，不把“已接收”当作“已启动”。
 
-实例归属：电脑实例使用 `wispjar=computer-<installation>` 标签，按组织、用户、电脑、存储域和 generation 完整校验后接管。旧会话管理器及 legacy_sessions_enabled 配置已移除。
+实例归属：电脑实例使用 `wispjar=computer-<installation>` 标签，按安装标识、组织、用户、电脑和 generation 完整校验后接管。当前部署只使用一套沙箱与存储配置，不持久化后端实例标识。旧会话管理器及 legacy_sessions_enabled 配置已移除。
 
 ### 8.1 工作区上传与大文件下载
 

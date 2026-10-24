@@ -42,6 +42,7 @@ func fail(c *gin.Context, err error) {
 		{volume.ErrMissing, 409, "volume/missing"}, {volume.ErrConflict, 409, "volume/conflict"},
 		{store.ErrLockBusy, 409, "computer/busy"},
 		{sandbox.ErrComputerInsecure, 409, "computer/rebuild_required"},
+		{sandbox.ErrUnsupported, 422, "computer/unsupported"},
 	} {
 		if errors.Is(err, entry.err) {
 			status, code = entry.status, entry.code

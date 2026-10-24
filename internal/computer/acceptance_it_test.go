@@ -80,7 +80,7 @@ func TestRepositoryConcurrencyIntegration(t *testing.T) {
 		t.Fatalf("agent env: %v %v", envs, err)
 	}
 	var savedAgent store.Agent
-	svc := NewService(repo, memoryVolumes{}, &memoryBackend{}, "test", "test", nil)
+	svc := NewService(repo, memoryVolumes{}, &memoryBackend{}, "test", nil)
 	template, err := svc.resolvedConfig(ctx, org, agentID, Config{Env: map[string]string{"COMPUTER": "computer"}})
 	if err != nil || template.Env["AGENT_TOKEN"] != "" || template.Env["COMPUTER"] != "computer" {
 		t.Fatal("Agent environment copied into computer")
@@ -99,7 +99,7 @@ func TestRepositoryConcurrencyIntegration(t *testing.T) {
 		t.Fatal("agent env deletion failed")
 	}
 	envComputerID := id.New()
-	computer := store.Computer{ID: envComputerID, OrgID: org, UserID: user, Name: "env-test", BackendID: "test", Generation: 4, Status: "running", Config: json.RawMessage(`{"image":"python:3.12","ttl_seconds":3600,"env":{"SECRET":"keep","OLD":"remove"}}`)}
+	computer := store.Computer{ID: envComputerID, OrgID: org, UserID: user, Name: "env-test", Generation: 4, Status: "running", Config: json.RawMessage(`{"image":"python:3.12","ttl_seconds":3600,"env":{"SECRET":"keep","OLD":"remove"}}`)}
 	if err := db.Create(&computer).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestRepositoryConcurrencyIntegration(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Go(func() {
-			c := store.Computer{ID: id.New(), OrgID: org, UserID: user, Name: "integration", BackendID: "test", Generation: 1, Status: "stopped"}
+			c := store.Computer{ID: id.New(), OrgID: org, UserID: user, Name: "integration", Generation: 1, Status: "stopped"}
 			op, err := newOperation(org, user, c.ID, "create", key, "identical")
 			if err == nil {
 				op, err = repo.Intent(ctx, &c, op)

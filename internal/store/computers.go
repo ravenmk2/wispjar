@@ -13,7 +13,6 @@ type Computer struct {
 	OrgID        string          `gorm:"column:org_id;size:32" json:"org_id"`
 	UserID       string          `gorm:"column:user_id;size:32" json:"user_id"`
 	Name         string          `gorm:"column:name;size:128" json:"name"`
-	BackendID    string          `gorm:"column:backend_id;size:64" json:"-"`
 	SandboxID    *string         `gorm:"column:sandbox_id;size:128" json:"sandbox_id"`
 	Generation   uint64          `gorm:"column:generation" json:"generation"`
 	Status       string          `gorm:"column:status;size:16" json:"status"`
@@ -32,7 +31,6 @@ type UserVolume struct {
 	OrgID       string          `gorm:"column:org_id;size:32" json:"org_id"`
 	UserID      string          `gorm:"column:user_id;size:32" json:"user_id"`
 	Kind        string          `gorm:"column:kind;size:16" json:"kind"`
-	BackendID   string          `gorm:"column:backend_id;size:64" json:"-"`
 	BackendName string          `gorm:"column:backend_name;size:63" json:"-"`
 	Status      string          `gorm:"column:status;size:16" json:"status"`
 	Policy      json.RawMessage `gorm:"column:policy;type:json" json:"policy"`

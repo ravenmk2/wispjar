@@ -109,7 +109,13 @@ type memoryBackend struct {
 	err              error
 }
 
-func (b *memoryBackend) Ensure(_ context.Context, _ sandbox.ComputerSpec, create bool) (*sandbox.Handle, error) {
+type memoryInstance struct{ ref sandbox.InstanceRef }
+
+func (i memoryInstance) Ref() sandbox.InstanceRef         { return i.ref }
+func (memoryInstance) Files() (sandbox.FileReader, error) { return nil, sandbox.ErrUnsupported }
+
+func (b *memoryBackend) Ensure(_ context.Context, spec sandbox.ComputerSpec, policy sandbox.EnsurePolicy) (sandbox.Instance, error) {
+	create := policy.AllowCreate
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.allow = append(b.allow, create)
@@ -123,7 +129,7 @@ func (b *memoryBackend) Ensure(_ context.Context, _ sandbox.ComputerSpec, create
 		b.creates++
 		b.exists = true
 	}
-	return &sandbox.Handle{SandboxID: "instance"}, nil
+	return memoryInstance{ref: sandbox.InstanceRef{InstanceID: "instance", ComputerID: spec.ComputerID, Generation: spec.Generation}}, nil
 }
 func (b *memoryBackend) Inspect(context.Context, sandbox.ComputerSpec) (string, error) {
 	if !b.exists {
@@ -147,10 +153,10 @@ func (memoryVolumes) List(context.Context, string, string) ([]store.UserVolume, 
 	return nil, nil
 }
 func fixture() (*Service, *memoryRepo, *memoryBackend) {
-	r := &memoryRepo{computer: store.Computer{ID: "computer", OrgID: "org", UserID: "user", BackendID: "local", Generation: 1, Status: "starting", Config: json.RawMessage(`{"image":"python:3.12","ttl_seconds":3600}`)},
+	r := &memoryRepo{computer: store.Computer{ID: "computer", OrgID: "org", UserID: "user", Generation: 1, Status: "starting", Config: json.RawMessage(`{"image":"python:3.12","ttl_seconds":3600}`)},
 		op: store.ResourceOperation{ID: "op", OrgID: "org", UserID: "user", ResourceID: "computer", Action: "computer/create", Status: "pending", Progress: json.RawMessage(`{"generation":1}`)}}
 	b := &memoryBackend{}
-	return NewService(r, memoryVolumes{}, b, "installation", "local", nil), r, b
+	return NewService(r, memoryVolumes{}, b, "installation", nil), r, b
 }
 func TestWorkerReturnsUnlockError(t *testing.T) {
 	for _, conflict := range []bool{false, true} {

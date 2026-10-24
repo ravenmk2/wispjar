@@ -11,7 +11,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/volume/naming"
 )
 
-type Options struct{ BackendID, Namespace, NamePattern string }
+type Options struct{ Namespace, NamePattern string }
 type Service struct {
 	repo     Repository
 	provider Provider
@@ -21,9 +21,6 @@ type Service struct {
 func NewService(repo Repository, provider Provider, options Options) (*Service, error) {
 	if repo == nil || provider == nil {
 		return nil, fmt.Errorf("%w: missing volume dependency", ErrUnavailable)
-	}
-	if options.BackendID == "" || len(options.BackendID) > 64 {
-		return nil, fmt.Errorf("invalid backend ID")
 	}
 	if err := naming.Validate(options.NamePattern, options.Namespace); err != nil {
 		return nil, err
@@ -87,7 +84,7 @@ func (s *Service) Ensure(ctx context.Context, orgID, userID string) (mounts []Mo
 				return nil, nameErr
 			}
 			row, err = s.repo.GetOrCreate(ctx, store.UserVolume{ID: volumeID, OrgID: orgID, UserID: userID, Kind: kind,
-				BackendID: s.options.BackendID, BackendName: name, Status: "pending"})
+				BackendName: name, Status: "pending"})
 			if err != nil {
 				return nil, err
 			}
@@ -95,7 +92,7 @@ func (s *Service) Ensure(ctx context.Context, orgID, userID string) (mounts []Mo
 		if err = s.reconcile(ctx, installation, row, true); err != nil {
 			return nil, err
 		}
-		mounts = append(mounts, Mount{Name: kind, ClaimName: row.BackendName, MountPath: "/" + kind, BackendID: row.BackendID})
+		mounts = append(mounts, Mount{Name: kind, ClaimName: row.BackendName, MountPath: "/" + kind})
 	}
 	return mounts, nil
 }
@@ -131,9 +128,6 @@ func (s *Service) InspectOwner(ctx context.Context, orgID, userID string) (rows 
 }
 
 func (s *Service) reconcile(ctx context.Context, installation string, row store.UserVolume, create bool) error {
-	if row.BackendID != s.options.BackendID {
-		return fmt.Errorf("%w: registered storage domain unavailable", ErrUnavailable)
-	}
 	spec := Spec{Name: row.BackendName, Labels: map[string]string{
 		"wispjar.managed": "true", "wispjar.installation": installation, "wispjar.volume-id": row.ID,
 		"wispjar.org-id": row.OrgID, "wispjar.user-id": row.UserID, "wispjar.kind": row.Kind,

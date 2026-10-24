@@ -31,7 +31,7 @@ func TestComputerSessionGuardsIntegration(t *testing.T) {
 		&store.ModelProvider{ID: provider, Name: "session-guards", APIKeyEnc: []byte{}, CreatedBy: user, Status: "active"},
 		&store.Model{ID: model, ProviderID: provider, ModelCode: "test", Capabilities: json.RawMessage(`{}`), Status: "active"},
 		&store.Agent{ID: agentID, OrgID: org, Name: "session-guards", ModelID: model, ToolsEnabled: json.RawMessage(`[]`), CreatedBy: user, Status: "published"},
-		&store.Computer{ID: computerID, OrgID: org, UserID: user, Name: "session-guards", BackendID: "test", Status: "deleting", Generation: 1},
+		&store.Computer{ID: computerID, OrgID: org, UserID: user, Name: "session-guards", Status: "deleting", Generation: 1},
 		&store.Session{ID: sid, OrgID: org, UserID: user, AgentID: agentID, ModelID: model, ComputerID: &computerID, AgentSnapshot: json.RawMessage(`{}`), ModelParams: json.RawMessage(`{}`), UsageTotal: json.RawMessage(`{}`), Workspace: json.RawMessage(`{"state":"ready"}`), Status: StatusActive, ApprovalMode: ApprovalAuto, LastActiveAt: time.Now()},
 	}
 	t.Cleanup(func() {

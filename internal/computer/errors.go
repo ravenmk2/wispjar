@@ -7,7 +7,6 @@ import (
 	"net"
 	"strings"
 
-	opensandbox "github.com/alibaba/OpenSandbox/sdks/sandbox/go"
 	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/volume"
 )
@@ -44,7 +43,6 @@ var failureMessages = map[string][2]string{
 func operationError(cause error, operationID string) string {
 	code := "computer/backend_failed"
 	var dns *net.DNSError
-	var upstream *opensandbox.APIError
 	message := strings.ToLower(cause.Error())
 	switch {
 	case errors.Is(cause, sandbox.ErrComputerMissing):
@@ -63,12 +61,10 @@ func operationError(cause error, operationID string) string {
 		code = "computer/network_not_ready"
 	case errors.Is(cause, context.DeadlineExceeded), strings.Contains(message, "timeout"), strings.Contains(message, "timed out"):
 		code = "computer/backend_timeout"
-	case errors.As(cause, &upstream):
-		if upstream.StatusCode == 401 || upstream.StatusCode == 403 {
-			code = "computer/backend_auth"
-		} else if strings.Contains(strings.ToUpper(upstream.Response.Code), "IMAGE") {
-			code = "computer/image_unavailable"
-		}
+	case errors.Is(cause, sandbox.ErrBackendAuth):
+		code = "computer/backend_auth"
+	case errors.Is(cause, sandbox.ErrImageUnavailable):
+		code = "computer/image_unavailable"
 	}
 	raw, _ := json.Marshal(storedFailure{Code: code, OperationID: operationID})
 	return string(raw)
