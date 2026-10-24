@@ -21,12 +21,3 @@ export function previewDirectory(path: string): string {
   const index = path.lastIndexOf("/")
   return index < 0 ? "." : path.slice(0, index)
 }
-
-export function previewRoots(path: string): string[] {
-  const parts = path.split("/").slice(0, -1)
-  return [...parts.map((_, index) => parts.slice(0, parts.length - index).join("/")), "."]
-}
-
-export function previewEntry(path: string, root: string): string {
-  return root === "." ? path : path.slice(root.length + 1)
-}

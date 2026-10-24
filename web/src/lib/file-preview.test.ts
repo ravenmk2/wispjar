@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { previewDirectory, previewEntry, previewRoots, resolvePreviewReference } from "./file-preview"
+import { previewDirectory, resolvePreviewReference } from "./file-preview"
 
 const origin = "https://localhost"
 const files = "/api/v1/previews/token/files/"
@@ -21,10 +21,13 @@ test("preview rejects escapes, application-root URLs, malformed encodings and un
   assert.equal(resolve("#section")?.url, "#section")
 })
 
-test("preview root options are only ancestors and preserve entry paths", () => {
-  assert.deepEqual(previewRoots("outputs/site/docs/readme.md"), ["outputs/site/docs", "outputs/site", "outputs", "."])
-  assert.deepEqual(previewRoots("readme.md"), ["."])
+test("scope-root preview resolves parent references and keeps local navigation paths", () => {
+  const nestedEntry = `${files}outputs/site/docs/readme.md`
+  const resolveNested = (url: string) => resolvePreviewReference(url, nestedEntry, files, origin)
+  assert.equal(resolveNested("../assets/check.svg")?.path, "outputs/site/assets/check.svg")
+  assert.equal(resolveNested("../../../shared/check.svg")?.path, "shared/check.svg")
+  assert.equal(resolveNested("next.md")?.path, "outputs/site/docs/next.md")
+  assert.equal(resolveNested("../../../../other-scope/secret"), undefined)
   assert.equal(previewDirectory("readme.md"), ".")
-  assert.equal(previewEntry("outputs/site/docs/readme.md", "outputs/site"), "docs/readme.md")
-  assert.equal(previewEntry("readme.md", "."), "readme.md")
+  assert.equal(previewDirectory("outputs/site/docs/readme.md"), "outputs/site/docs")
 })

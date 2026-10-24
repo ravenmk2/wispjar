@@ -10,7 +10,7 @@ import { PixelImage } from "@/components/PixelImage"
 import type { ReactNode } from "react"
 import { highlightCode } from "@/lib/highlight"
 import type { SandboxFileItem } from "@/lib/types"
-import { previewDirectory, previewEntry, previewRoots, resolvePreviewReference } from "@/lib/file-preview"
+import { resolvePreviewReference } from "@/lib/file-preview"
 import {
   downloadBlob,
   downloadWorkspaceFile,
@@ -49,10 +49,8 @@ export function FilePreview({
   const [mode, setMode] = useState<"preview" | "source">("preview")
   const [sourceHtml, setSourceHtml] = useState<string | null>(null)
   const loadedPathRef = useRef<string | null>(null)
-  const [rootSelection, setRootSelection] = useState<{ path: string; root: string }>()
-  const root = rootSelection?.path === item.path ? rootSelection.root : previewDirectory(item.path)
   const [previewRevision, setPreviewRevision] = useState(0)
-  const previewKey = JSON.stringify([sessionId, scope, root, item.path, reloadToken, previewRevision])
+  const previewKey = JSON.stringify([sessionId, scope, item.path, reloadToken, previewRevision])
   const [grantState, setGrantState] = useState<{ key: string; grant?: FilePreviewGrant; content?: string; error?: string }>()
   const preview = grantState?.key === previewKey ? grantState : undefined
 
@@ -63,7 +61,7 @@ export function FilePreview({
     let timer: ReturnType<typeof setTimeout> | undefined
     const revoke = (value: FilePreviewGrant) => { void sessionsApi.revokePreview(sessionId, value.id).catch(() => { /* TTL covers offline/unload cleanup. */ }) }
     setGrantState({ key: previewKey })
-    void sessionsApi.createPreview(sessionId, scope ?? "workspace", root, previewEntry(item.path, root)).then(async (value) => {
+    void sessionsApi.createPreview(sessionId, scope ?? "workspace", ".", item.path).then(async (value) => {
       if (canceled) { revoke(value); return }
       grant = value
       let content: string | undefined
@@ -79,7 +77,7 @@ export function FilePreview({
       if (!canceled) setGrantState({ key: previewKey, error: error instanceof Error ? error.message : "预览创建失败" })
     })
     return () => { canceled = true; clearTimeout(timer); if (grant) revoke(grant) }
-  }, [sessionId, scope, root, item.path, kind, previewKey])
+  }, [sessionId, scope, item.path, kind, previewKey])
 
   const resolveReference = (url: string) => preview?.grant ? resolvePreviewReference(url, preview.grant.entry_url, preview.grant.files_url, window.location.origin) : undefined
   async function download() {
@@ -223,15 +221,6 @@ export function FilePreview({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        {(kind === "html" || kind === "markdown") && mode === "preview" && (
-          <div className="flex shrink-0 items-center gap-2 border-b px-3 py-1 text-[11px] text-muted-foreground">
-            <label htmlFor="preview-root">资源目录</label>
-            <select id="preview-root" aria-label="预览资源根目录" title="仅允许读取所选目录及其子目录；跨目录引用请选择共同上级目录" value={root} onChange={(event) => setRootSelection({ path: item.path, root: event.target.value })} className="min-w-0 flex-1 truncate rounded border bg-background px-1 py-0.5">
-              {previewRoots(item.path).map((value) => <option key={value} value={value}>{value === "." ? "当前文件范围根目录" : value}</option>)}
-            </select>
-            <button type="button" className="shrink-0 hover:text-foreground" onClick={() => setPreviewRevision((n) => n + 1)}>刷新预览</button>
-          </div>
-        )}
         {state.status === "loading" && (
           <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
@@ -280,7 +269,7 @@ export function FilePreview({
               const target = new URL(url, window.location.origin)
               if (target.origin !== files.origin || !target.pathname.startsWith(files.pathname) || !onNavigate) return false
               const local = target.pathname.slice(files.pathname.length).split("/").map(decodeURIComponent).join("/")
-              onNavigate(root === "." ? local : `${root}/${local}`)
+              onNavigate(local)
               return true
             }} />
           </div>
