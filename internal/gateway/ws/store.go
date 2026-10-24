@@ -30,7 +30,7 @@ func NewGormStore(db *gorm.DB) Store {
 func (s *gormStore) ActiveUser(ctx context.Context, userID string) (bool, error) {
 	var n int64
 	err := s.db.WithContext(ctx).Model(&store.User{}).
-		Where("id = ? AND status = ?", userID, "active").
+		Where("id = ? AND status = ? AND must_change_password = ?", userID, "active", false).
 		Count(&n).Error
 	return n > 0, err
 }

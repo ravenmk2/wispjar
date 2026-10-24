@@ -42,7 +42,7 @@
 | 404 | `attachment/not_found` | 附件不存在或无权访问（不区分，防枚举） |
 | 422 | `attachment/invalid` | 图片校验失败（格式/大小/像素，details 含原因） |
 | 422 | `skill/invalid` | skill zip 校验失败（details 含原因） |
-| 429 | `auth/rate_limited` | 登录尝试过多 |
+| 429 | `auth/rate_limited` | 登录尝试过多或待使用 WS 票据达到容量上限 |
 | 502 | `provider/upstream` | 调用模型供应商失败 |
 | 502 | `sandbox/upstream` | 调用 OpenSandbox 失败 |
 | 500 | `internal` | 未分类异常（details.request_id 供排查） |
@@ -81,6 +81,17 @@
 ### GET /api/v1/auth/me
 
 响应同 login 的 `user + orgs`（每次组织变更后前端刷新）。
+
+### POST /api/v1/auth/ws-ticket
+
+要求 `Authorization: Bearer <jwt>`，无需请求体；沿用用户启用、首次改密检查。
+
+响应 200：`{ "ticket": "<opaque-base64url>", "expiresAt": "<RFC3339 timestamp>" }`，设置 `Cache-Control: no-store`。
+
+- 票据由 32 字节安全随机数生成，30 秒有效，仅允许建立一次 `/api/ws?ticket=...` 连接，不能用于 REST 认证。每次重连必须重新申请。
+- 单实例内存保存哈希、用户 ID 和到期时间，原子消费后删除，升级失败不恢复；重启失效，无数据库迁移。详细握手语义见 [protocol.md §1](protocol.md#1-连接与鉴权)。
+- 每用户最多 32 张、全局最多 4096 张未过期票据；签发时清理过期项，超限返回 429 `auth/rate_limited`，`Retry-After: 30`。401 走现有登录失效/首次改密处理。
+- 票据和 Authorization 均不得进入应用或代理日志。
 
 ---
 

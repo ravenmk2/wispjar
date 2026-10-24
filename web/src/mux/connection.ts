@@ -1,5 +1,8 @@
 import type { ApiErrorBody, MuxClientFrame, MuxServerFrame } from "@/lib/types"
 import { uuid } from "@/lib/utils"
+import { ApiError } from "@/api/client"
+import { requestWSTicket } from "@/api/ws-ticket"
+import { useIdentityStore } from "@/stores/identity"
 
 export interface StreamHandlers {
   onItem: (value: unknown) => void
@@ -29,9 +32,10 @@ export class MuxConnection {
   private attempt = 0
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private closedByUser = false
+  private ticketRequest: AbortController | null = null
 
   connect(token: string) {
-    if (this.token === token && (this.status === "open" || this.status === "connecting")) return
+    if (this.token === token && (this.status === "open" || this.status === "connecting" || this.status === "reconnecting")) return
     this.teardownSocket()
     this.token = token
     this.closedByUser = false
@@ -76,12 +80,42 @@ export class MuxConnection {
     }
   }
 
-  private openSocket() {
+  private async openSocket() {
     if (!this.token) return
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
-    const url = `${proto}//${window.location.host}/api/ws?token=${encodeURIComponent(this.token)}`
+    const token = this.token
+    const request = new AbortController()
+    this.ticketRequest = request
+    const isCurrent = () => this.ticketRequest === request && this.token === token && !this.closedByUser
+    const timeout = setTimeout(() => request.abort(), 10000)
     this.setStatus(this.attempt === 0 ? "connecting" : "reconnecting")
-    const ws = new WebSocket(url)
+    let ws: WebSocket
+    try {
+      const { ticket } = await requestWSTicket(token, request.signal)
+      if (!isCurrent()) return
+      if (request.signal.aborted) throw new Error("获取连接票据超时")
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
+      const url = `${proto}//${window.location.host}/api/ws?ticket=${encodeURIComponent(ticket)}`
+      ws = new WebSocket(url)
+    } catch (err) {
+      if (!isCurrent()) return
+      if (err instanceof ApiError && err.status === 401) {
+        this.disconnect()
+        // The store can change before React propagates the new login to mux.
+        if (useIdentityStore.getState().token !== token) return
+        if (err.code === "auth/password_change_required") {
+          if (window.location.pathname !== "/change-password") window.location.href = "/change-password"
+        } else {
+          useIdentityStore.getState().clear()
+          if (window.location.pathname !== "/login") window.location.href = "/login"
+        }
+      } else {
+        this.scheduleReconnect()
+      }
+      return
+    } finally {
+      clearTimeout(timeout)
+      if (this.ticketRequest === request) this.ticketRequest = null
+    }
     this.ws = ws
 
     ws.onopen = () => {
@@ -151,6 +185,8 @@ export class MuxConnection {
   }
 
   private teardownSocket() {
+    this.ticketRequest?.abort()
+    this.ticketRequest = null
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null

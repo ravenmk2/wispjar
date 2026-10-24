@@ -6,7 +6,7 @@
 > - `docs/system-design.md`（本文）：目标、决策、术语、总体架构、里程碑、风险
 > - `docs/design/data-model.md`：MySQL 完整表结构（可直接执行的 DDL）、种子数据、迁移约定
 > - `docs/design/api.md`：REST API 完整规格（全部端点请求/响应/权限/错误码）
-> - `docs/design/protocol.md`：WebSocket 实时协议（mux 帧、follow 订阅、StreamChunk、会话事件词表、重连对账）
+> - `docs/design/protocol.md`：WebSocket 实时协议（30 秒一次性连接票据、mux 帧、follow 订阅、StreamChunk、会话事件词表、重连对账）
 > - `docs/design/runtime.md`：Agent 运行时（eino 集成、工具规格、task 委派、Skills、审批、沙箱管理）
 > - `docs/design/media.md`：图片工具、供应商文件引用、历史持久化与能力限制
 > - `docs/design/search.md`：网络搜索与网页读取供应商实例、独立全局默认与智能体选择、工具及界面

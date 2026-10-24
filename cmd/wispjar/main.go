@@ -189,7 +189,6 @@ func main() {
 		MaxEntries: cfg.Storage.Downloads.MaxEntries, TTL: time.Duration(cfg.Storage.Downloads.TTL), PrepareTimeout: time.Duration(cfg.Storage.Downloads.PrepareTimeout),
 	})
 	wsServer := ws.NewServer(ws.Deps{
-		JWTSecret:      []byte(jwtSecret),
 		Store:          ws.NewGormStore(db),
 		Orchestrator:   orch,
 		Bus:            bus,

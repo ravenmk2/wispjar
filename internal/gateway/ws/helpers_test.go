@@ -147,7 +147,7 @@ func newTestEnv(t *testing.T, mutate func(*Deps)) *testEnv {
 		owned:       map[string]bool{keyOf("o1", "u1", "sess1"): true},
 	}
 	bus := runtime.NewBus()
-	deps := Deps{JWTSecret: testSecret, Store: st, Orchestrator: orch, Bus: bus}
+	deps := Deps{Store: st, Orchestrator: orch, Bus: bus}
 	if mutate != nil {
 		mutate(&deps)
 	}
@@ -155,6 +155,15 @@ func newTestEnv(t *testing.T, mutate func(*Deps)) *testEnv {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/api/ws", srv.Handle)
+	// Stand in for AuthRequired; the production router uses the real middleware.
+	r.POST("/api/v1/auth/ws-ticket", func(c *gin.Context) {
+		token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
+		uid, err := auth.ParseToken(testSecret, token)
+		if err == nil && st.activeUsers[uid] {
+			c.Set("wispjar.uid", uid)
+		}
+		srv.IssueTicket(c)
+	})
 	ts := httptest.NewServer(r)
 	t.Cleanup(ts.Close)
 	return &testEnv{
@@ -174,7 +183,7 @@ func (e *testEnv) token(t *testing.T, uid string) string {
 
 func (e *testEnv) dial(t *testing.T, uid string, header http.Header) *websocket.Conn {
 	t.Helper()
-	url := e.wsURL + "?token=" + e.token(t, uid)
+	url := e.wsURL + "?ticket=" + e.ticket(t, uid)
 	c, resp, err := websocket.DefaultDialer.Dial(url, header)
 	if err != nil {
 		status := 0
@@ -185,6 +194,15 @@ func (e *testEnv) dial(t *testing.T, uid string, header http.Header) *websocket.
 	}
 	t.Cleanup(func() { _ = c.Close() })
 	return c
+}
+
+func (e *testEnv) ticket(t *testing.T, uid string) string {
+	t.Helper()
+	ticket, _, err := e.server.tickets.issue(uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ticket
 }
 
 type testFrame struct {

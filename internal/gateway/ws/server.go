@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
-	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/gateway/respond"
 	"github.com/ravenmk2/wispjar/internal/runtime"
 )
@@ -24,7 +23,6 @@ const (
 )
 
 type Deps struct {
-	JWTSecret      []byte
 	Store          Store
 	Orchestrator   runtime.Orchestrator
 	Bus            *runtime.Bus
@@ -36,6 +34,7 @@ type Deps struct {
 type Server struct {
 	deps     Deps
 	upgrader websocket.Upgrader
+	tickets  *ticketStore
 }
 
 func NewServer(deps Deps) *Server {
@@ -46,7 +45,8 @@ func NewServer(deps Deps) *Server {
 		deps.PongWait = missedPongLimit*deps.PingPeriod + 10*time.Second
 	}
 	return &Server{
-		deps: deps,
+		deps:    deps,
+		tickets: newTicketStore(),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
@@ -56,12 +56,12 @@ func NewServer(deps Deps) *Server {
 }
 
 func (s *Server) Handle(c *gin.Context) {
-	uid, ok := s.authenticate(c)
-	if !ok {
-		return
-	}
 	if !s.originAllowed(c.Request) {
 		respond.Error(c, http.StatusForbidden, respond.CodeForbidden, "Origin 不被允许", nil)
+		return
+	}
+	uid, ok := s.authenticate(c)
+	if !ok {
 		return
 	}
 	wsConn, err := s.upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -72,9 +72,9 @@ func (s *Server) Handle(c *gin.Context) {
 }
 
 func (s *Server) authenticate(c *gin.Context) (string, bool) {
-	uid, err := auth.ParseToken(s.deps.JWTSecret, c.Query("token"))
-	if err != nil {
-		respond.Error(c, http.StatusUnauthorized, respond.CodeUnauthorized, "登录状态已失效，请重新登录", nil)
+	uid, ok := s.tickets.consume(c.Query("ticket"))
+	if !ok {
+		respond.Error(c, http.StatusUnauthorized, respond.CodeUnauthorized, "连接票据无效或已过期，请重新获取", nil)
 		return "", false
 	}
 	active, err := s.deps.Store.ActiveUser(c.Request.Context(), uid)

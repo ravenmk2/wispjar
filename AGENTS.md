@@ -22,7 +22,7 @@ wispjar/
 - docs/system-design.md：系统设计总览（需求决策、总体架构、里程碑，设计文档入口）
 - docs/design/data-model.md：MySQL 完整表结构 DDL 与种子数据
 - docs/design/api.md：REST API 完整规格（/api/v1）
-- docs/design/protocol.md：WebSocket 实时协议（/api/ws，mux/follow/StreamChunk/事件词表）
+- docs/design/protocol.md：WebSocket 实时协议（/api/ws、30 秒一次性连接票据、mux/follow/StreamChunk/事件词表）
 - docs/design/runtime.md：Agent 运行时（eino 集成、工具规格、task 委派、审批、沙箱管理）
 - docs/design/media.md：图片工具、供应商文件引用、历史持久化与能力限制
 - docs/design/search.md：网络搜索与网页读取、多供应商共享实例、独立默认与智能体选择、工具、UI 和验收

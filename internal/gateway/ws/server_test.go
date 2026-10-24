@@ -9,9 +9,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func TestUpgradeRequiresValidToken(t *testing.T) {
+func TestUpgradeRequiresValidTicket(t *testing.T) {
 	env := newTestEnv(t, nil)
-	for _, url := range []string{env.http.URL + "/api/ws", env.http.URL + "/api/ws?token=bad"} {
+	for _, url := range []string{env.http.URL + "/api/ws", env.http.URL + "/api/ws?ticket=bad", env.http.URL + "/api/ws?token=" + env.token(t, "u1"), env.http.URL + "/api/ws?ticket=" + env.token(t, "u1")} {
 		resp, err := http.Get(url)
 		if err != nil {
 			t.Fatal(err)
@@ -25,7 +25,7 @@ func TestUpgradeRequiresValidToken(t *testing.T) {
 
 func TestUpgradeRejectsInactiveUser(t *testing.T) {
 	env := newTestEnv(t, nil)
-	_, resp, err := websocket.DefaultDialer.Dial(env.wsURL+"?token="+env.token(t, "ghost"), nil)
+	_, resp, err := websocket.DefaultDialer.Dial(env.wsURL+"?ticket="+env.ticket(t, "ghost"), nil)
 	if err == nil {
 		t.Fatal("want dial failure for inactive user")
 	}
@@ -40,7 +40,7 @@ func TestUpgradeOriginCheck(t *testing.T) {
 	})
 
 	_, resp, err := websocket.DefaultDialer.Dial(
-		env.wsURL+"?token="+env.token(t, "u1"),
+		env.wsURL+"?ticket="+env.ticket(t, "u1"),
 		http.Header{"Origin": []string{"https://evil.example"}},
 	)
 	if err == nil {

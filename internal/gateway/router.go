@@ -46,6 +46,9 @@ func NewRouter(deps Deps) *gin.Engine {
 	v1.POST("/auth/login", deps.Auth.Login)
 
 	authed := v1.Group("", deps.Auth.AuthRequired())
+	if deps.WS != nil {
+		authed.POST("/auth/ws-ticket", deps.WS.IssueTicket)
+	}
 	authed.POST("/auth/change-password", deps.Auth.ChangePassword)
 	authed.GET("/auth/me", deps.Auth.Me)
 

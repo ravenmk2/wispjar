@@ -7,8 +7,13 @@
 
 ## 1. 连接与鉴权
 
-- 端点：`GET /api/ws?token=<jwt>` → 101 升级（gorilla/websocket）。
-- 升级前校验：JWT 有效；Origin 与 Host 匹配（同源部署）或在配置的允许列表内。
+- 先使用 `Authorization: Bearer <jwt>` 调用 `POST /api/v1/auth/ws-ticket`，得到 `{ticket, expiresAt}`；签发沿用 REST 登录鉴权（含用户启用和首次改密检查）。
+- 端点：`GET /api/ws?ticket=<ticket>` → 101 升级（gorilla/websocket）；不再接受 URL 中的登录 JWT。
+- ticket 为 32 字节安全随机数的 base64url 编码，仅用于兑换一次 WS 连接，签发后 **30 秒**有效。服务端只在当前进程内保存票据哈希、用户 ID、到期时间；重启后全部失效，多实例部署前需引入共享原子消费存储。
+- 升级前先校验 Origin 与 Host 匹配（同源部署）或在允许列表内，再原子消费 ticket 并复核用户启用、无需首次改密。同一票据并发使用只有一个请求能通过；升级失败也不恢复票据，必须重新申请。拒绝 Origin 不消费票据。
+- ticket 到期只限制建连，不关闭已建立连接；每条逻辑流仍单独鉴权。已有连接的登录到期/注销撤销机制不在本次变更范围。
+- 每次首次连接、断线重连都先重新取票；票据仅保存在前端内存，不持久化、不复用。取票接口返回 `Cache-Control: no-store`；应用及代理日志不得记录 ticket 或 Authorization。
+- 内存最多保留 4096 张未过期票据，每用户最多 32 张；超限返回 429 `auth/rate_limited` 和 `Retry-After: 30`。签发时回收过期项，消费时立即删除，空闲时保留的过期项也受总容量约束。
 - 心跳：服务端每 30s 发 WS ping；连续 2 次未收到 pong 主动断开。
 - 一个用户可有多条物理连接（多标签页）；逻辑流互不影响。
 - 每条逻辑流 `open` 时独立鉴权（组织成员关系 + 资源归属）；鉴权失败回 `error` 帧并 `end`。
