@@ -100,7 +100,8 @@ func nativeFileOperation(ctx context.Context, files sandbox.FileReader, root, re
 	if err != nil {
 		return result, err
 	}
-	defer body.Close()
+	// Closing this read-only stream only releases resources; read errors are handled below.
+	defer func() { _ = body.Close() }()
 	result.Content, err = io.ReadAll(io.LimitReader(body, int64(limit)+1))
 	if err != nil {
 		return result, err

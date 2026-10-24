@@ -119,7 +119,7 @@ func TestTicketEndpointAndHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	if _, resp, err := websocket.DefaultDialer.Dial(url, nil); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
 		t.Fatal("used ticket accepted")
 	}

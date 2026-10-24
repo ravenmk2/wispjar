@@ -22,12 +22,16 @@ func TestUserFilesIdentityTransportAndErrors(t *testing.T) {
 		name := r.URL.Query().Get("path")
 		if name == "/missing" {
 			w.WriteHeader(404)
-			io.WriteString(w, `{"code":"FILE_NOT_FOUND"}`)
+			if _, err := io.WriteString(w, `{"code":"FILE_NOT_FOUND"}`); err != nil {
+				t.Errorf("write missing file response: %v", err)
+			}
 			return
 		}
 		if name == "/unsupported" {
 			w.WriteHeader(404)
-			io.WriteString(w, `404 page not found`)
+			if _, err := io.WriteString(w, `404 page not found`); err != nil {
+				t.Errorf("write unsupported API response: %v", err)
+			}
 			return
 		}
 		if name != "/storage/中文 &.txt" {
@@ -35,13 +39,17 @@ func TestUserFilesIdentityTransportAndErrors(t *testing.T) {
 		}
 		switch r.URL.Path {
 		case "/v1/filesystem/65532/65532/files/info":
-			io.WriteString(w, `{"/storage/中文 &.txt":{"path":"/storage/中文 &.txt","type":"file","size":3}}`)
+			if _, err := io.WriteString(w, `{"/storage/中文 &.txt":{"path":"/storage/中文 &.txt","type":"file","size":3}}`); err != nil {
+				t.Errorf("write file info response: %v", err)
+			}
 		case "/v1/filesystem/65532/65532/files/download":
 			if r.Header.Get("Range") != "bytes=0-2" {
 				t.Errorf("range: %s", r.Header.Get("Range"))
 			}
 			w.WriteHeader(206)
-			w.Write([]byte{0, 255, 1})
+			if _, err := w.Write([]byte{0, 255, 1}); err != nil {
+				t.Errorf("write file download response: %v", err)
+			}
 		default:
 			t.Errorf("unexpected or privileged endpoint: %s", r.URL.Path)
 			w.WriteHeader(500)
@@ -63,7 +71,9 @@ func TestUserFilesIdentityTransportAndErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, err := io.ReadAll(body)
-	body.Close()
+	if closeErr := body.Close(); closeErr != nil {
+		t.Errorf("close file download: %v", closeErr)
+	}
 	if err != nil || string(data) != string([]byte{0, 255, 1}) {
 		t.Fatalf("binary payload: %v %v", data, err)
 	}

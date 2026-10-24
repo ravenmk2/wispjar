@@ -26,13 +26,17 @@ func TestInstanceContractAndMaintenanceOwnership(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/endpoints/44772"):
-			json.NewEncoder(w).Encode(map[string]any{"endpoint": endpoint})
+			if err := json.NewEncoder(w).Encode(map[string]any{"endpoint": endpoint}); err != nil {
+				t.Errorf("encode endpoint response: %v", err)
+			}
 		case r.URL.Path == "/v1/sandboxes/instance/resume":
 			resumes++
 			state = "Running"
 			w.WriteHeader(204)
 		case r.URL.Path == "/v1/sandboxes/instance":
-			json.NewEncoder(w).Encode(map[string]any{"id": id, "metadata": meta, "status": map[string]any{"state": state}})
+			if err := json.NewEncoder(w).Encode(map[string]any{"id": id, "metadata": meta, "status": map[string]any{"state": state}}); err != nil {
+				t.Errorf("encode instance response: %v", err)
+			}
 		default:
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(500)
@@ -90,9 +94,13 @@ func TestEnsureDoesNotCreateOnUnknownOrKnownMissingInstance(t *testing.T) {
 				}
 				if known {
 					w.WriteHeader(404)
-					fmt.Fprint(w, `{"code":"NOT_FOUND"}`)
+					if _, err := fmt.Fprint(w, `{"code":"NOT_FOUND"}`); err != nil {
+						t.Errorf("write missing instance response: %v", err)
+					}
 				} else {
-					fmt.Fprint(w, `{"items":[],"pagination":{"hasNextPage":false}}`)
+					if _, err := fmt.Fprint(w, `{"items":[],"pagination":{"hasNextPage":false}}`); err != nil {
+						t.Errorf("write instance list response: %v", err)
+					}
 				}
 			}))
 			defer server.Close()
