@@ -68,7 +68,12 @@ type DownloadJob = { id: string; status: "preparing" | "ready" | "failed" | "can
 
 export async function downloadWorkspaceFile(sessionId: string, path: string, scope: FileScope, archive = false): Promise<void> {
   const base = `/sessions/${sessionId}/downloads`
-  let job = await api<DownloadJob>(base, { method: "POST", body: { path, scope, archive } })
+  return downloadFileJob(base, { path, scope, archive })
+}
+
+export async function downloadFileJob(base: string, body: { path: string; scope: FileScope; archive: boolean }, createURL = base): Promise<void> {
+  const { archive } = body
+  let job = await api<DownloadJob>(createURL, { method: "POST", body })
   let canceled = false
   let canceling = false
   const notification = toast.loading(`正在${archive ? "打包目录" : "准备下载"}：${job.name}`, {

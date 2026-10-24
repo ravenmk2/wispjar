@@ -15,7 +15,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ravenmk2/wispjar/internal/auth"
 	"github.com/ravenmk2/wispjar/internal/gateway/respond"
 	"github.com/ravenmk2/wispjar/internal/runtime/tools"
 	"github.com/ravenmk2/wispjar/internal/sandbox"
@@ -68,7 +67,7 @@ type fileAccess struct {
 // withFiles keeps a durable maintenance occupant through any lazy initialization
 // and the final file operation; pause/delete cannot race a detached HTTP handler.
 func (h *Handler) withFiles(c *gin.Context, fn func(*session.Detail, scopedFileOperation, string)) {
-	access, err := h.openFileAccess(c.Request.Context(), auth.UID(c), c.Param("id"), c.DefaultQuery("scope", "workspace"))
+	access, err := h.requestFileAccess(c, c.Query("scope"))
 	if err != nil {
 		fail(c, err)
 		return
@@ -154,7 +153,11 @@ func (a *fileAccess) operate(ctx context.Context, root, relative, op string, ext
 }
 
 func (h *Handler) initializeFileWorkspace(ctx context.Context, handle tools.Handle, sess *session.Detail, runID string) error {
-	err := initializeWorkspace(ctx, handle, sess.ID, []string{sess.AgentID})
+	agents := []string{}
+	if sess.AgentID != "" {
+		agents = append(agents, sess.AgentID)
+	}
+	err := initializeWorkspace(ctx, handle, sess.ID, agents)
 	if err != nil && controlCommandStopped(err) {
 		// The request context may already be canceled. Cleanup still needs its
 		// own bounded lifetime after a confirmed remote failure.
@@ -424,6 +427,10 @@ try:
         s=os.fstat(fd);os.close(fd)
         if not stat.S_ISREG(s.st_mode) and not stat.S_ISDIR(s.st_mode): raise ValueError("not a file or directory")
         result["bytes"]=s.st_size
+    elif p["op"]=="mkdir":
+        directory,name=parent(p["root"],p["path"])
+        try: os.mkdir(name,0o755,dir_fd=directory)
+        finally: os.close(directory)
     elif p["op"]=="write":
         data=base64.b64decode(p["data"],validate=True)
         if len(data)>p["max_bytes"]:sys.exit(43)

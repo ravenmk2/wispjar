@@ -76,6 +76,44 @@ func TestScopedFilesIntegration(t *testing.T) {
 	if err != nil || len(listing.Items) != 2 || commands != 1 || uploads != 0 || !handle.CommandsStopped() {
 		t.Fatalf("listing must need one supervised command without uploads: %+v commands=%d uploads=%d err=%v", listing, commands, uploads, err)
 	}
+	// Personal storage initialization must not create a placeholder session.
+	beforeSessions, _ := os.ReadDir("/sessions")
+	if err := initializeWorkspace(ctx, raw, "", []string{}); err != nil {
+		t.Fatal(err)
+	}
+	afterSessions, _ := os.ReadDir("/sessions")
+	if len(beforeSessions) != len(afterSessions) {
+		t.Fatal("storage initialization created a session directory")
+	}
+	if _, err := os.Stat("/sessions/inputs"); !os.IsNotExist(err) {
+		t.Fatal("storage initialization created session inputs at volume root")
+	}
+	if _, err := remoteFileOperation(ctx, handle, root, "outputs/资料", "mkdir", nil); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(path.Join(root, "outputs/资料")); err != nil || !info.IsDir() {
+		t.Fatal("new directory missing", err)
+	}
+	for _, relative := range []string{"outputs/资料", "missing-parent/new"} {
+		if _, err := remoteFileOperation(ctx, handle, root, relative, "mkdir", nil); err == nil {
+			t.Fatalf("mkdir accepted conflict or missing parent: %s", relative)
+		}
+	}
+	outside := t.TempDir()
+	if err := os.Symlink(outside, path.Join(root, "outputs/linked")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := remoteFileOperation(ctx, handle, root, "outputs/linked/escape", "mkdir", nil); err == nil {
+		t.Fatal("mkdir followed a symlink parent")
+	}
+	if _, err := os.Stat(path.Join(outside, "escape")); !os.IsNotExist(err) {
+		t.Fatal("mkdir wrote outside the requested directory")
+	}
+	for _, relative := range []string{"outputs/资料", "outputs/linked"} {
+		if err := os.Remove(path.Join(root, relative)); err != nil {
+			t.Fatal(err)
+		}
+	}
 	// Shell metacharacters and UTF-8 must survive the inline stdin path literally.
 	name := "outputs/quote'\"$().txt"
 	small := []byte("literal ' \" $(id) `id` \\ 中文\n")

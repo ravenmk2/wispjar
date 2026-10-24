@@ -108,11 +108,12 @@ function SecondaryLayout({ title }: { title: string }) {
   const org = useCurrentOrg()
   const { pathname } = useLocation()
   const personalPage = title === "个人中心" ? sectionNavigation.personal.groups.flatMap((group) => group.items).find((item) => item.to === pathname)?.label : undefined
+  const fileBrowser = pathname === "/personal/storage"
   return <div className="flex h-full min-h-0 flex-col">
     <header className="flex h-14 shrink-0 items-center gap-2 border-b px-6 text-sm">
       <span className="font-medium">{title}</span><span className="text-muted-foreground">/</span><span className="truncate text-muted-foreground">{personalPage ?? (title === "系统管理" ? "平台范围" : org?.name)}</span>
     </header>
-    <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"><Outlet /></div>
+    <div className={fileBrowser ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"}><Outlet /></div>
   </div>
 }
 

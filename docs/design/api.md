@@ -470,3 +470,30 @@ token 使用加密安全随机生成的 16 字节（128 位），按 RFC 4648 Ba
 资源返回 `Cache-Control: private, no-store`、`Referrer-Policy: no-referrer`、`X-Content-Type-Options: nosniff`。此通道单独允许无凭据 CORS，以支持 opaque-origin iframe 的字体、模块及 fetch；普通 API 不开放 CORS。资源响应附带 CSP `sandbox allow-scripts`，不开放 allow-same-origin；子资源及 connect 仅允许当前令牌资源前缀（图片等允许相应 data/blob），禁止 frame/object、表单及自定义 base。直接打开 HTML/SVG 也受响应头沙箱约束。代理访问日志应隐藏 token 路径段。
 
 首版支持目录内相对 URL，包括浏览器归一化后仍在授权根内的 `../`，以及查询参数和片段；`/assets/...` 站点根路径、外部 HTML 资源和 SPA 回退不支持。资源缺失明确失败，不返回应用 SPA。Markdown 的外部 HTTP(S) 图片/链接沿用原有行为；不会启用原始 HTML 执行。
+
+### 8.3 个人文件空间
+
+个人中心无需借用会话绑定来访问文件。下列接口属于 `/api/v1/orgs/{orgId}`，要求登录且为当前组织成员，电脑必须属于同组织本人。
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| GET | `/file-agents` | 返回 `{items:[{id,name,status}]}`，包含当前组织已发布智能体，以及本人保留会话使用过的智能体；文件始终位于本人的卷 |
+| GET / POST | `/files` | 列出目录 / 上传文件；响应及上传大小、冲突规则同会话接口 |
+| GET | `/file` | 读取文件，支持 `path`、`max_bytes` |
+| POST | `/file-directories` | `{path:"资料/新目录"}` 创建目录，返回 201；父目录必须存在，不覆盖已有条目；冲突返回 409 |
+| POST | `/file-previews` | 创建 HTML/Markdown 预览，body 同 §8.2 |
+| DELETE | `/file-previews/{previewId}` | 撤销本人通过此组织级接口创建的预览 |
+| POST | `/file-downloads` | 创建单文件或目录 ZIP 下载，body 及限制同 §8.1 |
+| GET / DELETE | `/file-downloads/{downloadId}` | 查询 / 取消本人在当前组织创建的下载任务 |
+
+列表、上传、读取、新建目录使用 query `computer_id`（必填）、`scope`（默认 storage）、`target_id`（按 scope 指定），其中 `path` 为相对路径；上传路径仍用 multipart 字段 `path`。预览／下载创建的 scope 来自 JSON body，其余身份参数仍在 query；状态查询及撤销无需重传身份参数。
+
+| scope | target_id | 根目录 |
+|---|---|---|
+| storage | 不允许设置 | `/storage` |
+| agent | 必填且属于上述可见智能体集合 | `/agents/<target_id>/files` |
+| workspace | 必填，本人同组织的未删除会话，允许归档 | `/sessions/<target_id>` |
+
+访问不会新建会话或修改任何会话绑定；使用电脑级维护占用，暂停的访问电脑会先启动。缺失的空间根目录按需初始化，个人存储初始化不会产生空会话目录。成员资格、目标归属和电脑归属在读取时重新核验；无权访问的空间返回 404 `file/space_not_found`。路径限制同会话接口，新建目录拒绝根目录、父目录段和符号链接父路径。
+
+预览令牌固定保存用户、组织、逻辑空间、访问电脑及 generation；目标会话换绑不影响独立预览，但删除目标、撤销成员资格、删除电脑或重建代次变化会使读取失败。下载快照继续使用 §8.1 的资源 URL，查询、取消和获取成品均重新授权其保存的空间与电脑归属；组织级和会话级任务不能跨管理接口访问。原会话文件接口及其绑定规则保持兼容。

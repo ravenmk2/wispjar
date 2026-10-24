@@ -25,6 +25,7 @@ type PreviewGrant struct {
 	Scope, Root                                                  string
 	Generation                                                   uint64
 	ExpiresAt                                                    time.Time
+	Space                                                        *FileSpace
 }
 
 // PreviewStore can be replaced by shared storage (for example Redis). All
@@ -34,7 +35,7 @@ type PreviewGrant struct {
 type PreviewStore interface {
 	Create(context.Context, PreviewGrant) error
 	ByTokenHash(context.Context, string) (PreviewGrant, error)
-	Revoke(context.Context, string, string, string) error // id, userID, sessionID
+	Revoke(context.Context, string, string, string) error // id, userID, sessionID or "org:"+orgID
 	BeginRead(context.Context, string) (PreviewGrant, error)
 	FinishRead(context.Context, string, int64) error
 }
@@ -116,7 +117,11 @@ func (s *memoryPreviewStore) Revoke(ctx context.Context, id, uid, sid string) er
 	defer s.mu.Unlock()
 	s.prune()
 	for hash, p := range s.byHash {
-		if p.grant.ID == id && p.grant.UserID == uid && p.grant.SessionID == sid {
+		matches := p.grant.Space == nil && p.grant.SessionID == sid
+		if p.grant.Space != nil {
+			matches = sid == "org:"+p.grant.OrgID
+		}
+		if p.grant.ID == id && p.grant.UserID == uid && matches {
 			delete(s.byHash, hash)
 			return nil
 		}

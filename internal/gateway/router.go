@@ -99,6 +99,19 @@ func NewRouter(deps Deps) *gin.Engine {
 	authed.GET("/sessions/:id/events", sessionH.ListEvents)
 
 	org := authed.Group("/orgs/:orgId", deps.Auth.ResolveOrg())
+	if deps.Runtime != nil {
+		deps.Runtime.SetFileSpaces(deps.DB)
+		org.GET("/files", deps.Runtime.Files)
+		org.GET("/file", deps.Runtime.File)
+		org.POST("/files", deps.Runtime.UploadFile)
+		org.POST("/file-directories", deps.Runtime.CreateDirectory)
+		org.GET("/file-agents", deps.Runtime.FileAgents)
+		org.POST("/file-previews", deps.Runtime.CreatePreview)
+		org.DELETE("/file-previews/:previewId", deps.Runtime.RevokePreview)
+		org.POST("/file-downloads", deps.Runtime.CreateDownload)
+		org.GET("/file-downloads/:downloadId", deps.Runtime.DownloadStatus)
+		org.DELETE("/file-downloads/:downloadId", deps.Runtime.CancelDownload)
+	}
 	if deps.Computers != nil {
 		h := computer.NewHandler(deps.Computers)
 		org.GET("/computers", h.List)

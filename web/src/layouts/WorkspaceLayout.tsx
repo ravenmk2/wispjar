@@ -126,7 +126,7 @@ export default function WorkspaceLayout() {
           </>
         )}
       </aside>
-      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-background">
+      <main className={cn("min-h-0 min-w-0 flex-1 bg-background", location.pathname === "/personal/storage" ? "overflow-hidden" : "overflow-y-auto")}>
         <Outlet key={currentOrg?.id} />
       </main>
     </div>

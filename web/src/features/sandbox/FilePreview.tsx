@@ -2,6 +2,8 @@ import { Download, Eye, FileCode2, FileText, Image as ImageIcon, Loader2 } from 
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { sessionsApi, type FilePreviewGrant, type FileScope } from "@/api/sessions"
+import type { FilePreviewSource } from "@/api/files"
+import { formatBytes, formatDateTime } from "@/lib/format"
 import { Markdown } from "@/components/Markdown"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -35,6 +37,8 @@ export function FilePreview({
   actions,
   navigation,
   onNavigate,
+  source,
+  fullPage = false,
 }: {
   sessionId: string
   item: SandboxFileItem
@@ -43,6 +47,8 @@ export function FilePreview({
   actions?: ReactNode
   navigation?: ReactNode
   onNavigate?: (path: string) => void
+  source?: FilePreviewSource
+  fullPage?: boolean
 }) {
   const kind = previewKind(item.name)
   const [state, setState] = useState<LoadState>({ status: "loading" })
@@ -50,7 +56,7 @@ export function FilePreview({
   const [sourceHtml, setSourceHtml] = useState<string | null>(null)
   const loadedPathRef = useRef<string | null>(null)
   const [previewRevision, setPreviewRevision] = useState(0)
-  const previewKey = JSON.stringify([sessionId, scope, item.path, reloadToken, previewRevision])
+  const previewKey = JSON.stringify([source?.key, sessionId, scope, item.path, reloadToken, previewRevision])
   const [grantState, setGrantState] = useState<{ key: string; grant?: FilePreviewGrant; content?: string; error?: string }>()
   const preview = grantState?.key === previewKey ? grantState : undefined
 
@@ -60,9 +66,9 @@ export function FilePreview({
     const controller = new AbortController()
     let grant: FilePreviewGrant | undefined
     let timer: ReturnType<typeof setTimeout> | undefined
-    const revoke = (value: FilePreviewGrant) => { void sessionsApi.revokePreview(sessionId, value.id).catch(() => { /* TTL covers offline/unload cleanup. */ }) }
+    const revoke = (value: FilePreviewGrant) => { void (source ? source.revoke(value.id) : sessionsApi.revokePreview(sessionId, value.id)).catch(() => { /* TTL covers offline/unload cleanup. */ }) }
     setGrantState({ key: previewKey })
-    void sessionsApi.createPreview(sessionId, scope ?? "workspace", ".", item.path).then(async (value) => {
+    void (source ? source.preview(item.path) : sessionsApi.createPreview(sessionId, scope ?? "workspace", ".", item.path)).then(async (value) => {
       if (canceled) { revoke(value); return }
       grant = value
       let content: string | undefined
@@ -78,12 +84,13 @@ export function FilePreview({
       if (!canceled) setGrantState({ key: previewKey, error: error instanceof Error ? error.message : "预览创建失败" })
     })
     return () => { canceled = true; controller.abort(); clearTimeout(timer); if (grant) revoke(grant) }
-  }, [sessionId, scope, item.path, kind, previewKey])
+  }, [sessionId, scope, item.path, kind, previewKey, source])
 
   const resolveReference = (url: string) => preview?.grant ? resolvePreviewReference(url, preview.grant.entry_url, preview.grant.files_url, window.location.origin) : undefined
   async function download() {
     try {
-      if (scope || kind === "html" || kind === "markdown") await downloadWorkspaceFile(sessionId, item.path, scope ?? "workspace")
+      if (source) await source.download(item.path)
+      else if (scope || kind === "html" || kind === "markdown") await downloadWorkspaceFile(sessionId, item.path, scope ?? "workspace")
       else if (state.status === "ready") downloadBlob(state.blob, fileName(item.path))
     } catch (e) { toast.error(e instanceof Error ? e.message : "下载失败") }
   }
@@ -107,7 +114,8 @@ export function FilePreview({
     const isReload = loadedPathRef.current === item.path
 
     const maxBytes = kind === "image" ? IMAGE_MAX_BYTES : undefined
-    fetchSandboxFileData(sessionId, item.path, maxBytes, scope, controller.signal)
+    const request = source ? source.read(item.path, maxBytes, controller.signal) : fetchSandboxFileData(sessionId, item.path, maxBytes, scope, controller.signal)
+    request
       .then(async (data) => {
         if (cancelled) return
         if (data.type === "text") {
@@ -132,7 +140,7 @@ export function FilePreview({
         }
         if (kind === "other") {
           // 二进制文件：首次打开直接触发下载，自动刷新重载时不重复下载
-          if (!scope && !isReload) {
+          if (!source && !scope && !isReload) {
             downloadBlob(data.blob, fileName(item.path))
             toast.info("二进制文件已开始下载")
           }
@@ -158,7 +166,7 @@ export function FilePreview({
       controller.abort()
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [sessionId, item.path, item.size, item.name, kind, reloadToken, scope, mode])
+  }, [sessionId, item.path, item.size, item.name, kind, reloadToken, scope, mode, source])
 
   useEffect(() => {
     setSourceHtml(null)
@@ -177,14 +185,17 @@ export function FilePreview({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b px-3">
-        {navigation ?? <>
+      <div className={fullPage ? "flex min-h-16 shrink-0 flex-wrap items-center gap-2 border-b px-4 py-3 sm:px-6" : "flex h-10 shrink-0 items-center gap-2 border-b px-3"}>
+        {fullPage ? <div className="flex min-w-[140px] flex-1 items-center gap-3">
+          <FileIcon name={item.name} className="size-5 shrink-0" />
+          <div className="min-w-0"><h2 className="truncate text-sm font-medium" title={item.name}>{item.name}</h2><p className="mt-1 text-xs text-muted-foreground">{formatBytes(item.size)}<span className="hidden sm:inline"> · {formatDateTime(item.modified_at)}</span></p></div>
+        </div> : navigation ?? <>
         <FileIcon name={item.name} className="size-3.5" />
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground" title={item.path}>
           {item.path}
         </span>
         </>}
-        <Badge variant="secondary" className="shrink-0 text-[10px] font-normal">
+        <Badge variant="secondary" className={fullPage ? "hidden shrink-0 text-[10px] font-normal xl:inline-flex" : "shrink-0 text-[10px] font-normal"}>
           {kind === "other" ? (fileExt(item.name)?.toUpperCase() ?? KIND_LABEL.other) : KIND_LABEL[kind]}
         </Badge>
         {truncated && (
@@ -215,7 +226,8 @@ export function FilePreview({
           </div>
         )}
         {actions}
-        {(scope || state.status === "ready") && (
+        {fullPage && <Button variant="ghost" size="icon" className="size-8 shrink-0" title="下载文件" aria-label="下载文件" onClick={() => void download()}><Download className="size-4" /></Button>}
+        {!fullPage && (source || scope || state.status === "ready") && (
           <Button
             variant="ghost"
             size="icon"
@@ -273,7 +285,7 @@ export function FilePreview({
         )}
         {state.status === "ready" && !state.binary && kind === "markdown" && mode === "preview" && preview?.grant && (
           <div className="min-h-0 flex-1 overflow-auto">
-            <Markdown content={preview.content ?? state.text ?? ""} className="px-4 py-3" resolveUrl={(url) => resolveReference(url)?.url} onLink={(url) => {
+            <Markdown content={preview.content ?? state.text ?? ""} className={fullPage ? "mx-auto max-w-5xl px-6 py-7 sm:px-10" : "px-4 py-3"} resolveUrl={(url) => resolveReference(url)?.url} onLink={(url) => {
               const files = new URL(preview.grant!.files_url, window.location.origin)
               const target = new URL(url, window.location.origin)
               if (target.origin !== files.origin || !target.pathname.startsWith(files.pathname) || !onNavigate) return false

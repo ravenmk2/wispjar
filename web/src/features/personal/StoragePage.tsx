@@ -1,76 +1,79 @@
-import { Folder } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { ChevronsUpDown, Folder, HardDrive } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link } from "react-router"
-import { errorMessage } from "@/api/client"
-import { sessionsApi } from "@/api/sessions"
-import { EmptyState, PageHeader } from "@/components/common"
+import { toast } from "sonner"
+import { ApiError, errorMessage } from "@/api/client"
+import { computersApi } from "@/api/computers"
+import type { FileSpaceTarget } from "@/api/files"
+import type { FileScope } from "@/api/sessions"
+import { EmptyState } from "@/components/common"
 import { Button } from "@/components/ui/button"
-import { RefreshButton } from "@/components/RefreshButton"
-import { Label } from "@/components/ui/label"
-import { WorkspaceFiles } from "@/features/computers/WorkspaceFiles"
-import type { SessionSummary } from "@/lib/types"
+import { accessComputers } from "@/lib/file-browser"
+import type { Computer } from "@/lib/computers"
+import { cn } from "@/lib/utils"
 import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
+import { AccessComputerPicker, FileSpacePicker, type FileObject } from "./FileSpacePicker"
+import { FileBrowser, type FileLocation } from "./FileBrowser"
+
+const names: Record<FileScope, string> = { storage: "我的存储", agent: "智能体", workspace: "会话" }
 
 export default function StoragePage() {
   const org = useCurrentOrg()
-  const token = useIdentityStore((s) => s.token)
-  const [sessions, setSessions] = useState<SessionSummary[]>([])
-  const [cursor, setCursor] = useState<string | undefined>()
-  const [status, setStatus] = useState<"active" | "archived">("active")
-  const [selected, setSelected] = useState("")
-  const [opened, setOpened] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [opening, setOpening] = useState(false)
-  const [error, setError] = useState("")
-  const [revision, setRevision] = useState(0)
-  const request = useRef(0)
+  const user = useIdentityStore(s => s.user)
+  return org && user ? <PersonalFiles key={`${org.id}:${user.id}`} orgId={org.id} /> : null
+}
 
+function PersonalFiles({ orgId }: { orgId: string }) {
+  const [scope, setScope] = useState<FileScope>("storage")
+  const [objects, setObjects] = useState<Partial<Record<FileScope, FileObject>>>({})
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [computers, setComputers] = useState<Computer[]>([])
+  const [computerId, setComputerId] = useState("")
+  const [autoId, setAutoId] = useState("")
+  const [computersLoading, setComputersLoading] = useState(true)
+  const [computersError, setComputersError] = useState("")
+  const [listRevision, setListRevision] = useState(0)
+  const [connecting, setConnecting] = useState(false)
+  const [connectionError, setConnectionError] = useState(false)
+  const [writing, setWriting] = useState(false)
+  const [locations, setLocations] = useState<Record<string, FileLocation>>({})
+  const token = useIdentityStore(s => s.token)
+  const attempted = useRef(new Set<string>())
+  const choices = useMemo(() => accessComputers(computers), [computers])
+  const resolved = computers.find(c => c.id === (computerId || autoId))
+  const targetObject = objects[scope]
+  const spaceKey = `${scope}:${targetObject?.id ?? ""}`
+  const location = locations[spaceKey] ?? { directory: ".", selected: null, expanded: ["."] }
+  const target = useMemo<FileSpaceTarget | undefined>(() => resolved && (scope === "storage" || targetObject) ? { orgId, computerId: resolved.id, scope, targetId: scope === "storage" ? undefined : targetObject?.id } : undefined, [orgId, resolved?.id, scope, targetObject?.id])
   useEffect(() => {
     let active = true
-    request.current++
-    setSessions([]); setSelected(""); setOpened(""); setCursor(undefined); setOpening(false); setError(""); setLoading(true)
-    if (!org) { setLoading(false); return }
-    sessionsApi.list(org.id, { limit: 50, status }).then((result) => {
-      if (active) { setSessions(result.items); setCursor(result.next_cursor) }
-    }).catch((e) => { if (active) setError(errorMessage(e)) }).finally(() => { if (active) setLoading(false) })
-    return () => { active = false; request.current++ }
-  }, [org?.id, token, status, revision])
-
-  async function loadMore() {
-    if (!org || !cursor || loading) return
-    const version = request.current
-    setLoading(true)
-    try {
-      const result = await sessionsApi.list(org.id, { limit: 50, cursor, status })
-      if (version !== request.current) return
-      setSessions((items) => [...items, ...result.items]); setCursor(result.next_cursor); setError("")
-    } catch (e) { if (version === request.current) setError(errorMessage(e)) }
-    finally { if (version === request.current) setLoading(false) }
-  }
-
-  async function open() {
-    if (!selected || opening) return
-    const version = ++request.current
-    setOpening(true); setError("")
-    try {
-      const detail = await sessionsApi.detail(selected)
-      if (version !== request.current) return
-      if (!detail.computer_id) { setError("会话未绑定云电脑，请重新选择会话。"); return }
-      setOpened(detail.id)
-    } catch (e) { if (version === request.current) setError(errorMessage(e)) }
-    finally { if (version === request.current) setOpening(false) }
-  }
-
-  return <div className="mx-auto max-w-5xl space-y-5">
-    <PageHeader title="存储" description="浏览和管理当前组织下可在不同会话中共用的个人文件。"><RefreshButton variant="outline" size="sm" onClick={() => setRevision((value) => value + 1)} refreshing={loading} /></PageHeader>
-    <div className="flex flex-wrap items-end gap-3 rounded-xl border p-4">
-      <div className="min-w-0 flex-1 space-y-2"><Label htmlFor="storage-session">访问会话</Label><select id="storage-session" className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={selected} disabled={loading || opening} onChange={(event) => { request.current++; setSelected(event.target.value); setOpened(""); setError("") }}><option value="">选择已绑定云电脑的会话</option>{sessions.map((session) => <option key={session.id} value={session.id}>{session.title || "新聊天"} · {session.agent_name}</option>)}</select></div>
-      <select aria-label="会话状态" className="h-9 rounded-md border bg-background px-2 text-sm" value={status} onChange={(event) => setStatus(event.target.value as "active" | "archived")}><option value="active">未归档会话</option><option value="archived">已归档会话</option></select>
-      {cursor && <Button variant="outline" size="sm" disabled={loading || opening} onClick={() => void loadMore()}>加载更多</Button>}
-      <Button size="sm" disabled={!selected || opening || loading} onClick={() => void open()}>{opening ? "正在连接…" : "浏览文件"}</Button>
-    </div>
-    <p className="text-xs text-muted-foreground">存储仅本人可见，同一组织内的个人云电脑共用这些文件。浏览时会使用所选会话的云电脑，电脑已暂停时会自动启动。</p>
-    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    {opened ? <WorkspaceFiles key={`${org?.id}-${opened}`} sessionId={opened} running={false} fixedScope="storage" embedded /> : <EmptyState icon={<Folder className="size-8" />} title={loading ? "正在读取会话…" : "选择一个访问会话"} description="使用已有会话的云电脑浏览存储，不会新建会话或发送消息。" action={<Button variant="outline" size="sm" asChild><Link to="/">前往工作区</Link></Button>} />}
-  </div>
+    setComputersLoading(true); setComputersError("")
+    void computersApi.list(orgId).then(result => {
+      if (!active) return
+      setComputers(result.items)
+      setAutoId(previous => accessComputers(result.items).some(c => c.id === previous) ? previous : accessComputers(result.items)[0]?.id ?? "")
+    }).catch(e => { if (active) setComputersError(errorMessage(e)) }).finally(() => { if (active) setComputersLoading(false) })
+    return () => { active = false }
+  }, [orgId, token, listRevision])
+  function selectComputer(id: string) { attempted.current.clear(); setComputerId(id); setConnectionError(false); if (!id) setAutoId(choices[0]?.id ?? "") }
+  const accessError = useCallback((error: unknown): boolean => {
+    if (!computerId && resolved && error instanceof ApiError && (error.code.startsWith("computer/") || error.code === "file/api_unavailable")) {
+      attempted.current.add(resolved.id)
+      const next = choices.find(c => !attempted.current.has(c.id))
+      if (next) { setAutoId(next.id); toast.info(`无法通过「${resolved.name}」读取文件，正在尝试「${next.name}」`); return true }
+    }
+    setConnectionError(true); return false
+  }, [computerId, resolved, choices])
+  const accessReady = useCallback(() => setConnectionError(false), [])
+  const updateLocation = useCallback((next: FileLocation) => setLocations(old => ({ ...old, [spaceKey]: next })), [spaceKey])
+  return <>
+    <FileBrowser key={spaceKey} target={target} rootName={scope === "storage" ? "我的存储" : targetObject?.name ?? names[scope]} location={location} onLocation={updateLocation} onConnecting={setConnecting} onWriting={setWriting} onAccessError={accessError} onAccessReady={accessReady}
+      sourceSelector={<><div className="flex gap-0.5 rounded-lg bg-muted/60 p-1" aria-label="文件来源">{(["storage", "agent", "workspace"] as const).map(value => <button type="button" key={value} disabled={writing} aria-pressed={scope === value} className={cn("min-w-0 flex-1 rounded-md px-1 py-1.5 text-xs text-muted-foreground disabled:opacity-50", scope === value && "bg-background font-medium text-foreground shadow-sm")} onClick={() => { setScope(value); if (value !== "storage" && !objects[value]) setPickerOpen(true) }}>{names[value]}</button>)}</div>
+        {scope === "storage" ? <div className="mt-4 flex items-center gap-2"><HardDrive className="size-4 text-muted-foreground" /><div><p className="text-sm">我的存储</p><p className="mt-0.5 text-xs text-muted-foreground">跨会话使用的资料与成果</p></div></div> : <><Button variant="outline" className="mt-4 w-full justify-between gap-2 text-sm" disabled={writing} onClick={() => setPickerOpen(true)}><span className="truncate">{targetObject?.name ?? `选择${names[scope]}`}</span><ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" /></Button><p className="mt-2 text-xs text-muted-foreground">{scope === "agent" ? "这个智能体的个人长期文件" : "这个会话的输入、工作文件与成果"}</p></>}
+      </>}
+      computerSelector={<AccessComputerPicker computers={computers} selected={computerId} resolved={resolved} loading={connecting || computersLoading} writing={writing} error={connectionError || !!computersError} onSelect={selectComputer} onRefresh={() => { attempted.current.clear(); setListRevision(n => n + 1) }} />}
+      unavailable={computersLoading ? <p role="status" className="m-auto p-6 text-sm text-muted-foreground">正在读取云电脑…</p> : computersError ? <EmptyState title="无法读取云电脑" description={computersError} action={<Button variant="outline" onClick={() => setListRevision(n => n + 1)}>重试</Button>} /> : !resolved ? <EmptyState icon={<HardDrive className="size-8" />} title={computerId ? "所选电脑不可用" : "没有可用的云电脑"} description="文件通过你的云电脑访问。请在目录树底部选择电脑，或前往云电脑页面创建。" action={<Button variant="outline" asChild><Link to="/personal/computers">管理云电脑</Link></Button>} /> : <EmptyState icon={<Folder className="size-8" />} title={`选择${names[scope]}`} description="选择后即可浏览对应文件，不会新建会话。" action={<Button onClick={() => setPickerOpen(true)}>选择{names[scope]}</Button>} />}
+    />
+    <FileSpacePicker orgId={orgId} scope={scope} selected={targetObject?.id} open={pickerOpen} onOpenChange={setPickerOpen} onSelect={object => setObjects(old => ({ ...old, [scope]: object }))} />
+  </>
 }

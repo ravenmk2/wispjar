@@ -35,6 +35,7 @@ type AttachmentResolver interface {
 // Handler 承载会话运行时相关 REST 端点（api.md §3）。
 type Handler struct {
 	computers   ComputerService
+	fileSpaces  FileSpaceResolver
 	orch        Orchestrator
 	sessions    SessionService
 	events      EventStore

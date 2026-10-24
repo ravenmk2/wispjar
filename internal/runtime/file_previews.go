@@ -85,7 +85,7 @@ func (h *Handler) CreatePreview(c *gin.Context) {
 		respond.Error(c, 400, respond.CodeInvalid, "预览入口只支持 HTML 或 Markdown", nil)
 		return
 	}
-	access, err := h.openFileAccess(c.Request.Context(), auth.UID(c), c.Param("id"), req.Scope)
+	access, err := h.requestFileAccess(c, req.Scope)
 	if err != nil {
 		fail(c, err)
 		return
@@ -113,10 +113,13 @@ func (h *Handler) CreatePreview(c *gin.Context) {
 	scope := req.Scope
 	if scope == "" {
 		scope = "workspace"
+		if c.Param("orgId") != "" {
+			scope = "storage"
+		}
 	}
 	grant := PreviewGrant{ID: id.New(), TokenHash: previewHash(token), UserID: auth.UID(c), OrgID: access.session.OrgID,
 		SessionID: access.session.ID, ComputerID: *access.session.ComputerID, AgentID: access.session.AgentID,
-		Scope: scope, Root: root, Generation: access.generation, ExpiresAt: time.Now().Add(previewTTL)}
+		Scope: scope, Root: root, Generation: access.generation, ExpiresAt: time.Now().Add(previewTTL), Space: requestFileSpace(c, scope)}
 	if err = h.previews.Create(c.Request.Context(), grant); err != nil {
 		previewError(c, err)
 		return
@@ -143,11 +146,17 @@ func (h *Handler) PreviewOwner(ctx context.Context, token string) string {
 
 func (h *Handler) RevokePreview(c *gin.Context) {
 	c.Header("Cache-Control", "private, no-store")
-	if _, err := h.sessions.Get(c.Request.Context(), auth.UID(c), c.Param("id")); err != nil {
-		fail(c, err)
-		return
+	resource := c.Param("id")
+	if c.Param("orgId") != "" {
+		// ResolveOrg has already rechecked membership; no computer is started.
+		resource = "org:" + c.Param("orgId")
+	} else {
+		if _, err := h.sessions.Get(c.Request.Context(), auth.UID(c), resource); err != nil {
+			fail(c, err)
+			return
+		}
 	}
-	err := h.previews.Revoke(c.Request.Context(), c.Param("previewId"), auth.UID(c), c.Param("id"))
+	err := h.previews.Revoke(c.Request.Context(), c.Param("previewId"), auth.UID(c), resource)
 	// Idempotent cleanup of expired/revoked grants without revealing ownership.
 	if err != nil && !errors.Is(err, ErrPreviewNotFound) {
 		previewError(c, err)
@@ -190,12 +199,13 @@ func (h *Handler) PreviewContent(c *gin.Context) {
 	}()
 	// Check binding and generation BEFORE EnsureRunning: stale tokens must not
 	// start a different computer or a rebuilt instance.
-	sess, err := h.sessions.Get(ctx, grant.UserID, grant.SessionID)
-	if err != nil {
-		previewError(c, ErrPreviewNotFound)
-		return
-	}
-	if sess.ComputerID == nil || *sess.ComputerID != grant.ComputerID || sess.OrgID != grant.OrgID || sess.AgentID != grant.AgentID {
+	if grant.Space == nil {
+		sess, err := h.sessions.Get(ctx, grant.UserID, grant.SessionID)
+		if err != nil || sess.ComputerID == nil || *sess.ComputerID != grant.ComputerID || sess.OrgID != grant.OrgID || sess.AgentID != grant.AgentID {
+			previewError(c, ErrPreviewNotFound)
+			return
+		}
+	} else if _, err := h.resolveFileSpace(ctx, grant.UserID, *grant.Space); err != nil {
 		previewError(c, ErrPreviewNotFound)
 		return
 	}
@@ -204,7 +214,12 @@ func (h *Handler) PreviewContent(c *gin.Context) {
 		previewError(c, ErrPreviewNotFound)
 		return
 	}
-	access, err := h.openFileAccess(ctx, grant.UserID, grant.SessionID, grant.Scope)
+	var access *fileAccess
+	if grant.Space != nil {
+		access, err = h.openSpaceAccess(ctx, grant.UserID, *grant.Space)
+	} else {
+		access, err = h.openFileAccess(ctx, grant.UserID, grant.SessionID, grant.Scope)
+	}
 	if err != nil {
 		fail(c, err)
 		return

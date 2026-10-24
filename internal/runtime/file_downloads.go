@@ -88,6 +88,7 @@ type fileDownload struct {
 	expires                                               time.Time
 	cancel                                                context.CancelFunc
 	readers                                               int
+	space                                                 *FileSpace
 }
 
 // CreateDownload authenticates a resource-scoped capability. The bearer JWT is
@@ -107,10 +108,13 @@ func (h *Handler) CreateDownload(c *gin.Context) {
 	if !ok {
 		return
 	}
-	sess, err := h.sessions.Get(c.Request.Context(), auth.UID(c), c.Param("id"))
+	sess, space, err := h.fileIdentity(c, req.Scope)
 	if err != nil {
 		fail(c, err)
 		return
+	}
+	if space != nil {
+		req.Scope = space.Scope
 	}
 	if _, err = fileRoot(sess, req.Scope); err != nil {
 		fail(c, err)
@@ -136,7 +140,7 @@ func (h *Handler) CreateDownload(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), limits.PrepareTimeout)
 	job := &fileDownload{ID: hex.EncodeToString(key), Status: "preparing", Name: name,
 		uid: auth.UID(c), sessionID: sess.ID, source: relative, scope: req.Scope, archive: req.Archive,
-		expires: time.Now().Add(limits.PrepareTimeout + limits.TTL), cancel: cancel}
+		expires: time.Now().Add(limits.PrepareTimeout + limits.TTL), cancel: cancel, space: space}
 	h.downloadMu.Lock()
 	active, userActive := 0, 0
 	for _, old := range h.downloads {
@@ -165,19 +169,31 @@ func (h *Handler) CreateDownload(c *gin.Context) {
 
 func (h *Handler) downloadForUser(c *gin.Context) *fileDownload {
 	// Recheck current membership and ownership on every status/cancel operation.
-	if _, err := h.sessions.Get(c.Request.Context(), auth.UID(c), c.Param("id")); err != nil {
-		fail(c, err)
-		return nil
-	}
 	h.downloadMu.Lock()
-	defer h.downloadMu.Unlock()
 	job := h.downloads[c.Param("downloadId")]
-	if job == nil || job.uid != auth.UID(c) || job.sessionID != c.Param("id") || time.Now().After(job.expires) {
+	if job == nil || job.uid != auth.UID(c) || time.Now().After(job.expires) ||
+		(job.space == nil && (c.Param("orgId") != "" || job.sessionID != c.Param("id"))) ||
+		(job.space != nil && job.space.OrgID != c.Param("orgId")) {
+		h.downloadMu.Unlock()
 		respond.Error(c, 404, "file/download_not_found", "下载任务不存在或已过期", nil)
 		return nil
 	}
 	copy := *job
+	h.downloadMu.Unlock()
+	if err := h.authorizeDownload(c.Request.Context(), &copy); err != nil {
+		fail(c, err)
+		return nil
+	}
 	return &copy
+}
+
+func (h *Handler) authorizeDownload(ctx context.Context, job *fileDownload) error {
+	if job.space != nil {
+		_, err := h.resolveFileSpace(ctx, job.uid, *job.space)
+		return err
+	}
+	_, err := h.sessions.Get(ctx, job.uid, job.sessionID)
+	return err
 }
 
 func (h *Handler) DownloadStatus(c *gin.Context) {
@@ -241,7 +257,13 @@ func (h *Handler) prepareDownload(ctx context.Context, job *fileDownload) {
 		h.downloadMu.Unlock()
 		time.AfterFunc(limits.TTL, func() { h.expireDownload(job.ID) })
 	}()
-	access, err := h.openFileAccess(ctx, job.uid, job.sessionID, job.scope)
+	var access *fileAccess
+	var err error
+	if job.space != nil {
+		access, err = h.openSpaceAccess(ctx, job.uid, *job.space)
+	} else {
+		access, err = h.openFileAccess(ctx, job.uid, job.sessionID, job.scope)
+	}
 	if err != nil {
 		prepareErr = err
 		return
@@ -384,7 +406,7 @@ func (h *Handler) DownloadContent(c *gin.Context) {
 		}
 		h.downloadMu.Unlock()
 	}()
-	if _, err = h.sessions.Get(c.Request.Context(), view.uid, view.sessionID); err != nil {
+	if err = h.authorizeDownload(c.Request.Context(), &view); err != nil {
 		fail(c, err)
 		return
 	}

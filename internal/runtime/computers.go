@@ -208,7 +208,7 @@ func quoteShell(value string) string { return "'" + strings.ReplaceAll(value, "'
 const workspacePython = `
 import os,sys,json,stat,re
 p=json.loads(sys.argv[1])
-ids=[p["session"]]+p["agents"]
+ids=([p["session"]] if p["session"] else [])+p["agents"]
 if any(not re.fullmatch("[a-f0-9]{32}",v) for v in ids): raise RuntimeError("invalid identity")
 def directory(path,writable=False):
     try: os.mkdir(path,0o755)
@@ -221,10 +221,11 @@ def directory(path,writable=False):
 directory("/storage",True)
 directory("/sessions")
 directory("/agents")
-root="/sessions/"+p["session"]
-directory(root,True)
-directory(root+"/inputs",True)
-directory(root+"/outputs",True)
+if p["session"]:
+    root="/sessions/"+p["session"]
+    directory(root,True)
+    directory(root+"/inputs",True)
+    directory(root+"/outputs",True)
 for agent in p["agents"]:
     root="/agents/"+agent
     directory(root)
