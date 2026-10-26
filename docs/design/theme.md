@@ -6,7 +6,7 @@
 
 正文与通用界面使用本机字体，不下载外部字体文件。平台系统字体优先，中文按字体栈回退：
 
-- 正文：`-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, Roboto, Noto Sans, Ubuntu, Cantarell, Helvetica Neue, sans-serif, Arial, PingFang SC, Source Han Sans SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC`。
+- 正文：`-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, Roboto, Noto Sans, Ubuntu, Cantarell, Helvetica Neue, Arial, PingFang SC, Source Han Sans SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, sans-serif`。通用 `sans-serif` 放在末尾，避免在显式中文字体之前提前回退；平台系统字体仍优先。
 - 等宽：`SFMono-Regular, Consolas, Menlo, Liberation Mono, PingFang SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, monospace`；西文优先等宽，CJK 明确回退到苹方、微软雅黑等中文字体。
 - 侧栏品牌字标：Clash Display Semibold（600），18px，字距 0.04em。`WispjarWordmark` 使用转为轮廓的 SVG 字标（字体来源：[Fontshare](https://www.fontshare.com/fonts/clash-display)，ITF FFL），以 `currentColor` 跟随深浅主题；不分发字体文件。
 
@@ -24,6 +24,8 @@
 | 辅助提示 | 13px / 20px | `text-xs` |
 
 body 基准 14px；聊天正文使用 `--chat-font-size: 16px`、`--chat-line-height: 26px`，输入框为 16px / 24px。Markdown H1 为 24px / 36px，H2 为 20px / 32px，H3 为 18px / 28px，H4 为 16px / 26px；标题与粗体使用 600 字重，正文为 400。段落间距 16px，标题上 24px、下 16px。表格不缩小字号，宽内容在表格或代码块内横向滚动。
+
+文字抗锯齿沿用浏览器与操作系统默认值，不全局强制 `-webkit-font-smoothing: antialiased` 或 `-moz-osx-font-smoothing: grayscale`；这些非标准属性主要作用于 macOS，不能用来改善 Windows 字体渲染。阅读区不通过缩放、文字描边或阴影模拟清晰度。字体回退调整后的实际观感需在目标系统与显示缩放下检查，不能仅凭 CSS 配置认定更清晰。
 
 ## 2. 语义颜色
 
