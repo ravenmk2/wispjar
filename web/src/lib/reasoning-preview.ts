@@ -1,4 +1,6 @@
-export const PREVIEW_HOLD_MS = 1800
+export const PREVIEW_HOLD_MS = 500
+const PREVIEW_SEGMENT_LENGTH = 48
+const PREVIEW_HARD_LIMIT = 72
 
 export interface ReasoningPreviewState {
   scanned: number
@@ -21,6 +23,14 @@ export function advanceReasoningPreview(previous: ReasoningPreviewState, text: s
     if (state.boundary && !/\s/.test(char)) {
       state.candidate = i
       state.boundary = false
+    }
+    // Long sentences must keep advancing too. Prefer word/CJK boundaries;
+    // cap unbroken tokens without splitting UTF-16 surrogate pairs.
+    const length = i - state.candidate
+    if (!/\s/.test(char) && length >= PREVIEW_SEGMENT_LENGTH &&
+      (/\s/.test(text[i - 1]) || /[\u3000-\u9fff]/.test(char) ||
+        (length >= PREVIEW_HARD_LIMIT && !/[\uDC00-\uDFFF]/.test(char)))) {
+      state.candidate = i
     }
     if (state.candidate === state.start) state.end = i + 1
     // A period is a boundary only when followed by whitespace (not decimals/URLs).

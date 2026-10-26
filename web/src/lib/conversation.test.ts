@@ -318,9 +318,9 @@ test("reasoning preview holds a line then skips to newest without replaying a ba
   const text = "one\n\ntwo\nthree"
   state = advanceReasoningPreview(state, text, 100)
   assert.equal(reasoningPreviewText(state, text), "one")
-  state = advanceReasoningPreview(state, text, 1799)
+  state = advanceReasoningPreview(state, text, 499)
   assert.equal(reasoningPreviewText(state, text), "one")
-  state = advanceReasoningPreview(state, text, 1800)
+  state = advanceReasoningPreview(state, text, 500)
   assert.equal(reasoningPreviewText(state, text), "three")
 })
 
@@ -328,11 +328,11 @@ test("reasoning preview appends without moving its beginning and uses sentence b
   let state = advanceReasoningPreview(emptyReasoningPreview(0), "检查", 0)
   state = advanceReasoningPreview(state, "检查配置。继续验证", 100)
   assert.equal(reasoningPreviewText(state, "检查配置。继续验证"), "检查配置。")
-  state = advanceReasoningPreview(state, "检查配置。继续验证", 1800)
+  state = advanceReasoningPreview(state, "检查配置。继续验证", 500)
   assert.equal(reasoningPreviewText(state, "检查配置。继续验证"), "继续验证")
   const long = "长".repeat(10000)
   state = advanceReasoningPreview(emptyReasoningPreview(0), long, 0)
-  assert.equal(reasoningPreviewText(state, long), "长".repeat(240))
+  assert.equal(reasoningPreviewText(state, long), "长".repeat(48))
   state = advanceReasoningPreview(state, "新内容", 2000)
   assert.equal(reasoningPreviewText(state, "新内容"), "新内容")
 })
@@ -341,7 +341,7 @@ test("reasoning preview ignores blank lines and keeps decimals intact", () => {
   const text = "Version 1.25 is ready. Next step\r\n\n"
   let state = advanceReasoningPreview(emptyReasoningPreview(0), text, 0)
   assert.equal(reasoningPreviewText(state, text), "Version 1.25 is ready.")
-  state = advanceReasoningPreview(state, text, 1800)
+  state = advanceReasoningPreview(state, text, 500)
   assert.equal(reasoningPreviewText(state, text), "Next step")
 })
 
@@ -430,4 +430,23 @@ test("collapsed thinking activity requires a live streaming reasoning block", ()
   assert.equal(activeProcessNode(part), part.nodes[0])
   part.hasPending = true
   assert.equal(activeProcessNode(part), undefined)
+})
+
+
+test("long reasoning previews advance at word and CJK boundaries without replaying", () => {
+  const text = "长".repeat(150)
+  let state = advanceReasoningPreview(emptyReasoningPreview(0), text, 0)
+  assert.equal(reasoningPreviewText(state, text), "长".repeat(48))
+  state = advanceReasoningPreview(state, text, 500)
+  assert.equal(state.start, 144)
+  assert.equal(reasoningPreviewText(state, text), "长".repeat(6))
+  assert.deepEqual(advanceReasoningPreview(state, text, 1000), state)
+  const words = "word ".repeat(24)
+  state = advanceReasoningPreview(emptyReasoningPreview(0), words, 500)
+  assert.equal(state.start, 100)
+  assert.equal(reasoningPreviewText(state, words), "word word word word")
+  const token = "x".repeat(71) + "😀" + "y".repeat(10)
+  state = advanceReasoningPreview(emptyReasoningPreview(0), token, 500)
+  assert.equal(state.start, 73)
+  assert.equal(reasoningPreviewText(state, token), "y".repeat(10))
 })

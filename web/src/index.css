@@ -224,13 +224,13 @@
   }
   /* Runtime feedback, like ActivityIcon: keep enabled even with reduced motion. */
   .reasoning-preview-incoming {
-    animation: reasoning-preview-enter 160ms cubic-bezier(.22, 1, .36, 1) both;
+    animation: reasoning-preview-enter 150ms cubic-bezier(.22, 1, .36, 1) both;
   }
   .reasoning-preview-outgoing {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    animation: reasoning-preview-exit 160ms cubic-bezier(.22, 1, .36, 1) both;
+    animation: reasoning-preview-exit 150ms cubic-bezier(.22, 1, .36, 1) both;
   }
   .text-shimmer {
     background-size: 200% 100%;
