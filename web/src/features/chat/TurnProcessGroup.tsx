@@ -2,7 +2,8 @@ import { Waypoints } from "lucide-react"
 import { DisclosureChevron, DisclosureContent, useDisclosureMotion } from "@/components/DisclosureMotion"
 import { NodeView } from "@/features/chat/NodeList"
 import { ActivityIcon } from "@/features/chat/ActivityIcon"
-import { activeProcessNode, reasoningTail, type ProcessGroup } from "@/lib/turn-grouping"
+import { activeProcessNode, type ProcessGroup } from "@/lib/turn-grouping"
+import { ReasoningPreview } from "@/features/chat/ReasoningPreview"
 import { safeParseJson } from "@/lib/format"
 import { toolDisplayName } from "@/lib/tool-names"
 import { useChatDisclosure } from "@/stores/chatPresentation"
@@ -27,7 +28,6 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
   let detail = ""
   if (!expanded && thinking?.type === "reasoning") {
     label = "思考中"
-    detail = reasoningTail(thinking.text) || "正在思考…"
   } else if (!expanded && working) {
     label = working.name === "skill" || working.name === "activate_skill" ? "技能" : `正在${toolDisplayName(working.name)}`
     const args = safeParseJson(working.arguments)
@@ -43,9 +43,11 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
         {!expanded && activity ? <ActivityIcon name={activity.kind === "assistant" ? "reasoning" : activity.name} active />
           : tools.length > 0 && <Waypoints aria-hidden="true" className="chat-activity-icon" strokeWidth={1.65} />}
         <span className={cn("shrink-0", active && "text-shimmer")}>{label}</span>
-        {detail && <>
+        {(detail || (!expanded && thinking)) && <>
           <span className="shrink-0">·</span>
-          <span className={cn("min-w-0 overflow-hidden whitespace-nowrap text-ellipsis", !expanded && thinking && "[direction:rtl] text-left")} title={detail}><bdi>{detail}</bdi></span>
+          <span className="min-w-0 overflow-hidden whitespace-nowrap text-ellipsis">
+            {!expanded && thinking?.type === "reasoning" ? <ReasoningPreview key={activity?.id} text={thinking.text} /> : <bdi title={detail}>{detail}</bdi>}
+          </span>
         </>}
         <DisclosureChevron open={expanded} revision={motion.revision} />
       </button>

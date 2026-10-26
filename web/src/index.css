@@ -155,6 +155,16 @@
   }
 }
 
+@keyframes reasoning-preview-enter {
+  from { opacity: .55; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes reasoning-preview-exit {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-100%); }
+}
+
 @keyframes activity-search {
   0%, 100% { transform: translate(0, 0); }
   30% { transform: translate(2px, -1.5px); }
@@ -209,6 +219,19 @@
 }
 
 @layer utilities {
+  .reasoning-preview-window {
+    position: relative;
+  }
+  /* Runtime feedback, like ActivityIcon: keep enabled even with reduced motion. */
+  .reasoning-preview-incoming {
+    animation: reasoning-preview-enter 160ms cubic-bezier(.22, 1, .36, 1) both;
+  }
+  .reasoning-preview-outgoing {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    animation: reasoning-preview-exit 160ms cubic-bezier(.22, 1, .36, 1) both;
+  }
   .text-shimmer {
     background-size: 200% 100%;
     background-clip: text;

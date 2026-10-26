@@ -121,11 +121,6 @@ export function groupByTurn(nodes: ConversationNode[], sessionRunning?: boolean)
   return { segments, loose }
 }
 
-export function reasoningTail(text: string, limit = 160): string {
-  const tail = text.trimEnd().slice(-limit).replace(/\s+/g, " ").trim()
-  return text.trimEnd().length > limit ? `…${tail}` : tail
-}
-
 export function formatTurnDuration(ms: number): string {
   const total = Math.max(1, Math.round(ms / 1000))
   const hours = Math.floor(total / 3600)

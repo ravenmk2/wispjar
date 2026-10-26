@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { deriveConversationNodes } from "./conversation"
-import { activeProcessNode, groupByTurn, reasoningTail } from "./turn-grouping"
+import { activeProcessNode, groupByTurn } from "./turn-grouping"
+import { advanceReasoningPreview, emptyReasoningPreview, reasoningPreviewText } from "./reasoning-preview"
 import type { ContentBlock, SessionEvent, StreamChunk, TurnEndReason } from "./types"
 import { useChatPresentationStore } from "../stores/chatPresentation"
 import { useSessionStore } from "../stores/session"
@@ -312,9 +313,36 @@ test("nested assistant replies stay inside the task and have distinct identities
   }
 })
 
-test("reasoning preview shows the tail, flattening newlines", () => {
-  assert.equal(reasoningTail("earlier content\nlatest line", 11), "…latest line")
-  assert.equal(reasoningTail("one\ntwo"), "one two")
+test("reasoning preview holds a line then skips to newest without replaying a backlog", () => {
+  let state = advanceReasoningPreview(emptyReasoningPreview(0), "one", 0)
+  const text = "one\n\ntwo\nthree"
+  state = advanceReasoningPreview(state, text, 100)
+  assert.equal(reasoningPreviewText(state, text), "one")
+  state = advanceReasoningPreview(state, text, 1799)
+  assert.equal(reasoningPreviewText(state, text), "one")
+  state = advanceReasoningPreview(state, text, 1800)
+  assert.equal(reasoningPreviewText(state, text), "three")
+})
+
+test("reasoning preview appends without moving its beginning and uses sentence boundaries", () => {
+  let state = advanceReasoningPreview(emptyReasoningPreview(0), "检查", 0)
+  state = advanceReasoningPreview(state, "检查配置。继续验证", 100)
+  assert.equal(reasoningPreviewText(state, "检查配置。继续验证"), "检查配置。")
+  state = advanceReasoningPreview(state, "检查配置。继续验证", 1800)
+  assert.equal(reasoningPreviewText(state, "检查配置。继续验证"), "继续验证")
+  const long = "长".repeat(10000)
+  state = advanceReasoningPreview(emptyReasoningPreview(0), long, 0)
+  assert.equal(reasoningPreviewText(state, long), "长".repeat(240))
+  state = advanceReasoningPreview(state, "新内容", 2000)
+  assert.equal(reasoningPreviewText(state, "新内容"), "新内容")
+})
+
+test("reasoning preview ignores blank lines and keeps decimals intact", () => {
+  const text = "Version 1.25 is ready. Next step\r\n\n"
+  let state = advanceReasoningPreview(emptyReasoningPreview(0), text, 0)
+  assert.equal(reasoningPreviewText(state, text), "Version 1.25 is ready.")
+  state = advanceReasoningPreview(state, text, 1800)
+  assert.equal(reasoningPreviewText(state, text), "Next step")
 })
 
 test("manual disclosure survives remount/reconnect; switching sessions resets it", () => {

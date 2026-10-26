@@ -8,7 +8,8 @@ import { DisclosureChevron, DisclosureContent, useDisclosureMotion } from "@/com
 import { Markdown } from "@/components/Markdown"
 import { ForkButton } from "@/features/chat/ForkButton"
 import { formatMessageTime, formatNumber } from "@/lib/format"
-import { formatTurnDuration, reasoningTail } from "@/lib/turn-grouping"
+import { formatTurnDuration } from "@/lib/turn-grouping"
+import { ReasoningPreview } from "@/features/chat/ReasoningPreview"
 import { useChatDisclosure } from "@/stores/chatPresentation"
 import { cn } from "@/lib/utils"
 import type { AssistantNode } from "@/lib/conversation"
@@ -87,8 +88,8 @@ export function ReasoningBlock({
     const el = bodyRef.current
     if (el && open && streaming && followRef.current) el.scrollTop = el.scrollHeight
   }, [text, open, streaming])
-  const detail = streaming && !open ? reasoningTail(text)
-    : durationMs !== undefined ? formatTurnDuration(durationMs) : ""
+  const previewing = streaming && !open
+  const detail = durationMs !== undefined ? formatTurnDuration(durationMs) : ""
   return (
     <div className="my-0.5">
       <button
@@ -100,9 +101,9 @@ export function ReasoningBlock({
       >
         <ActivityIcon name="reasoning" active={streaming} />
         <span className={cn("shrink-0 text-fg-process", streaming && "text-shimmer")}>{streaming ? "思考中" : "思考"}</span>
-        <span className="shrink-0 text-fg-process-muted">{detail && "·"}</span>
-        <span className={cn("min-w-0 flex-1 overflow-hidden whitespace-nowrap text-fg-process-muted", streaming && !open ? "[direction:rtl] [text-overflow:ellipsis] text-left" : "text-ellipsis")} title={detail}>
-          <bdi>{detail}</bdi>
+        <span className="shrink-0 text-fg-process-muted">{(previewing || detail) && "·"}</span>
+        <span className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-ellipsis text-fg-process-muted">
+          {previewing ? <ReasoningPreview text={text} /> : <bdi>{detail}</bdi>}
         </span>
         <DisclosureChevron open={open} revision={motion.revision} className="text-fg-process-muted" />
       </button>
