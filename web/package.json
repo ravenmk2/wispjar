@@ -4,9 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "node scripts/test.mjs",
-    "dev": "vite",
-    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "test": "node --test scripts/prepare-fonts.test.mjs && node scripts/test.mjs",
+    "fonts:prepare": "node scripts/prepare-fonts.mjs",
+    "dev": "node scripts/prepare-fonts.mjs && vite",
+    "build": "node scripts/prepare-fonts.mjs && tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -38,12 +39,13 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
-    "esbuild": "^0.25.12",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "esbuild": "^0.25.12",
+    "fflate": "0.8.2",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.6.3",

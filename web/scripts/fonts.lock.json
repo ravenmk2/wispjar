@@ -1,0 +1,16 @@
+{
+  "snapshot": "MiSans-official-2026-10-29",
+  "archive": {
+    "url": "https://hyperos.mi.com/font-download/MiSans.zip",
+    "sha256": "b6aa1fc827035922612df8edf36e5609bca1c5441e25cd57572204569b7b81d9"
+  },
+  "license": {
+    "url": "https://hyperos.mi.com/font-download/MiSans字体知识产权许可协议.pdf",
+    "sha256": "4a93a27cd2bd81b3b5ecfd0a853144a876fa26938a93a68443c67d74172fcb86"
+  },
+  "fonts": [
+    { "file": "MiSans-Regular.woff2", "entry": "MiSans/woff2/MiSans-Regular.woff2", "weight": 400, "sha256": "d704c1a932c0bd7e8a071d276cd81c0ed0c9fecfa26ac234f4bed0559fe1cb2d" },
+    { "file": "MiSans-Medium.woff2", "entry": "MiSans/woff2/MiSans-Medium.woff2", "weight": 500, "sha256": "44e28ca6c2f0ca79829f192831ef87b5eec7c464f5cfb7a83467f57bb6e58114" },
+    { "file": "MiSans-Semibold.woff2", "entry": "MiSans/woff2/MiSans-Semibold.woff2", "weight": 600, "sha256": "78227c6ec59566785c65ac0b5312328bfa2f879918f3d7403725785615a9a8f6" }
+  ]
+}

@@ -6,7 +6,7 @@ WORKDIR /build/web
 COPY web/package.json web/pnpm-lock.yaml ./
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate && pnpm install --frozen-lockfile
 COPY web/ ./
-RUN pnpm build
+RUN --mount=type=cache,id=wispjar-fonts,target=/build/web/.cache/fonts pnpm build
 
 # 后端构建
 FROM golang:1.26-alpine AS go

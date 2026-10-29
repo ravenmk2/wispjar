@@ -1,12 +1,12 @@
 # 界面主题设计 Token
 
-本规范对应 `web/src/index.css` 与 `web/tailwind.config.js`。界面按 Kimi 的系统字体顺序、排版密度与中性灰阶分层对齐；深色助手正文、两套主题的蓝色用户气泡及发送／停止按钮保留项目现状。`:root` 定义浅色，`.dark` 覆盖深色。
+本规范对应 `web/src/index.css` 与 `web/tailwind.config.js`。界面采用 MiSans 首选字体，并保持既有排版密度与中性灰阶分层；深色助手正文、两套主题的蓝色用户气泡及发送／停止按钮保留项目现状。`:root` 定义浅色，`.dark` 覆盖深色。
 
 ## 1. 字体与排版
 
-正文与通用界面使用本机字体，不下载外部字体文件。平台系统字体优先，中文按字体栈回退：
+正文与通用界面优先使用随应用分发的 MiSans。前端构建从官方源下载并校验字体，复用本地离线缓存；运行时通过同源资源加载，不依赖外部字体服务。字体文件、缓存与生成样式不入库。
 
-- 正文：`-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, Roboto, Noto Sans, Ubuntu, Cantarell, Helvetica Neue, Arial, PingFang SC, Source Han Sans SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, sans-serif`。通用 `sans-serif` 放在末尾，避免在显式中文字体之前提前回退；平台系统字体仍优先。
+- 正文：`MiSans, -apple-system, BlinkMacSystemFont, Segoe UI, system-ui, Roboto, Noto Sans, Ubuntu, Cantarell, Helvetica Neue, Arial, PingFang SC, Source Han Sans SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, sans-serif`。通用 `sans-serif` 放在末尾，避免在显式中文字体之前提前回退；MiSans 缺字或加载失败时使用后续系统字体。
 - 等宽：`SFMono-Regular, Consolas, Menlo, Liberation Mono, PingFang SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, monospace`；西文优先等宽，CJK 明确回退到苹方、微软雅黑等中文字体。
 - 侧栏品牌字标：Clash Display Semibold（600），18px，字距 0.04em。`WispjarWordmark` 使用转为轮廓的 SVG 字标（字体来源：[Fontshare](https://www.fontshare.com/fonts/clash-display)，ITF FFL），以 `currentColor` 跟随深浅主题；不分发字体文件。
 
@@ -16,12 +16,14 @@
 | 聊天正文、用户气泡 | 16px / 26px | `text-chat` |
 | 消息输入文本与占位符 | 16px / 24px | `text-chat leading-6` |
 | 思考摘要及详情、过程组与工具折叠行 | 16px / 26px | `text-chat`，以辅助色区分层级 |
-| 工具参数、输出、搜索结果、diff、代码块及行内代码 | 16px / 26px | 普通内容与行内代码使用正文系统字体；代码块、命令和 diff 使用支持 CJK 回退的等宽字体 |
+| 工具参数、输出、搜索结果、diff、代码块及行内代码 | 16px / 26px | 普通内容与行内代码使用正文字体；代码块、命令和 diff 使用支持 CJK 回退的等宽字体 |
 | 提问、选项及解释、已回答内容 | 16px / 26px | `text-chat` |
 | 侧栏“智能体”“聊天”及聊天名称 | 14px / 20px | `text-sm leading-5`，分组以辅助色与间距区分 |
 | 通用菜单、按钮、表单及管理表格 | 14px / 20px | `text-sm`，保留管理页密度 |
 | 时间、工具耗时、token 统计与状态徽标 | 12px / 18px | `text-meta` |
 | 辅助提示 | 13px / 20px | `text-xs` |
+
+MiSans 使用官方原始 WOFF2 的 400、500、600 字重，保持字体文件与版权信息原样，不自行裁剪或转码。`font-display: swap` 允许加载期间显示系统字体。登录页注明字体使用并提供随包许可协议。字体变更需验证中文、英文、粗体、深浅主题和窄屏换行；构建缓存及更新方式见 [构建与发布](../build-release.md)。
 
 body 基准 14px；聊天正文使用 `--chat-font-size: 16px`、`--chat-line-height: 26px`，输入框为 16px / 24px。Markdown H1 为 24px / 36px，H2 为 20px / 32px，H3 为 18px / 28px，H4 为 16px / 26px；标题与粗体使用 600 字重，正文为 400。段落间距 16px，标题上 24px、下 16px。表格不缩小字号，宽内容在表格或代码块内横向滚动。
 
@@ -102,6 +104,6 @@ body 基准 14px；聊天正文使用 `--chat-font-size: 16px`、`--chat-line-he
 
 ## 4. 代码高亮
 
-Shiki 按需加载语言，使用 `github-light` / `github-dark`；背景跟随代码容器，深色通过 `--shiki-dark` 应用语法色。聊天普通内容（含思考、摘要、路径、普通工具输出）统一使用正文系统字体；代码块、命令、JSON 参数与 diff 使用支持 CJK 回退的等宽字体，行内代码沿用正文系统字体，数字可使用 tabular-nums。高亮前后的代码保持同一字体、16px / 26px 字号与行高，避免加载后字号跳动。
+Shiki 按需加载语言，使用 `github-light` / `github-dark`；背景跟随代码容器，深色通过 `--shiki-dark` 应用语法色。聊天普通内容（含思考、摘要、路径、普通工具输出）统一使用正文字体；代码块、命令、JSON 参数与 diff 使用支持 CJK 回退的等宽字体，行内代码沿用正文字体，数字可使用 tabular-nums。高亮前后的代码保持同一字体、16px / 26px 字号与行高，避免加载后字号跳动。
 
 思考和工具标题使用常规字重。可交互的整轮、过程组、思考和工具折叠行 hover 或键盘 focus-visible 时，通过局部过程色变量统一增强文字、耗时、图标、箭头和运行摘要的对比度；展开详情正文不连带变色，错误、审批及 diff 状态色保留语义。禁用的等待状态不提供可点击 hover 反馈。

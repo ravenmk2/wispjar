@@ -89,6 +89,9 @@ export default function LoginPage() {
               {loading ? "登录中…" : "登录"}
             </Button>
           </form>
+          <p className="mt-4 text-center text-xs text-fg-secondary">
+            本软件使用 MiSans 字体 · <a className="underline" href={new URL("../generated/fonts/MiSans-License.pdf", import.meta.url).href} target="_blank" rel="noreferrer">字体许可</a>
+          </p>
         </CardContent>
       </Card>
     </div>

@@ -27,6 +27,12 @@ jobs:
         with:
           node-version: 24
 
+      - name: Cache font downloads
+        uses: actions/cache@v4
+        with:
+          path: web/.cache/fonts
+          key: misans-${{ hashFiles('web/scripts/fonts.lock.json') }}
+
       - name: Build web frontend
         shell: bash
         working-directory: web

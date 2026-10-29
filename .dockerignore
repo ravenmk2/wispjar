@@ -9,6 +9,8 @@ docs
 scripts
 web/dist
 web/node_modules
+web/.cache
+web/src/generated/fonts
 node_modules
 *.log
 .playwright-cli
