@@ -1,11 +1,15 @@
 import { Building2, Check, CircleUserRound, LayoutDashboard, LogOut, Monitor, Moon, Settings2, ShieldCheck, Sun } from "lucide-react"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Outlet, useLocation, useNavigate } from "react-router"
 import { toast } from "sonner"
 import { authApi } from "@/api/auth"
 import { errorMessage } from "@/api/client"
 import { UserAvatar } from "@/components/UserAvatar"
 import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent,
@@ -45,6 +49,8 @@ export function UserMenu({ variant = "sidebar" }: { variant?: "sidebar" | "icon"
   const location = useLocation()
   const section = mainSection(location.pathname)
   const [switching, setSwitching] = useState(false)
+  const [logoutOpen, setLogoutOpen] = useState(false)
+  const menuTrigger = useRef<HTMLButtonElement>(null)
   const platformOrg = platformOrganization(orgs)
   if (!user) return null
 
@@ -72,36 +78,59 @@ export function UserMenu({ variant = "sidebar" }: { variant?: "sidebar" | "icon"
     <Icon className="size-4" /><span className="flex-1">{name}</span>{active && <Check className="size-3.5 text-muted-foreground" />}
   </DropdownMenuItem>
 
-  return <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <button type="button" title={`用户菜单 · ${user.display_name || user.username} · @${user.username}`} aria-label={`用户菜单 · ${user.display_name || user.username}`} className={variant === "icon" ? "flex size-8 items-center justify-center rounded-full hover:bg-accent" : "flex h-14 w-full items-center gap-3 rounded-lg px-2 text-sm hover:bg-accent"}>
-        <UserAvatar size={variant === "icon" ? "compact" : "sidebar"} />
-        {variant === "sidebar" && <span className="min-w-0 flex-1 text-left"><span className="block truncate font-medium">{user.display_name || user.username}</span><span className="block truncate text-meta text-muted-foreground">@{user.username}</span></span>}
-      </button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent side="top" align="start" className="w-60">
-      <DropdownMenuLabel><div className="flex min-w-0 flex-col"><span className="truncate" title={user.display_name || user.username}>{user.display_name || user.username}</span><span className="truncate text-xs font-normal text-muted-foreground" title={`@${user.username}`}>@{user.username}</span>
-        {currentOrg && <span className="mt-1 flex items-center gap-1.5 text-xs font-normal text-muted-foreground"><span className="truncate">{currentOrg.name}</span>{currentOrg.is_platform && <Badge variant="secondary">系统</Badge>}</span>}
-      </div></DropdownMenuLabel>
-      <DropdownMenuSeparator />
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger className="gap-2" disabled={switching}><Building2 className="size-4" />切换组织</DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className="w-56">{orgs.map((org) => <DropdownMenuItem key={org.id} onClick={() => void switchOrg(org)} className="gap-2">
-          <span className={cn("size-1.5 rounded-full", org.id === currentOrg?.id ? "bg-primary" : "bg-transparent")} /><span className="flex-1 truncate">{org.name}</span>
-          {org.is_platform && <Badge variant="secondary">系统</Badge>}{org.role === "admin" && <span className="text-xs text-muted-foreground">管理员</span>}
-        </DropdownMenuItem>)}</DropdownMenuSubContent>
-      </DropdownMenuSub>
-      <DropdownMenuSeparator />
-      {entry("工作区", LayoutDashboard, section === "workspace", returnToWorkspace)}
-      {entry("个人中心", CircleUserRound, section === "personal", () => navigate("/personal/computers"))}
-      {currentOrg?.role === "admin" && entry("组织管理", Settings2, section === "organization", () => navigate("/admin/agents"))}
-      {platformOrg && entry("系统管理", ShieldCheck, section === "system", openPlatform)}
-      <DropdownMenuSeparator />
-      <ThemeSubMenu />
-      <DropdownMenuSeparator />
-      <DropdownMenuItem onClick={() => { clear(); navigate("/login", { replace: true }) }}><LogOut className="size-4" />退出登录</DropdownMenuItem>
-    </DropdownMenuContent>
-  </DropdownMenu>
+  return <>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button ref={menuTrigger} type="button" title={`用户菜单 · ${user.display_name || user.username} · @${user.username}`} aria-label={`用户菜单 · ${user.display_name || user.username}`} className={variant === "icon" ? "flex size-8 items-center justify-center rounded-full hover:bg-accent" : "flex h-14 w-full items-center gap-3 rounded-lg px-2 text-sm hover:bg-accent"}>
+          <UserAvatar size={variant === "icon" ? "compact" : "sidebar"} />
+          {variant === "sidebar" && <span className="min-w-0 flex-1 text-left"><span className="block truncate font-medium">{user.display_name || user.username}</span><span className="block truncate text-meta text-muted-foreground">@{user.username}</span></span>}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="w-60" onCloseAutoFocus={(event) => { if (logoutOpen) event.preventDefault() }}>
+        <DropdownMenuLabel>
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="truncate" title={user.display_name || user.username}>{user.display_name || user.username}</span>
+            <div className="flex min-w-0 items-center gap-1.5 text-xs font-normal text-muted-foreground">
+              <span className="min-w-0 truncate" title={`@${user.username}`}>@{user.username}</span>
+              {currentOrg && <>
+                <span aria-hidden="true">·</span>
+                <span className="min-w-0 truncate" title={currentOrg.name}>{currentOrg.name}</span>
+                {currentOrg.is_platform && <Badge variant="secondary" className="shrink-0">系统</Badge>}
+              </>}
+            </div>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {entry("工作区", LayoutDashboard, section === "workspace", returnToWorkspace)}
+        {entry("个人中心", CircleUserRound, section === "personal", () => navigate("/personal/computers"))}
+        {currentOrg?.role === "admin" && entry("组织管理", Settings2, section === "organization", () => navigate("/admin/agents"))}
+        {platformOrg && entry("系统管理", ShieldCheck, section === "system", openPlatform)}
+        <div className="h-2" aria-hidden="true" />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="gap-2" disabled={switching}><Building2 className="size-4" />切换组织</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-56">{orgs.map((org) => <DropdownMenuItem key={org.id} onClick={() => void switchOrg(org)} className="gap-2">
+            <span className={cn("size-1.5 rounded-full", org.id === currentOrg?.id ? "bg-primary" : "bg-transparent")} /><span className="flex-1 truncate">{org.name}</span>
+            {org.is_platform && <Badge variant="secondary">系统</Badge>}{org.role === "admin" && <span className="text-xs text-muted-foreground">管理员</span>}
+          </DropdownMenuItem>)}</DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <ThemeSubMenu />
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => setLogoutOpen(true)}><LogOut className="size-4" />退出登录</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+    <AlertDialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+      <AlertDialogContent onCloseAutoFocus={(event) => { event.preventDefault(); menuTrigger.current?.focus() }}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>退出登录？</AlertDialogTitle>
+          <AlertDialogDescription>退出后需要重新登录才能继续使用。</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { clear(); navigate("/login", { replace: true }) }}>退出登录</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
 }
 
 function SecondaryLayout({ title }: { title: string }) {
