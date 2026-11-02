@@ -24,6 +24,7 @@
     --border: rgba(0, 0, 0, 0.09);
     --divider: rgba(0, 0, 0, 0.09);
     --input: 0 0% 90%;
+    --input-focus: #737373;
     --ring: 216.82540 92.19512% 59.80392%;
     --ring-focus: rgba(58, 131, 247, 0.2);
     --chat-font-size: 16px;
@@ -80,6 +81,7 @@
     --border: rgba(255, 255, 255, 0.1);
     --divider: rgba(255, 255, 255, 0.1);
     --input: 0 0% 20%;
+    --input-focus: #a3a3a3;
     --ring: 216.86275 63.48548% 47.25490%;
     --ring-focus: rgba(44, 103, 197, 0.2);
     --sidebar: #181817;
@@ -121,10 +123,12 @@
     outline: none;
   }
   /* 菜单已有焦点底色；容器和内嵌输入由外层边框提示，避免覆盖菜单投影。 */
-  :focus-visible:not(:where(textarea, [role="menu"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="listbox"], [role="option"], [role="group"], [data-focus-ring="none"])) {
-    box-shadow: 0 0 0 3px var(--ring-focus) !important;
+  :focus-visible:not(:where(.form-control, textarea, [role="menu"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="listbox"], [role="option"], [role="group"], [data-focus-ring="none"])) {
+    box-shadow: none !important;
+    outline: 2px solid var(--input-focus) !important;
+    outline-offset: 2px;
   }
-  /* 浏览器自动填充底色可能为 UA !important；用内阴影覆盖，并保留焦点 ring。
+  /* 浏览器自动填充底色可能为 UA !important；用内阴影覆盖，焦点由边框提示。
      登录、强制改密和个人中心改密均位于 Card 内，沿用同一主题背景。 */
   .auth-form input:is(:autofill, :-webkit-autofill) {
     background-color: hsl(var(--card));
@@ -134,8 +138,16 @@
     caret-color: var(--foreground);
     box-shadow: inset 0 0 0 1000px hsl(var(--card)), var(--tw-shadow, 0 0 #0000) !important;
   }
-  .auth-form input:is(:autofill, :-webkit-autofill):focus-visible {
-    box-shadow: inset 0 0 0 1000px hsl(var(--card)), 0 0 0 3px var(--ring-focus) !important;
+  .form-control {
+    transition: border-color 150ms;
+  }
+  .form-control:focus:not([data-focus-ring="none"]) {
+    border-color: var(--input-focus);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .form-control {
+      transition: none;
+    }
   }
   /* 文本域自带光标焦点，ring 会与容器卡片边框打架（如 composer 胶囊卡内圈矩形） */
   textarea:focus-visible {
