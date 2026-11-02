@@ -14,6 +14,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/config"
 	"github.com/ravenmk2/wispjar/internal/gateway/ws"
 	"github.com/ravenmk2/wispjar/internal/provider"
+	"github.com/ravenmk2/wispjar/internal/requestlog"
 	"github.com/ravenmk2/wispjar/internal/runtime"
 	"github.com/ravenmk2/wispjar/internal/search"
 	"github.com/ravenmk2/wispjar/internal/session"
@@ -32,6 +33,7 @@ type Deps struct {
 	WSBus           *runtime.Bus
 	RuntimeSessions runtime.SessionRepo
 	Computers       *computer.Service
+	RequestLogs     *requestlog.Service
 }
 
 func NewRouter(deps Deps) *gin.Engine {
@@ -165,6 +167,9 @@ func NewRouter(deps Deps) *gin.Engine {
 	admin.GET("/usage", usageH.OrgUsage)
 
 	platform := authed.Group("/platform", deps.Auth.RequirePlatformAdmin())
+	if deps.RequestLogs != nil {
+		deps.RequestLogs.Register(platform)
+	}
 	platform.GET("/orgs", tenantH.ListOrgs)
 	platform.POST("/orgs", tenantH.CreateOrg)
 	platform.GET("/orgs/:id", tenantH.GetOrg)

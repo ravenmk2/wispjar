@@ -23,6 +23,7 @@ import WebSearchPage from "@/platform/WebSearchPage"
 import SettingsPage from "@/platform/SettingsPage"
 import UsersPage from "@/platform/UsersPage"
 import AuditPage from "@/platform/AuditPage"
+import RequestLogsPage from "@/platform/RequestLogsPage"
 import PlatformUsagePage from "@/platform/PlatformUsagePage"
 import { useCurrentOrg, useIdentityStore } from "@/stores/identity"
 
@@ -111,6 +112,7 @@ export const router = createBrowserRouter([
                   { path: "models", element: <ModelsPage /> },
                   { path: "usage", element: <PlatformUsagePage /> },
                   { path: "audit", element: <AuditPage /> },
+                  { path: "request-logs", element: <RequestLogsPage /> },
                   { path: "settings", element: <SettingsPage /> },
                 ],
               },

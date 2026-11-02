@@ -9,6 +9,7 @@
 > - `docs/design/api.md`：REST API 完整规格（全部端点请求/响应/权限/错误码）
 > - `docs/design/protocol.md`：WebSocket 实时协议（30 秒一次性连接票据、mux 帧、follow 订阅、StreamChunk、会话事件词表、重连对账）
 > - `docs/design/runtime.md`：Agent 运行时（eino 集成、工具规格、task 委派、Skills、审批、沙箱管理）
+> - `docs/design/request-logs.md`：独立模型请求日志、内存开关、异步存储与清理
 > - `docs/design/media.md`：图片工具、供应商文件引用、历史持久化与能力限制
 > - `docs/design/search.md`：网络搜索与网页读取供应商实例、独立全局默认与智能体选择、工具及界面
 > - `docs/design/computers.md`：用户云电脑与持久卷（目录、命名配置、并行执行、技能同步、退役升级及实施验收）

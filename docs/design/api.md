@@ -1,5 +1,7 @@
 # REST API 规格
 
+系统管理员独立模型请求日志接口见 [请求日志](request-logs.md#管理-api-与界面)。
+
 > 所有会话绑定用户云电脑。文件接口统一使用 scope 和相对 path；旧会话沙箱端点已移除，云电脑 API 见 §8。
 > 全部端点以 `/api/v1` 为前缀（WS 实时协议 `/api/ws` 见 protocol.md）。
 > 认证：除 `/api/v1/auth/login` 外全部需要 `Authorization: Bearer <jwt>`。

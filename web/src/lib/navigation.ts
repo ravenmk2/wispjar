@@ -43,6 +43,7 @@ export const sectionNavigation = {
       { label: "模型服务", items: [
         { to: "/platform/providers", label: "模型供应商", icon: "provider" },
         { to: "/platform/models", label: "模型", icon: "model" },
+        { to: "/platform/request-logs", label: "请求日志", icon: "audit" },
       ] },
       { label: "运行与维护", items: [
         { to: "/platform/web-search", label: "网络搜索", icon: "search" },

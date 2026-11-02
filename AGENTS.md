@@ -27,6 +27,7 @@ docs/
     |-- api.md              # REST API
     |-- protocol.md         # WebSocket 协议
     |-- runtime.md          # Agent 运行时
+    |-- request-logs.md     # 独立模型请求日志
     |-- media.md            # 图片与媒体
     |-- search.md           # 网络搜索与网页读取
     |-- computers.md        # 云电脑与持久卷

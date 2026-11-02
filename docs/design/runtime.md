@@ -1,5 +1,7 @@
 # Agent 运行时详细设计
 
+模型请求日志由 `internal/requestlog` 在 HTTP 发送边界捕获，双开关内存判断、后台写文件和索引，不依赖会话事件，见 [请求日志](request-logs.md)。
+
 > 本文是 `internal/runtime`、`internal/sandbox`、`internal/skill`、`internal/provider` 的权威设计。
 > 用户云电脑资源边界、目录、并行执行和技能更新以 [computers.md](computers.md) 为准。会话必须绑定电脑，工作区为 `/sessions/<sid>`，技能为 `/agents/<agent_id>/skills`。
 > 依赖事实（调研结论）：

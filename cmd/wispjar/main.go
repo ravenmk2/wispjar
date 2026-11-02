@@ -24,6 +24,7 @@ import (
 	"github.com/ravenmk2/wispjar/internal/gateway"
 	"github.com/ravenmk2/wispjar/internal/gateway/ws"
 	"github.com/ravenmk2/wispjar/internal/provider"
+	"github.com/ravenmk2/wispjar/internal/requestlog"
 	"github.com/ravenmk2/wispjar/internal/runtime"
 	"github.com/ravenmk2/wispjar/internal/sandbox"
 	"github.com/ravenmk2/wispjar/internal/search"
@@ -106,6 +107,12 @@ func main() {
 	skillSvc := skill.NewService(db, cfg.Storage.DataDir)
 	skillCoordinator := skill.NewCoordinator(db, skillSvc)
 	attachmentSvc := attachment.NewService(db, cfg.Storage.DataDir)
+	requestLogs, err := requestlog.New(db, cfg.Storage.DataDir)
+	if err != nil {
+		log.Fatalf("request logs: %v", err)
+	}
+	modelFactory := provider.NewChatModelFactory(db, cfg.MasterKey(), attachmentSvc)
+	modelFactory.SetRequestLogs(requestLogs)
 	eventStore := session.NewStore(db)
 	eventStore.AfterAppend = usage.NewRecorder(db).OnEvents
 	repo := runtime.NewSessionRepo(db)
@@ -127,7 +134,7 @@ func main() {
 		Skills:           skillCoordinator,
 		Events:           eventStore,
 		Sessions:         repo,
-		Models:           provider.NewChatModelFactory(db, cfg.MasterKey(), attachmentSvc),
+		Models:           modelFactory,
 		Checkpoints: func(sessionID string) adk.CheckPointStore {
 			return runtime.NewCheckpointStore(db, sessionID)
 		},
@@ -197,7 +204,8 @@ func main() {
 	router := gateway.NewRouter(gateway.Deps{
 		Config: cfg, DB: db, Auth: authSvc, Runtime: runtimeH, WS: wsServer,
 		WSBus: bus, RuntimeSessions: repo,
-		Computers: computerSvc,
+		Computers:   computerSvc,
+		RequestLogs: requestLogs,
 	})
 
 	srv := &http.Server{
@@ -223,5 +231,10 @@ func main() {
 		log.Fatalf("shutdown: %v", err)
 	}
 	computerSvc.Stop()
+	logCtx, logCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer logCancel()
+	if err := requestLogs.Close(logCtx); err != nil {
+		log.Printf("drain request logs: %v", err)
+	}
 	log.Println("wispjar stopped")
 }

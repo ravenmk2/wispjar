@@ -1,5 +1,7 @@
 # 前端详细设计
 
+系统管理请求日志页面及交互见 [请求日志](request-logs.md#管理-api-与界面)。
+
 > 用户云电脑整体契约见 [computers.md §9](computers.md#9-实时协议与前端)，界面实现见本文“用户云电脑与持久文件”。所有会话使用 WorkspaceFiles 工作区文件面板，复用文件预览组件及 theme.md token。
 
 > 本文是 `web/` 的权威设计。技术栈已定（决策 #11）：React 18 + Vite + TypeScript + Tailwind CSS + shadcn/ui + Zustand + React Router。界面语言中文。

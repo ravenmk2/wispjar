@@ -1,5 +1,7 @@
 # 数据模型（MySQL 8）
 
+`000013_model_request_log` 新增独立日志及模型开关表，字段与生命周期见 [请求日志](request-logs.md#数据与恢复)，DDL 见对应迁移。无业务外键，正文保存在数据目录；请求日志是物理清理例外。
+
 > 本文是数据库的权威定义：DDL 可直接执行，迁移文件按此生成。
 > 云电脑增量模型见 [computers.md §5](computers.md#5-数据模型)。七张新表、session 电脑引用与 skill 修订字段见 §14（000005 增量迁移）；000008 删除旧会话及 sandbox 字段，并将 session.computer_id 设为 NOT NULL；共享电脑状态以 computer 为准。
 > 全局约定：

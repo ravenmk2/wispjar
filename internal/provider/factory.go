@@ -14,6 +14,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"gorm.io/gorm"
 
+	"github.com/ravenmk2/wispjar/internal/requestlog"
 	"github.com/ravenmk2/wispjar/internal/store"
 )
 
@@ -21,11 +22,15 @@ import (
 // v1 所有供应商类型（deepseek/ark/qwen/openai_compat）统一走 openai 兼容组件；
 // 密钥解密仅发生在工厂内部，不明文出包。
 type ChatModelFactory struct {
-	db        *gorm.DB
-	masterKey []byte
-	cache     sync.Map // key: modelID+"|"+paramsHash -> model.ToolCallingChatModel
-	media     *mediaStore
+	db          *gorm.DB
+	masterKey   []byte
+	cache       sync.Map // key: modelID+"|"+paramsHash -> model.ToolCallingChatModel
+	media       *mediaStore
+	requestLogs *requestlog.Service
 }
+
+// SetRequestLogs is called during startup, before any models are created.
+func (f *ChatModelFactory) SetRequestLogs(s *requestlog.Service) { f.requestLogs = s }
 
 func NewChatModelFactory(db *gorm.DB, masterKey []byte, readers ...MediaReader) *ChatModelFactory {
 	media := &mediaStore{db: db}
@@ -39,12 +44,13 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 	var row struct {
 		store.Model
 		ProviderType string `gorm:"column:provider_type"`
+		ProviderName string `gorm:"column:provider_name"`
 		BaseURL      string `gorm:"column:base_url"`
 		APIKeyEnc    []byte `gorm:"column:api_key_enc"`
 	}
 	err := f.db.WithContext(ctx).
 		Model(&store.Model{}).
-		Select("model.*, model_provider.type AS provider_type, model_provider.base_url, model_provider.api_key_enc").
+		Select("model.*, model_provider.type AS provider_type, model_provider.name AS provider_name, model_provider.base_url, model_provider.api_key_enc").
 		Joins("JOIN model_provider ON model_provider.id = model.provider_id").
 		Where("model.id = ?", modelID).
 		Take(&row).Error
@@ -56,7 +62,7 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 	}
 
 	merged := mergeParams(row.DefaultParams, params)
-	key := modelID + "|" + paramsHash(map[string]any{"params": merged, "endpoint": row.BaseURL, "key": row.APIKeyEnc, "caps": row.Capabilities, "model": row.ModelCode, "provider": row.ProviderType})
+	key := modelID + "|" + paramsHash(map[string]any{"params": merged, "endpoint": row.BaseURL, "key": row.APIKeyEnc, "caps": row.Capabilities, "model": row.ModelCode, "provider": row.ProviderType, "model_name": row.DisplayName, "provider_name": row.ProviderName})
 	if v, ok := f.cache.Load(key); ok {
 		return v.(model.ToolCallingChatModel), nil
 	}
@@ -69,11 +75,17 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 	if err := json.Unmarshal(row.Capabilities, &caps); err != nil {
 		return nil, err
 	}
+	protocol := caps.APIProtocol
+	if protocol == "" {
+		protocol = "chat_completions"
+	}
+	identity := requestlog.Identity{ModelID: modelID, ProviderID: row.ProviderID, Metadata: requestlog.Metadata{ModelName: row.DisplayName, ModelCode: row.ModelCode, ProviderName: row.ProviderName, ProviderType: row.ProviderType, Protocol: protocol}}
 	if caps.APIProtocol == "responses" {
 		if row.ProviderType != "deepseek" && row.ProviderType != "ark" && row.ProviderType != "openai_compat" {
 			return nil, fmt.Errorf("provider: Responses adapter unavailable for %s", row.ProviderType)
 		}
 		cm := &responsesModel{baseURL: row.BaseURL, apiKey: apiKey, providerID: row.ProviderID, providerType: row.ProviderType, modelCode: row.ModelCode, params: merged, caps: caps, media: f.media, client: mediaHTTPClient()}
+		cm.client.Transport = f.requestLogs.Transport(cm.client.Transport, identity)
 		actual, _ := f.cache.LoadOrStore(key, model.ToolCallingChatModel(cm))
 		return actual.(model.ToolCallingChatModel), nil
 	}
@@ -84,7 +96,7 @@ func (f *ChatModelFactory) NewChatModel(ctx context.Context, modelID string, par
 		Model:   row.ModelCode,
 		// 旁路抓取原始 usage（eino acl 丢弃供应商特有缓存字段）；
 		// 设置 HTTPClient 后组件不再用 Timeout（组件默认亦无超时，行为不变）。
-		HTTPClient: &http.Client{Transport: newUsageCaptureTransport(nil, adapter)},
+		HTTPClient: &http.Client{Transport: newUsageCaptureTransport(f.requestLogs.Transport(nil, identity), adapter)},
 	}
 	adapter.ApplyParams(cfg, merged)
 	cm, err := openai.NewChatModel(ctx, cfg)
