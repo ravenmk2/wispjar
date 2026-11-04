@@ -387,7 +387,7 @@ export function ToolCallCard({
         <DisclosureChevron open={expanded} revision={motion.revision} className="text-fg-process-muted" />
       </button>
       <DisclosureContent open={expanded} revision={motion.revision}>
-        <div className="py-1">
+        <div className="chat-process-detail min-w-0 py-1">
           {isQuestion && <QuestionBody node={node} />}
           {!isQuestion && render === "terminal" && <TerminalBody node={node} liveOutput={liveOutput} sessionId={sessionId} />}
           {!isQuestion && render === "diff" && (node.name === "write" ? <WriteBody node={node} sessionId={sessionId} /> : <DiffBody node={node} />)}
@@ -404,7 +404,7 @@ export function ToolCallCard({
         </div>
       </DisclosureContent>
       {!expanded && node.children.length > 0 && (
-        <div className="py-0.5 text-meta text-fg-process-muted">{node.children.length} 条嵌套轨迹</div>
+        <div className="chat-process-detail py-0.5 text-meta text-fg-process-muted">{node.children.length} 条嵌套轨迹</div>
       )}
     </div>
   )

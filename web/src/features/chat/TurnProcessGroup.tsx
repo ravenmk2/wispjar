@@ -42,17 +42,19 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
         className="chat-process-trigger flex min-h-9 w-full items-center gap-1.5 rounded-md text-left text-chat text-fg-process hover:bg-accent/50 disabled:cursor-default">
         {!expanded && activity ? <ActivityIcon name={activity.kind === "assistant" ? "reasoning" : activity.name} active />
           : tools.length > 0 && <Waypoints aria-hidden="true" className="chat-activity-icon" strokeWidth={1.65} />}
-        <span className={cn("shrink-0", active && "text-shimmer")}>{label}</span>
+        <span className={cn("shrink-0", active && !thinking && "text-shimmer")}>{label}</span>
         {(detail || (!expanded && thinking)) && <>
           <span className="shrink-0">·</span>
-          <span className="min-w-0 overflow-hidden whitespace-nowrap text-ellipsis">
+          <span className={cn("min-w-0 overflow-hidden whitespace-nowrap text-ellipsis", !expanded && thinking && "flex-1")}>
             {!expanded && thinking?.type === "reasoning" ? <ReasoningPreview key={activity?.id} text={thinking.text} /> : <bdi title={detail}>{detail}</bdi>}
           </span>
         </>}
         <DisclosureChevron open={expanded} revision={motion.revision} />
       </button>
-      <DisclosureContent open={expanded} revision={motion.revision}><div className="space-y-1 py-1">
-        {group.nodes.map((node) => <NodeView key={node.id} node={node} sessionId={sessionId} depth={0} latestTurn={latestTurn} />)}
+      <DisclosureContent open={expanded} revision={motion.revision}><div className="chat-process-steps space-y-1 py-1">
+        {group.nodes.map((node) => <div key={node.id} className="chat-process-step flow-root">
+          <NodeView node={node} sessionId={sessionId} depth={0} latestTurn={latestTurn} />
+        </div>)}
       </div></DisclosureContent>
     </div>
   )

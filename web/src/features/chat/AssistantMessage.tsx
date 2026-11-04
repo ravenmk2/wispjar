@@ -100,7 +100,7 @@ export function ReasoningBlock({
         className="chat-process-trigger flex min-h-9 w-full items-center gap-1.5 rounded-md text-left text-chat hover:bg-accent/50"
       >
         <ActivityIcon name="reasoning" active={streaming} />
-        <span className={cn("shrink-0 text-fg-process", streaming && "text-shimmer")}>{streaming ? "思考中" : "思考"}</span>
+        <span className="shrink-0 text-fg-process">{streaming ? "思考中" : "思考"}</span>
         <span className="shrink-0 text-fg-process-muted">{(previewing || detail) && "·"}</span>
         <span className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-ellipsis text-fg-process-muted">
           {previewing ? <ReasoningPreview text={text} /> : <bdi>{detail}</bdi>}
@@ -111,7 +111,7 @@ export function ReasoningBlock({
         <div ref={bodyRef} data-reasoning-body onScroll={() => {
           const el = bodyRef.current
           if (el) followRef.current = el.scrollHeight - el.clientHeight - el.scrollTop < 24
-        }} className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words py-1 text-chat text-fg-process">
+        }} className="chat-process-detail max-h-72 overflow-y-auto whitespace-pre-wrap break-words py-1 text-chat text-fg-process">
           {text}
         </div>
       </DisclosureContent>
@@ -156,9 +156,6 @@ export function AssistantMessage({
               return (
                 <div key={i}>
                   <Markdown content={block.text} className="assistant-body" />
-                  {node.live && i === node.content.length - 1 && (
-                    <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground/70 align-text-bottom" />
-                  )}
                 </div>
               )
             }

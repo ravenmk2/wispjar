@@ -109,14 +109,24 @@ export function DisclosureContent({ open, revision, children }: {
       { height: `${open ? height : 0}px`, opacity: open ? 1 : 0 },
     ], open)
     animationRef.current = animation
+    // Streaming or nested disclosures can change the measured target mid-animation.
+    // Release the fixed height instead of briefly preserving a stale blank/clipped area.
+    const content = element.firstElementChild
+    const observer = new ResizeObserver(() => {
+      if (open && content && animationRef.current === animation &&
+        Math.abs(content.getBoundingClientRect().height - height) > 1) animation.finish()
+    })
+    if (content) observer.observe(content)
     void animation.finished.then(() => {
+      observer.disconnect()
       if (animationRef.current !== animation || ref.current !== element) return
       animationRef.current = null
       animation.cancel()
       element.style.overflow = ""
       delete element.dataset.disclosureAnimating
       setPresent(open)
-    }, () => {})
+    }, () => observer.disconnect())
+    return () => observer.disconnect()
   }, [open, revision])
 
   useEffect(() => () => animationRef.current?.cancel(), [])

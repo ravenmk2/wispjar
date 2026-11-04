@@ -1,6 +1,6 @@
 import { ChevronDown } from "lucide-react"
 import { cancelDisclosureScrollAnchor, MANUAL_DISCLOSURE_EVENT } from "@/components/DisclosureMotion"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { NodeList, OptimisticBubble } from "@/features/chat/NodeList"
 import { deriveConversationNodes } from "@/lib/conversation"
 import { useComposerStore } from "@/stores/composer"
@@ -33,7 +33,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   }, [])
 
   // 吸底跟随：已在底部或自己刚发消息时跟随新内容；上翻阅读时不拉底
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = containerRef.current
     if (!el) return
     if (optimistic || atBottomRef.current) el.scrollTop = el.scrollHeight

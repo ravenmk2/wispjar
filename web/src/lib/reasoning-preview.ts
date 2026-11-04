@@ -1,50 +1,52 @@
-export const PREVIEW_HOLD_MS = 500
-const PREVIEW_SEGMENT_LENGTH = 48
-const PREVIEW_HARD_LIMIT = 72
+export const PREVIEW_HOLD_MS = 200
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
+
+// Measure complete graphemes so mixed CJK, emoji and combining marks stay intact.
+export function fitPreviewLine(text: string, width: number, measure: (text: string) => number, tail = false): string {
+  const parts = Array.from(graphemes.segment(text), (part) => part.segment)
+  let low = 0
+  let high = parts.length
+  while (low < high) {
+    const count = Math.ceil((low + high) / 2)
+    const candidate = (tail ? parts.slice(parts.length - count) : parts.slice(0, count)).join("")
+    if (measure(candidate) <= width) low = count
+    else high = count - 1
+  }
+  return (tail ? parts.slice(parts.length - low) : parts.slice(0, low)).join("")
+}
 
 export interface ReasoningPreviewState {
-  scanned: number
-  candidate: number
-  boundary: boolean
   start: number
   end: number
-  changedAt: number
+  length: number
+  fullSince: number | null
 }
 
-export function emptyReasoningPreview(now: number): ReasoningPreviewState {
-  return { scanned: 0, candidate: 0, boundary: false, start: 0, end: 0, changedAt: now }
+export function emptyReasoningPreview(): ReasoningPreviewState {
+  return { start: 0, end: 0, length: 0, fullSince: null }
 }
 
-// Scan only newly received characters. Timing affects this preview alone, never the stream.
-export function advanceReasoningPreview(previous: ReasoningPreviewState, text: string, now: number) {
-  const state = { ...(text.length < previous.scanned ? emptyReasoningPreview(now) : previous) }
-  for (let i = state.scanned; i < text.length; i++) {
-    const char = text[i]
-    if (state.boundary && !/\s/.test(char)) {
-      state.candidate = i
-      state.boundary = false
-    }
-    // Long sentences must keep advancing too. Prefer word/CJK boundaries;
-    // cap unbroken tokens without splitting UTF-16 surrogate pairs.
-    const length = i - state.candidate
-    if (!/\s/.test(char) && length >= PREVIEW_SEGMENT_LENGTH &&
-      (/\s/.test(text[i - 1]) || /[\u3000-\u9fff]/.test(char) ||
-        (length >= PREVIEW_HARD_LIMIT && !/[\uDC00-\uDFFF]/.test(char)))) {
-      state.candidate = i
-    }
-    if (state.candidate === state.start) state.end = i + 1
-    // A period is a boundary only when followed by whitespace (not decimals/URLs).
-    if (/[\n。！？!?]/.test(char) || (/\s/.test(char) && text[i - 1] === ".")) state.boundary = true
-  }
-  if (state.candidate !== state.start && now - state.changedAt >= PREVIEW_HOLD_MS) {
-    state.start = state.candidate
-    state.end = text.length
-    state.changedAt = now
-  }
-  state.scanned = text.length
+export function advanceReasoningPreview(previous: ReasoningPreviewState, text: string, now: number,
+  width: number, measure: (text: string) => number): ReasoningPreviewState {
+  const state = { ...(text.length < previous.length ? emptyReasoningPreview() : previous), length: text.length }
+  if (width <= 0) return state
+  const line = fitPreviewLine(text.slice(state.start), width, measure)
+  // An oversized grapheme waits for a resize instead of spinning a timer.
+  if (!line && text.length > state.start) return { ...state, end: state.start, fullSince: null }
+  state.end = state.start + line.length
+  if (state.end === text.length) return { ...state, fullSince: null }
+  state.fullSince ??= now
+  if (now - state.fullSince < PREVIEW_HOLD_MS) return state
+  const rest = text.slice(state.end)
+  const next = fitPreviewLine(rest, width, measure)
+  // Skip excess backlog only at a line boundary, without artificially pacing incoming text.
+  state.start = next.length < rest.length ? text.length - fitPreviewLine(rest, width, measure, true).length : state.end
+  state.end = text.length
+  state.fullSince = null
+
   return state
 }
 
 export function reasoningPreviewText(state: ReasoningPreviewState, text: string) {
-  return text.slice(state.start, Math.min(state.end, state.start + 240)).trim()
+  return text.slice(state.start, state.end)
 }

@@ -167,16 +167,6 @@
   }
 }
 
-@keyframes reasoning-preview-enter {
-  from { opacity: .55; transform: translateY(100%); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes reasoning-preview-exit {
-  from { opacity: 1; transform: translateY(0); }
-  to { opacity: 0; transform: translateY(-100%); }
-}
-
 @keyframes activity-search {
   0%, 100% { transform: translate(0, 0); }
   30% { transform: translate(2px, -1.5px); }
@@ -233,16 +223,8 @@
 @layer utilities {
   .reasoning-preview-window {
     position: relative;
-  }
-  /* Runtime feedback, like ActivityIcon: keep enabled even with reduced motion. */
-  .reasoning-preview-incoming {
-    animation: reasoning-preview-enter 150ms cubic-bezier(.22, 1, .36, 1) both;
-  }
-  .reasoning-preview-outgoing {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    animation: reasoning-preview-exit 150ms cubic-bezier(.22, 1, .36, 1) both;
+    height: var(--chat-line-height);
+    contain: layout paint;
   }
   .text-shimmer {
     background-size: 200% 100%;
@@ -302,6 +284,40 @@
   /* 折叠标记作为行内首项与正文共用左边界，不额外叠加缩进。 */
   .chat-process-trigger {
     color: var(--text-process);
+  }
+  .chat-process-step {
+    position: relative;
+  }
+  .chat-process-step .chat-process-detail {
+    margin-left: 18px;
+  }
+  /* Nested traces already have their own indentation inside the detail area. */
+  .chat-process-step .chat-process-detail .chat-process-detail {
+    margin-left: 0;
+  }
+  .chat-process-step::before,
+  .chat-process-step:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    left: 8px;
+    width: 1px;
+    pointer-events: none;
+    background-image: radial-gradient(circle at center, var(--text-process-muted) 0 .5px, transparent .6px);
+    background-size: 1px 5px;
+    background-repeat: repeat-y;
+    opacity: .7;
+  }
+  .chat-process-step::before {
+    top: -4px;
+    height: 12px;
+  }
+  .chat-process-step:first-child::before {
+    top: -8px;
+    height: 16px;
+  }
+  .chat-process-step:not(:last-child)::after {
+    top: 30px;
+    bottom: 0;
   }
   .chat-turn-header::after {
     content: "";

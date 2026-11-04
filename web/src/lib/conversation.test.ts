@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { deriveConversationNodes } from "./conversation"
 import { activeProcessNode, groupByTurn } from "./turn-grouping"
-import { advanceReasoningPreview, emptyReasoningPreview, reasoningPreviewText } from "./reasoning-preview"
+import { advanceReasoningPreview, emptyReasoningPreview, fitPreviewLine, reasoningPreviewText } from "./reasoning-preview"
 import type { ContentBlock, SessionEvent, StreamChunk, TurnEndReason } from "./types"
 import { useChatPresentationStore } from "../stores/chatPresentation"
 import { useSessionStore } from "../stores/session"
@@ -313,36 +313,54 @@ test("nested assistant replies stay inside the task and have distinct identities
   }
 })
 
-test("reasoning preview holds a line then skips to newest without replaying a backlog", () => {
-  let state = advanceReasoningPreview(emptyReasoningPreview(0), "one", 0)
-  const text = "one\n\ntwo\nthree"
-  state = advanceReasoningPreview(state, text, 100)
-  assert.equal(reasoningPreviewText(state, text), "one")
-  state = advanceReasoningPreview(state, text, 499)
-  assert.equal(reasoningPreviewText(state, text), "one")
-  state = advanceReasoningPreview(state, text, 500)
-  assert.equal(reasoningPreviewText(state, text), "three")
+const previewMeasure = (value: string) => Array.from(value).reduce((width, char) => width + (/[^\x00-\x7f]/.test(char) ? 2 : 1), 0)
+
+test("reasoning displays incoming chunks immediately and only holds at a full line", () => {
+  let state = advanceReasoningPreview(emptyReasoningPreview(), "abc", 0, 8, previewMeasure)
+  assert.equal(reasoningPreviewText(state, "abc"), "abc")
+  state = advanceReasoningPreview(state, "abcdefgh", 1, 8, previewMeasure)
+  assert.equal(reasoningPreviewText(state, "abcdefgh"), "abcdefgh")
+  state = advanceReasoningPreview(state, "abcdefghIJKL", 2, 8, previewMeasure)
+  assert.equal(reasoningPreviewText(state, "abcdefghIJKL"), "abcdefgh")
+  state = advanceReasoningPreview(state, "abcdefghIJKL", 201, 8, previewMeasure)
+  assert.equal(reasoningPreviewText(state, "abcdefghIJKL"), "abcdefgh")
+  state = advanceReasoningPreview(state, "abcdefghIJKL", 202, 8, previewMeasure)
+  assert.equal(reasoningPreviewText(state, "abcdefghIJKL"), "IJKL")
 })
 
-test("reasoning preview appends without moving its beginning and uses sentence boundaries", () => {
-  let state = advanceReasoningPreview(emptyReasoningPreview(0), "检查", 0)
-  state = advanceReasoningPreview(state, "检查配置。继续验证", 100)
-  assert.equal(reasoningPreviewText(state, "检查配置。继续验证"), "检查配置。")
-  state = advanceReasoningPreview(state, "检查配置。继续验证", 500)
-  assert.equal(reasoningPreviewText(state, "检查配置。继续验证"), "继续验证")
-  const long = "长".repeat(10000)
-  state = advanceReasoningPreview(emptyReasoningPreview(0), long, 0)
-  assert.equal(reasoningPreviewText(state, long), "长".repeat(48))
-  state = advanceReasoningPreview(state, "新内容", 2000)
-  assert.equal(reasoningPreviewText(state, "新内容"), "新内容")
+test("reasoning skips burst backlog, reflows on resize and resets on stream replacement", () => {
+  const text = "abcdefghijklmnopqrst"
+  let state = advanceReasoningPreview(emptyReasoningPreview(), text, 0, 4, previewMeasure)
+  assert.equal(reasoningPreviewText(state, text), "abcd")
+  state = advanceReasoningPreview(state, text, 200, 4, previewMeasure)
+  assert.equal(reasoningPreviewText(state, text), "qrst")
+  state = advanceReasoningPreview(state, text, 300, 2, previewMeasure)
+  assert.equal(reasoningPreviewText(state, text), "qr")
+  state = advanceReasoningPreview(state, text, 400, 8, previewMeasure)
+  assert.equal(reasoningPreviewText(state, text), "qrst")
+  assert.equal(state.fullSince, null)
+  state = advanceReasoningPreview(state, "新", 500, 8, previewMeasure)
+  assert.equal(reasoningPreviewText(state, "新"), "新")
 })
 
-test("reasoning preview ignores blank lines and keeps decimals intact", () => {
-  const text = "Version 1.25 is ready. Next step\r\n\n"
-  let state = advanceReasoningPreview(emptyReasoningPreview(0), text, 0)
-  assert.equal(reasoningPreviewText(state, text), "Version 1.25 is ready.")
-  state = advanceReasoningPreview(state, text, 500)
-  assert.equal(reasoningPreviewText(state, text), "Next step")
+test("large chunks within a line are never limited by character count or a timer", () => {
+  const text = "a".repeat(100)
+  let state = advanceReasoningPreview(emptyReasoningPreview(), text, 0, 200, previewMeasure)
+  assert.equal(reasoningPreviewText(state, text), text)
+  state = advanceReasoningPreview(state, text + "more", 1, 200, previewMeasure)
+  assert.equal(reasoningPreviewText(state, text + "more"), text + "more")
+  assert.equal(state.fullSince, null)
+})
+
+test("measured preview respects mixed widths and keeps complete graphemes", () => {
+  assert.equal(fitPreviewLine("ab中文c", 5, previewMeasure), "ab中")
+  assert.equal(fitPreviewLine("ab中文c", 5, previewMeasure, true), "中文c")
+  const length = (value: string) => value.length
+  assert.equal(fitPreviewLine("e\u0301😀X", 3, length), "e\u0301")
+  assert.equal(fitPreviewLine("X👨‍👩‍👧‍👦", 4, length), "X")
+  assert.equal(fitPreviewLine("中文", 1, previewMeasure), "")
+  const state = advanceReasoningPreview(emptyReasoningPreview(), "中文", 0, 0, previewMeasure)
+  assert.equal(state.fullSince, null)
 })
 
 test("manual disclosure survives remount/reconnect; switching sessions resets it", () => {
@@ -430,23 +448,4 @@ test("collapsed thinking activity requires a live streaming reasoning block", ()
   assert.equal(activeProcessNode(part), part.nodes[0])
   part.hasPending = true
   assert.equal(activeProcessNode(part), undefined)
-})
-
-
-test("long reasoning previews advance at word and CJK boundaries without replaying", () => {
-  const text = "长".repeat(150)
-  let state = advanceReasoningPreview(emptyReasoningPreview(0), text, 0)
-  assert.equal(reasoningPreviewText(state, text), "长".repeat(48))
-  state = advanceReasoningPreview(state, text, 500)
-  assert.equal(state.start, 144)
-  assert.equal(reasoningPreviewText(state, text), "长".repeat(6))
-  assert.deepEqual(advanceReasoningPreview(state, text, 1000), state)
-  const words = "word ".repeat(24)
-  state = advanceReasoningPreview(emptyReasoningPreview(0), words, 500)
-  assert.equal(state.start, 100)
-  assert.equal(reasoningPreviewText(state, words), "word word word word")
-  const token = "x".repeat(71) + "😀" + "y".repeat(10)
-  state = advanceReasoningPreview(emptyReasoningPreview(0), token, 500)
-  assert.equal(state.start, 73)
-  assert.equal(reasoningPreviewText(state, token), "y".repeat(10))
 })

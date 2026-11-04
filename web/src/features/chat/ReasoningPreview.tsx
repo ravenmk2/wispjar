@@ -1,28 +1,46 @@
-import { useEffect, useRef, useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import { advanceReasoningPreview, emptyReasoningPreview, PREVIEW_HOLD_MS, reasoningPreviewText } from "@/lib/reasoning-preview"
 
-// Mounted only for a collapsed, live preview; unmounting cancels pending updates.
 export function ReasoningPreview({ text }: { text: string }) {
-  const state = useRef(emptyReasoningPreview(performance.now()))
-  const [preview, setPreview] = useState({ text: "", start: 0, outgoing: "" })
-  useEffect(() => {
-    function update() {
-      state.current = advanceReasoningPreview(state.current, text, performance.now())
-      const next = { text: reasoningPreviewText(state.current, text), start: state.current.start }
-      setPreview(previous => previous.text === next.text && previous.start === next.start ? previous : {
-        ...next,
-        outgoing: previous.start !== next.start ? previous.text : previous.outgoing,
-      })
+  const ref = useRef<HTMLSpanElement>(null)
+  const state = useRef(emptyReasoningPreview())
+  const [preview, setPreview] = useState("")
+  const [metrics, setMetrics] = useState({ width: 0, font: "", spacing: 0, revision: 0 })
+  // Measure the actual flex slot, including after font loading and viewport changes.
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (!element) return
+    const update = () => {
+      const style = getComputedStyle(element)
+      setMetrics(previous => ({ width: element.clientWidth, font: style.font,
+        spacing: parseFloat(style.letterSpacing) || 0, revision: previous.revision + 1 }))
     }
     update()
-    if (state.current.candidate === state.current.start) return
-    const timer = window.setTimeout(update, Math.max(0, PREVIEW_HOLD_MS - (performance.now() - state.current.changedAt)))
+    const observer = new ResizeObserver(update)
+    observer.observe(element)
+    document.fonts.addEventListener("loadingdone", update)
+    return () => { observer.disconnect(); document.fonts.removeEventListener("loadingdone", update) }
+  }, [])
+  const normalized = text.replace(/\s/g, " ")
+  useLayoutEffect(() => {
+    if (!metrics.width) return
+    const context = document.createElement("canvas").getContext("2d")
+    if (!context) return
+    context.font = metrics.font
+    const measure = (value: string) => context.measureText(value).width + Array.from(value).length * metrics.spacing
+    let timer: number | undefined
+    function update() {
+      state.current = advanceReasoningPreview(state.current, normalized, performance.now(), metrics.width, measure)
+      setPreview(reasoningPreviewText(state.current, normalized))
+      if (state.current.fullSince !== null) {
+        const due = state.current.fullSince + PREVIEW_HOLD_MS
+        timer = window.setTimeout(update, Math.max(1, due - performance.now()))
+      }
+    }
+    update()
     return () => window.clearTimeout(timer)
-  }, [text])
-  // Only segment changes restart the two-line roll. Token appends keep the same DOM.
-  // At most one outgoing line is retained; stream updates never await an animation.
-  return <span key={preview.start} className="reasoning-preview-window block overflow-hidden text-left" title={preview.text}>
-    {preview.outgoing && <span aria-hidden="true" className="reasoning-preview-outgoing block truncate">{preview.outgoing}</span>}
-    <span className={`block truncate${preview.outgoing ? " reasoning-preview-incoming" : ""}`}>{preview.text || "正在思考…"}</span>
+  }, [normalized, metrics])
+  return <span ref={ref} className="reasoning-preview-window block overflow-hidden whitespace-pre text-left" title={preview}>
+    {preview || "正在思考…"}
   </span>
 }
