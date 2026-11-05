@@ -53,7 +53,7 @@ export function QuestionAnswerList({
           <div key={q.id} className="space-y-2 py-3 first:pt-0 last:pb-0">
             <dt className="flex items-start gap-2 text-chat text-fg-secondary">
               <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-accent text-meta">问</span>
-              <span className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{q.question}</span>
+              <span className="font-content min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{q.question}</span>
             </dt>
             <dd
               className="flex items-start gap-2 text-chat"
@@ -63,7 +63,7 @@ export function QuestionAnswerList({
                 tone === "answer" ? "bg-primary-soft text-link" : "bg-accent text-fg-caption",
               )}>答</span>
               <span className={cn(
-                "min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]",
+                "font-content min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]",
                 tone === "answer" && "font-medium text-foreground",
                 tone === "skip" && "text-fg-caption",
                 tone === "pending" && "text-amber-600 dark:text-amber-400",
@@ -253,7 +253,7 @@ export function QuestionTakeover({
             className="max-h-[336px] overflow-y-auto px-4 pt-3 outline-none"
           >
             {current.header && <div className="text-xs font-medium text-fg-caption">{current.header}</div>}
-            <div className="text-chat font-medium">{current.question}</div>
+            <div className="font-content text-chat font-medium">{current.question}</div>
             <div className="pb-1 pt-2" key={current.id}>
               {hasOptions ? (
                 <div role={multi ? "group" : "radiogroup"} className="space-y-1.5">
@@ -269,7 +269,7 @@ export function QuestionTakeover({
                         data-focus-ring="none"
                         onClick={() => (multi ? toggle(opt.label) : choose(opt.label))}
                         className={cn(
-                          "flex w-full items-start gap-2.5 rounded-xl border px-3 py-2 text-left text-chat transition-colors focus-visible:border-[color:var(--composer-border-focus)] focus-visible:bg-accent",
+                          "flex w-full items-start gap-2.5 rounded-xl border px-3 py-2 text-left font-content text-chat transition-colors focus-visible:border-[color:var(--composer-border-focus)] focus-visible:bg-accent",
                           checked
                             ? "border-[color:var(--composer-border-focus)] bg-selected"
                             : "border-divider hover:border-[color:var(--composer-border-focus)] hover:bg-accent",
@@ -325,7 +325,7 @@ export function QuestionTakeover({
                       value={currentAnswer.custom}
                       onChange={(e) => setCustom(e.target.value)}
                       placeholder="其他（填写自定义回答）"
-                      className="w-full bg-transparent text-chat outline-none placeholder:text-fg-placeholder"
+                      className="w-full bg-transparent font-content text-chat outline-none placeholder:text-fg-placeholder"
                     />
                   </div>
                 </div>
@@ -336,7 +336,7 @@ export function QuestionTakeover({
                   rows={3}
                   placeholder={`输入回答，Enter ${isLast ? "提交" : "下一题"}，Shift+Enter 换行`}
                   aria-label="回答"
-                  className="block w-full resize-none rounded-xl border border-divider bg-transparent px-3 py-2 text-chat outline-none placeholder:text-fg-placeholder focus:border-[color:var(--composer-border-focus)]"
+                  className="block w-full resize-none rounded-xl border border-divider bg-transparent px-3 py-2 font-content text-chat outline-none placeholder:text-fg-placeholder focus:border-[color:var(--composer-border-focus)]"
                 />
               )}
             </div>

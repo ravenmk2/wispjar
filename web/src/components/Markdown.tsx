@@ -29,7 +29,7 @@ function TableHeaderCell({ sourceEnd, children, ...props }: ComponentProps<"th">
 
 function BlockHeader({ label, text, tooltip }: { label: string; text: string; tooltip: string }) {
   return (
-    <div className="flex min-h-10 items-center gap-3 border-b bg-muted/60 py-0.5 pl-3 pr-1">
+    <div className="font-ui flex min-h-10 items-center gap-3 border-b bg-muted/60 py-0.5 pl-3 pr-1">
       <span className="text-meta text-muted-foreground">{label}</span>
       <CopyIconButton text={text} tooltip={tooltip} className="ml-auto size-8" />
     </div>
@@ -72,7 +72,7 @@ export const Markdown = memo(function Markdown({ content, className, externalCon
   onLink?: (url: string) => boolean
 }) {
   return (
-    <div className={cn("markdown-body min-w-0 break-words text-chat", className)}>
+    <div className={cn("markdown-body font-content min-w-0 break-words text-chat", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         urlTransform={(url) => {
@@ -89,7 +89,7 @@ export const Markdown = memo(function Markdown({ content, className, externalCon
               return <CodeBlock lang={match?.[1]} code={text} />
             }
             return (
-              <code className="mx-1 rounded-lg bg-muted px-1.5 py-0.5 font-sans text-[1em]">{text}</code>
+              <code className="mx-1 rounded-lg bg-muted px-1.5 py-0.5 font-content text-[1em]">{text}</code>
             )
           },
           a: ({ href, children }) => (

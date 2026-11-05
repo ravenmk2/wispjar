@@ -9,7 +9,7 @@ import { Markdown } from "@/components/Markdown"
 import { ForkButton } from "@/features/chat/ForkButton"
 import { formatMessageTime, formatNumber } from "@/lib/format"
 import { formatTurnDuration } from "@/lib/turn-grouping"
-import { ReasoningPreview } from "@/features/chat/ReasoningPreview"
+import { ThinkingDots } from "@/features/chat/ThinkingDots"
 import { useChatDisclosure } from "@/stores/chatPresentation"
 import { cn } from "@/lib/utils"
 import type { AssistantNode } from "@/lib/conversation"
@@ -88,8 +88,7 @@ export function ReasoningBlock({
     const el = bodyRef.current
     if (el && open && streaming && followRef.current) el.scrollTop = el.scrollHeight
   }, [text, open, streaming])
-  const previewing = streaming && !open
-  const detail = durationMs !== undefined ? formatTurnDuration(durationMs) : ""
+  const detail = !streaming && durationMs !== undefined ? formatTurnDuration(durationMs) : ""
   return (
     <div className="my-0.5">
       <button
@@ -101,17 +100,18 @@ export function ReasoningBlock({
       >
         <ActivityIcon name="reasoning" active={streaming} />
         <span className="shrink-0 text-fg-process">{streaming ? "思考中" : "思考"}</span>
-        <span className="shrink-0 text-fg-process-muted">{(previewing || detail) && "·"}</span>
-        <span className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-ellipsis text-fg-process-muted">
-          {previewing ? <ReasoningPreview text={text} /> : <bdi>{detail}</bdi>}
-        </span>
+        {streaming ? <ThinkingDots /> : detail && <>
+          <span className="shrink-0 text-fg-process-muted">·</span>
+          <bdi className="text-fg-process-muted">{detail}</bdi>
+        </>}
+        <span className="min-w-0 flex-1" />
         <DisclosureChevron open={open} revision={motion.revision} className="text-fg-process-muted" />
       </button>
       <DisclosureContent open={open} revision={motion.revision}>
         <div ref={bodyRef} data-reasoning-body onScroll={() => {
           const el = bodyRef.current
           if (el) followRef.current = el.scrollHeight - el.clientHeight - el.scrollTop < 24
-        }} className="chat-process-detail max-h-72 overflow-y-auto whitespace-pre-wrap break-words py-1 text-chat text-fg-process">
+        }} className="chat-process-detail font-content max-h-72 overflow-y-auto whitespace-pre-wrap break-words py-1 text-chat text-fg-process">
           {text}
         </div>
       </DisclosureContent>

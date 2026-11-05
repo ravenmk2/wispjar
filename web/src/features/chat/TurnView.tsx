@@ -65,7 +65,7 @@ export function TurnView({ segment, sessionId, latestTurn }: {
               <span>错误详情</span>
               <CopyIconButton text={segment.end.error} tooltip="复制错误详情" />
             </div>
-            <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-sans tabular-nums text-xs text-fg-process">{segment.end.error}</pre>
+            <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-content tabular-nums text-xs text-fg-process">{segment.end.error}</pre>
           </div></div>
         </DisclosureContent>}
         {segment.parts.map((part) => {

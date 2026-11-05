@@ -5,6 +5,18 @@
 @layer base {
   :root {
     color-scheme: light;
+    /* UI uses bundled MiSans; reading surfaces follow Kimi's system stack. */
+    --font-ui: "MiSans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+      Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", Arial,
+      "PingFang SC", "Source Han Sans SC", "Microsoft YaHei UI", "Microsoft YaHei",
+      "Noto Sans CJK SC", sans-serif;
+    --font-content: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+      Roboto, "Noto Sans", Ubuntu, Cantarell, "Helvetica Neue", sans-serif, Arial,
+      "PingFang SC", "Source Han Sans SC", "Microsoft YaHei UI", "Microsoft YaHei",
+      "Noto Sans CJK SC";
+    --font-mono: "SFMono-Regular", Consolas, Menlo, "Liberation Mono",
+      "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC",
+      "Source Han Sans SC", monospace;
     --background: 0 0% 100%;
     --foreground: rgba(0, 0, 0, 0.9);
     --text-body: rgba(0, 0, 0, 0.9);
@@ -117,7 +129,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background font-sans text-sm text-foreground;
+    @apply bg-background font-ui text-sm text-foreground;
   }
   *:focus-visible {
     outline: none;
@@ -208,7 +220,6 @@
   0%, 100% { opacity: .015; }
   50% { opacity: .15; }
 }
-
 @keyframes activity-bulb-filament {
   0%, 100% { opacity: .32; }
   50% { opacity: 1; }
@@ -221,11 +232,19 @@
 }
 
 @layer utilities {
-  .reasoning-preview-window {
-    position: relative;
-    height: var(--chat-line-height);
-    contain: layout paint;
+  .thinking-dots {
+    display: block;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    align-self: center;
+    color: var(--text-process-muted);
   }
+  .thinking-dots circle {
+    animation: activity-fade 1.5s ease-in-out infinite;
+  }
+  .thinking-dots circle:nth-child(2) { animation-delay: .2s; }
+  .thinking-dots circle:nth-child(3) { animation-delay: .4s; }
   .text-shimmer {
     background-size: 200% 100%;
     background-clip: text;
@@ -283,6 +302,7 @@
   }
   /* 折叠标记作为行内首项与正文共用左边界，不额外叠加缩进。 */
   .chat-process-trigger {
+    @apply font-content text-chat;
     color: var(--text-process);
   }
   .chat-process-step {
@@ -336,7 +356,6 @@
   .chat-activity-icon {
     @apply size-[18px] shrink-0 text-fg-process;
     position: relative;
-    top: 1px;
     transform-origin: center;
     overflow: visible;
   }
@@ -390,7 +409,10 @@
   .chat-activity-icon.is-running .activity-star-middle { animation-delay: -.6s; }
   .chat-activity-icon.is-running .activity-star-last { animation-delay: -1.2s; }
   .chat-disclosure-icon {
-    @apply size-3.5 shrink-0;
+    @apply block size-3.5 shrink-0 self-center;
+    /* Optical alignment with content glyphs; keep transform free for rotation. */
+    position: relative;
+    top: 1px;
   }
   .codeblock pre,
   .codeblock code {

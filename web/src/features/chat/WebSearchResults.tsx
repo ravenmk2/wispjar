@@ -14,9 +14,9 @@ export function WebSearchResults({ result }: { result: SearchResponse }) {
           const url = searchResultURL(item.url)
           if (!url) return null
           return <article key={`${item.url}-${index}`} className="space-y-1 px-3 py-2.5">
-            <a href={url.href} target="_blank" rel="noopener noreferrer" className="break-words text-sm font-medium text-link hover:underline">{item.title || url.hostname}</a>
+            <a href={url.href} target="_blank" rel="noopener noreferrer" className="font-content break-words text-sm font-medium text-link hover:underline">{item.title || url.hostname}</a>
             <div className="flex flex-wrap gap-x-2 text-xs text-muted-foreground"><span>{url.hostname}</span>{item.published_at && <span>{item.published_at}</span>}</div>
-            <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{item.snippet}</p>
+            <p className="font-content whitespace-pre-wrap break-words text-sm text-muted-foreground">{item.snippet}</p>
           </article>
         })}
       </div>}

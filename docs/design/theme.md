@@ -1,14 +1,17 @@
 # 界面主题设计 Token
 
-本规范对应 `web/src/index.css` 与 `web/tailwind.config.js`。界面采用 MiSans 首选字体，并保持既有排版密度与中性灰阶分层；深色助手正文、两套主题的蓝色用户气泡及发送／停止按钮保留项目现状。`:root` 定义浅色，`.dark` 覆盖深色。
+本规范对应 `web/src/index.css` 与 `web/tailwind.config.js`。UI 采用 MiSans 首选字体，聊天和 Markdown 阅读内容采用 Kimi 系统字体栈，并保持既有排版密度与中性灰阶分层；深色助手正文、两套主题的蓝色用户气泡及发送／停止按钮保留项目现状。`:root` 定义浅色，`.dark` 覆盖深色。
 
 ## 1. 字体与排版
 
-正文与通用界面优先使用随应用分发的 MiSans。前端构建从官方源下载并校验字体，复用本地离线缓存；运行时通过同源资源加载，不依赖外部字体服务。字体文件、缓存与生成样式不入库。
+通用界面优先使用随应用分发的 MiSans，阅读内容不再继承 UI 字体。前端构建从官方源下载并校验字体，复用本地离线缓存；运行时通过同源资源加载，不依赖外部字体服务。字体文件、缓存与生成样式不入库。
 
-- 正文：`MiSans, -apple-system, BlinkMacSystemFont, Segoe UI, system-ui, Roboto, Noto Sans, Ubuntu, Cantarell, Helvetica Neue, Arial, PingFang SC, Source Han Sans SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, sans-serif`。通用 `sans-serif` 放在末尾，避免在显式中文字体之前提前回退；MiSans 缺字或加载失败时使用后续系统字体。
-- 等宽：`SFMono-Regular, Consolas, Menlo, Liberation Mono, PingFang SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, monospace`；西文优先等宽，CJK 明确回退到苹方、微软雅黑等中文字体。
+- UI（`--font-ui` / `font-ui`，`font-sans` 为兼容别名）：`MiSans, -apple-system, BlinkMacSystemFont, Segoe UI, system-ui, Roboto, Noto Sans, Ubuntu, Cantarell, Helvetica Neue, Arial, PingFang SC, Source Han Sans SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, sans-serif`。通用 `sans-serif` 放在末尾，避免在显式中文字体之前提前回退；MiSans 缺字或加载失败时使用后续系统字体。
+- 内容（`--font-content` / `font-content`）：`-apple-system, BlinkMacSystemFont, Segoe UI, system-ui, Roboto, Noto Sans, Ubuntu, Cantarell, Helvetica Neue, sans-serif, Arial, PingFang SC, Source Han Sans SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC`。保留 Kimi 的完整顺序（包括通用 `sans-serif` 的位置），实际字形由操作系统和浏览器回退决定，不强制跨平台使用微软雅黑。
+- 等宽（`--font-mono` / `font-mono`）：`SFMono-Regular, Consolas, Menlo, Liberation Mono, PingFang SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, Source Han Sans SC, monospace`；西文优先等宽，CJK 明确回退到苹方、微软雅黑等中文字体。
 - 侧栏品牌字标：Clash Display Semibold（600），18px，字距 0.04em。`WispjarWordmark` 使用转为轮廓的 SVG 字标（字体来源：[Fontshare](https://www.fontshare.com/fonts/clash-display)，ITF FFL），以 `currentColor` 跟随深浅主题；不分发字体文件。
+
+body 默认使用 `font-ui`。用户消息（含乐观气泡）、助手正文、消息输入框及占位符、思考标题和详情、提问和回答内容、普通工具输出、搜索正文及 Markdown 预览显式使用 `font-content`。Markdown 标题、表格、引用和行内代码跟随内容字体；代码块、命令、JSON、diff 及源码视图仍使用 `font-mono`。导航、操作按钮、通用状态及代码块工具栏使用 UI 字体，不在整个聊天面板上覆盖字体。过程行（工具名称、摘要、耗时、计数和状态）统一使用内容字体；展开区域的操作按钮仍使用 UI 字体。
 
 | 内容 | 字号 / 行高 | 实现 |
 |---|---|---|
@@ -98,10 +101,10 @@ body 基准 14px；聊天正文使用 `--chat-font-size: 16px`、`--chat-line-he
 - 全局焦点轮廓排除表单控件、菜单、子菜单、列表框及其选项、自动获焦的详情 group 和标记 `data-focus-ring="none"` 的内嵌控件，避免覆盖菜单投影或叠出粗蓝框；菜单项沿用中性焦点底色。提问卡沿用输入区中性边缘与投影，标题用 `bg-accent` / `text-fg-secondary`，选中项用 `bg-selected` 与中性边框，仅勾选和主要按钮保留主色；自定义回答输入由外层 `focus-within` 边框提示，键盘操作仍可辨认焦点。
 - 弹层使用不透明中性色，不依赖毛玻璃；嵌套子菜单仍使用 Portal，避免动画变换影响定位。
 - 保留原生滚动与文字缩放；滚动条使用 thin 尺寸、透明轨道和稳定 gutter，滑块色 `--scrollbar-color` 为浅色 `#a3a3a3`／深色 `#737373`。滚动时显示，停滚 500ms 后以 150ms 淡出，悬停滚动条或拖动时保持显示。`color-scheme` 随深浅主题切换。长代码、路径和表格在所属容器滚动，正文正常换行。
-- 运行文字扫光统一使用中性灰阶：`--shimmer-base` 浅色 `#666666`／深色白色 .56，`--shimmer-highlight` 浅色 `#404040`／深色 `#B0B0B0`。类型图标运行时提亮至 `--text-process-hover` 并播放语义动画：思考使用加宽灯罩、短灯颈的细线灯泡，`viewBox=0 0 24 24`、描边 1.65，灯罩宽 16.6 个坐标单位；轮廓保持稳定，灯丝与内部柔光以 2.4s 周期同步呼吸，灯丝不透明度在 .32–1 间变化，柔光在 .015–.15 间变化；静止时柔光隐藏、灯丝不透明度固定为 .7；搜索图标以 1.8s 周期沿小圆弧移动（最大 2px）；读取文字线以 1.8s 周期逐行扫描；写入／编辑笔尖以 1.8s 周期短距离往复；命令提示符以 1.8s 周期轻推、光标以 1s 周期闪烁；委派机器人双眼以 1.4s 周期交替亮起；技能星星以 1.8s 周期错峰闪烁；图片轮廓提亮并伴随光点闪烁。未知工具使用 1.8s 透明度提示。待审批、待回答、完成、失败和停止时图标静止，工具行不重复叠加加载圈。系统减少动态效果时，灯泡与其它类型活动图标均保留轻微语义动画以指示运行状态；文字扫光静止并恢复过程辅助色。运行中的过程组或整轮被折叠时，可见折叠行展示当前阶段的类型图标及动效；展开时由内部节点展示，待审批、待回答不播放。上下文环形进度使用 link 色，70%/90% 仍分别使用琥珀/危险色。失败仅以 14px 无圆圈红色 X 局部提示，stderr 不整段标红。
+- 运行文字扫光统一使用中性灰阶：`--shimmer-base` 浅色 `#666666`／深色白色 .56，`--shimmer-highlight` 浅色 `#404040`／深色 `#B0B0B0`。类型图标运行时提亮至 `--text-process-hover` 并播放语义动画：思考使用加宽灯罩、短灯颈的细线灯泡，`viewBox=0 0 24 24`、描边 1.65，灯罩宽 16.6 个坐标单位；思考进行中灯丝与柔光以 2.4s 周期呼吸，轮廓不移动，同时显示固定三点；搜索图标以 1.8s 周期沿小圆弧移动（最大 2px）；读取文字线以 1.8s 周期逐行扫描；写入／编辑笔尖以 1.8s 周期短距离往复；命令提示符以 1.8s 周期轻推、光标以 1s 周期闪烁；委派机器人双眼以 1.4s 周期交替亮起；技能星星以 1.8s 周期错峰闪烁；图片轮廓提亮并伴随光点闪烁。未知工具使用 1.8s 透明度提示。待审批、待回答、完成、失败和停止时图标静止，工具行不重复叠加加载圈。系统减少动态效果时，思考三点仍保留轻微透明度循环，其它类型活动图标沿用原有语义动画；文字扫光静止并恢复过程辅助色。运行中的过程组或整轮被折叠时，可见折叠行展示当前阶段的类型图标及动效；展开时由内部节点展示，待审批、待回答不播放。上下文环形进度使用 link 色，70%/90% 仍分别使用琥珀/危险色。失败仅以 14px 无圆圈红色 X 局部提示，stderr 不整段标红。
 
-- 活动图标保留轻微语义动画以指示运行；思考预览文字不播放切换动画，思考标题不扫光。手动折叠、其他运行文字扫光和滚动条过渡沿用各自的减少动态效果策略。
-折叠思考预览由独立思考块和过程组共用 `ReasoningPreview`：按实际可用宽度及当前字体测量，收到的文字立即从左向右追加，按实际流式输出速度填满一行，不限制每批字符数或追加频率；有后续内容时保留满行约 200ms，再从行首显示下一段已收到的文字，不出现清空闪帧，无淡化、位移或叠字动画。换行等空白在预览中显示为空格，不按句末提前切换；保留完整 Unicode 字素。突发输出超过一行时，仅在换行边界跳过积压；直接显示最新可容纳的一行；仅满行后的短暂停留使用计时器，不排队逐字补播。窗口保持一行高度，字体加载和窗口缩放后重新测量。展开或结束立即取消计时器，不延迟正文、流式接收或执行状态。正文不再渲染独立占行的流式光标，避免运行与完成之间多出空白。
+- 工具活动图标保留轻微语义动画以指示运行；思考使用呼吸灯泡和三点，思考标题不扫光。手动折叠、其他运行文字扫光和滚动条过渡沿用各自的减少动态效果策略。
+思考进行中显示呼吸灯泡、“思考中”和固定 18×18px SVG 三点；三个圆点同处水平中线，仅透明度错峰循环，不依赖字号、文字基线或省略号字形，不移动、不增删。灯泡与三点作为进行中状态指示，不受系统减少动态效果设置影响，始终播放轻微透明度循环；不改变其他动画的设置。独立思考块与折叠过程组共用 `ThinkingDots`，不再截取、测量或轮播思考文字。展开后实时追加完整思考文本，位于底部时自动跟随，向上阅读后暂停跟随；结束后停止动画并显示耗时，保留展开选择。图标和三点使用 Flex 居中，取消活动图标额外 1px 下移；14px 折叠箭头单独下移 1px 作内容字体的视觉校正，使用相对定位，不覆盖展开旋转的 transform。正文不渲染独立占行的流式光标。
 
 ## 4. 代码高亮
 

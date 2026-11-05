@@ -52,7 +52,7 @@ function ApprovalParams({ name, args }: { name: string; args: string }) {
           : null
     return (
       <div>
-        {path && <div className="mb-1 font-sans tabular-nums text-chat text-muted-foreground">{path}</div>}
+        {path && <div className="mb-1 font-content tabular-nums text-chat text-muted-foreground">{path}</div>}
         {diff ? (
           <DiffBlock diff={diff} className="max-h-60 overflow-y-auto" />
         ) : (

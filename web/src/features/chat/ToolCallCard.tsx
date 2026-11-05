@@ -119,7 +119,7 @@ function ToolTextSection({ label, content, sessionId, preferenceKey, running = f
       <pre ref={bodyRef} onScroll={() => {
         const el = bodyRef.current
         if (el && expanded) followRef.current = el.scrollHeight - el.clientHeight - el.scrollTop < 24
-      }} className={cn("min-w-0 overflow-x-auto font-sans tabular-nums text-chat text-fg-process", wrapped ? "whitespace-pre-wrap [overflow-wrap:anywhere]" : "whitespace-pre", mono && "font-mono", expanded ? "max-h-96 overflow-y-auto" : "max-h-[calc(8*var(--chat-line-height))] overflow-y-hidden")}>
+      }} className={cn("min-w-0 overflow-x-auto font-content tabular-nums text-chat text-fg-process", wrapped ? "whitespace-pre-wrap [overflow-wrap:anywhere]" : "whitespace-pre", mono && "font-mono", expanded ? "max-h-96 overflow-y-auto" : "max-h-[calc(8*var(--chat-line-height))] overflow-y-hidden")}>
         {content || <span className="font-sans text-fg-process-muted">内容为空</span>}
       </pre>
       {(overflowing || expanded) && <button type="button" aria-expanded={expanded} onClick={() => {
@@ -172,7 +172,7 @@ function WriteBody({ node, sessionId }: { node: ToolCallNode; sessionId: string 
   const contentLabel = output.completed ? "完整内容" : "拟写入内容"
   return (
     <div className="min-w-0 overflow-hidden rounded-lg bg-muted/50">
-      {path && <div className="break-all px-3 py-2 font-sans tabular-nums text-chat text-fg-process">{path}</div>}
+      {path && <div className="break-all px-3 py-2 font-content tabular-nums text-chat text-fg-process">{path}</div>}
       {output.diff && <div role="group" aria-label="写入内容视图" className="flex items-center gap-1 border-t px-3 py-1.5">
         <button type="button" aria-pressed={!showContent} onClick={() => setContentView(false)} className={cn("rounded-md px-2 py-1 text-meta hover:bg-accent", !showContent && "bg-accent text-foreground")}>变更</button>
         <button type="button" aria-pressed={showContent} onClick={() => setContentView(true)} className={cn("rounded-md px-2 py-1 text-meta hover:bg-accent", showContent && "bg-accent text-foreground")}>完整内容</button>
@@ -199,11 +199,11 @@ function DiffBody({ node }: { node: ToolCallNode }) {
   const diff = node.result?.meta?.diff
   return (
     <div className="rounded-lg bg-muted/50 p-3">
-      {path && <div className="mb-1 font-sans tabular-nums text-chat text-fg-process">{path}</div>}
+      {path && <div className="mb-1 font-content tabular-nums text-chat text-fg-process">{path}</div>}
       {diff ? (
         <DiffBlock diff={diff} className="max-h-80 overflow-y-auto bg-background" />
       ) : node.result ? (
-        <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-sans tabular-nums text-chat">
+        <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-content tabular-nums text-chat">
           {node.result.error ?? node.result.content}
         </pre>
       ) : null}
@@ -231,12 +231,12 @@ function SearchBody({ node }: { node: ToolCallNode }) {
   const lines = (node.result?.content ?? "").split("\n").filter(Boolean)
   return (
     <div className="rounded-lg bg-muted/50 p-3">
-      {query && <div className="mb-1 font-sans tabular-nums text-chat text-fg-process">/{query}/</div>}
+      {query && <div className="mb-1 font-content tabular-nums text-chat text-fg-process">/{query}/</div>}
       {node.result ? (
         lines.length > 0 ? (
           <div className="max-h-72 overflow-y-auto rounded-md border bg-background">
             {lines.map((line, i) => (
-              <div key={i} className="border-b px-3 py-1 font-sans tabular-nums text-chat last:border-b-0 hover:bg-accent">
+              <div key={i} className="border-b px-3 py-1 font-content tabular-nums text-chat last:border-b-0 hover:bg-accent">
                 {line}
               </div>
             ))}
@@ -254,12 +254,12 @@ function ReadBody({ node }: { node: ToolCallNode }) {
   const path = typeof args?.path === "string" ? args.path : undefined
   return (
     <div className="rounded-lg bg-muted/50 p-3">
-      {path && <div className="mb-1 font-sans tabular-nums text-chat text-fg-process">{path}</div>}
+      {path && <div className="mb-1 font-content tabular-nums text-chat text-fg-process">{path}</div>}
       {node.result?.attachments && node.result.attachments.length > 0 && (
         <MessageImages attachments={node.result.attachments} className="mb-2" />
       )}
       {node.result && (
-        <pre className="max-h-80 overflow-auto whitespace-pre font-sans tabular-nums text-chat">
+        <pre className="max-h-80 overflow-auto whitespace-pre font-content tabular-nums text-chat">
           {node.result.error ?? node.result.content}
         </pre>
       )}
@@ -274,7 +274,7 @@ function GenericBody({ node }: { node: ToolCallNode }) {
         <pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-chat">{node.arguments}</pre>
       )}
       {node.result && (
-        <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-sans tabular-nums text-chat">
+        <pre className="max-h-60 overflow-auto whitespace-pre-wrap font-content tabular-nums text-chat">
           {node.result.error ?? node.result.content}
         </pre>
       )}
@@ -356,7 +356,7 @@ export function ToolCallCard({
         {summary ? (
           <span
             className={cn(
-              "min-w-0 flex-1 truncate font-sans tabular-nums text-chat text-fg-process",
+              "min-w-0 flex-1 truncate font-content tabular-nums text-chat text-fg-process",
               running && !pendingApproval && !pendingQuestion && "text-shimmer",
             )}
           >
@@ -366,7 +366,7 @@ export function ToolCallCard({
           <span className="flex-1" />
         )}
         {stats && (
-          <span className="shrink-0 font-sans tabular-nums text-meta">
+          <span className="shrink-0 tabular-nums text-meta">
             {stats.added > 0 && <span className="text-success">+{stats.added}</span>}
             {stats.added > 0 && stats.removed > 0 && " "}
             {stats.removed > 0 && <span className="text-destructive">-{stats.removed}</span>}

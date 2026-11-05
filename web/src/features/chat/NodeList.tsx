@@ -28,7 +28,7 @@ function BoundaryView({ node }: { node: Extract<ConversationNode, { kind: "bound
           </summary>
           {node.error && <div className="mt-2 rounded-lg bg-muted/50 p-3">
             <div className="flex items-center justify-between"><span>错误详情</span><CopyIconButton text={node.error} /></div>
-            <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-sans tabular-nums">{node.error}</pre>
+            <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words font-content tabular-nums">{node.error}</pre>
           </div>}
         </details>
       )}
@@ -58,7 +58,7 @@ export function NodeView({
     case "user":
       return (
         <div className={cn("group flex flex-col gap-1", depth === 0 && "items-end")}>
-          <div className="chat-user-bubble whitespace-pre-wrap break-words bg-bubble text-chat text-bubble-foreground">
+          <div className="chat-user-bubble font-content whitespace-pre-wrap break-words bg-bubble text-chat text-bubble-foreground">
             {node.attachments && node.attachments.length > 0 && (
               <MessageImages attachments={node.attachments} className={cn(node.content && "mb-1.5")} />
             )}
@@ -171,7 +171,7 @@ export function OptimisticBubble({
 }) {
   return (
     <div className="flex justify-end">
-      <div className="chat-user-bubble bg-bubble text-chat text-bubble-foreground">
+      <div className="chat-user-bubble font-content bg-bubble text-chat text-bubble-foreground">
         {attachments && attachments.length > 0 && (
           <div className={cn("flex flex-wrap gap-1", content && "mb-1.5")}>
             {attachments.map((a, i) => (

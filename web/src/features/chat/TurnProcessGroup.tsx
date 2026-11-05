@@ -3,7 +3,7 @@ import { DisclosureChevron, DisclosureContent, useDisclosureMotion } from "@/com
 import { NodeView } from "@/features/chat/NodeList"
 import { ActivityIcon } from "@/features/chat/ActivityIcon"
 import { activeProcessNode, type ProcessGroup } from "@/lib/turn-grouping"
-import { ReasoningPreview } from "@/features/chat/ReasoningPreview"
+import { ThinkingDots } from "@/features/chat/ThinkingDots"
 import { safeParseJson } from "@/lib/format"
 import { toolDisplayName } from "@/lib/tool-names"
 import { useChatDisclosure } from "@/stores/chatPresentation"
@@ -43,10 +43,10 @@ export function TurnProcessGroup({ group, sessionId, latestTurn }: {
         {!expanded && activity ? <ActivityIcon name={activity.kind === "assistant" ? "reasoning" : activity.name} active />
           : tools.length > 0 && <Waypoints aria-hidden="true" className="chat-activity-icon" strokeWidth={1.65} />}
         <span className={cn("shrink-0", active && !thinking && "text-shimmer")}>{label}</span>
-        {(detail || (!expanded && thinking)) && <>
+        {!expanded && thinking ? <ThinkingDots /> : detail && <>
           <span className="shrink-0">·</span>
-          <span className={cn("min-w-0 overflow-hidden whitespace-nowrap text-ellipsis", !expanded && thinking && "flex-1")}>
-            {!expanded && thinking?.type === "reasoning" ? <ReasoningPreview key={activity?.id} text={thinking.text} /> : <bdi title={detail}>{detail}</bdi>}
+          <span className="min-w-0 overflow-hidden whitespace-nowrap text-ellipsis">
+            <bdi title={detail}>{detail}</bdi>
           </span>
         </>}
         <DisclosureChevron open={expanded} revision={motion.revision} />
